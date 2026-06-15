@@ -12,6 +12,11 @@
 		1A0000032C00000000000001 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000122C00000000000001 /* OpenAIClient.swift */; };
 		1A0000042C00000000000001 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* ImagePicker.swift */; };
 		1A0000052C00000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000142C00000000000001 /* Assets.xcassets */; };
+		1A0000062C00000000000001 /* OpenLensController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000162C00000000000001 /* OpenLensController.swift */; };
+		1A0000072C00000000000001 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000172C00000000000001 /* HotKeyManager.swift */; };
+		1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000182C00000000000001 /* ScreenshotOverlay.swift */; };
+		1A0000092C00000000000001 /* AskPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000192C00000000000001 /* AskPanel.swift */; };
+		1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* NativeScreenshotController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +26,11 @@
 		1A0000132C00000000000001 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		1A0000142C00000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A0000152C00000000000001 /* OpenLens.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenLens.entitlements; sourceTree = "<group>"; };
+		1A0000162C00000000000001 /* OpenLensController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensController.swift; sourceTree = "<group>"; };
+		1A0000172C00000000000001 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
+		1A0000182C00000000000001 /* ScreenshotOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotOverlay.swift; sourceTree = "<group>"; };
+		1A0000192C00000000000001 /* AskPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskPanel.swift; sourceTree = "<group>"; };
+		1A00001A2C00000000000001 /* NativeScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenshotController.swift; sourceTree = "<group>"; };
 		1A0000202C00000000000001 /* OpenLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -48,6 +58,11 @@
 			children = (
 				1A0000102C00000000000001 /* OpenLensApp.swift */,
 				1A0000112C00000000000001 /* ContentView.swift */,
+				1A0000162C00000000000001 /* OpenLensController.swift */,
+				1A0000172C00000000000001 /* HotKeyManager.swift */,
+				1A00001A2C00000000000001 /* NativeScreenshotController.swift */,
+				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
+				1A0000192C00000000000001 /* AskPanel.swift */,
 				1A0000122C00000000000001 /* OpenAIClient.swift */,
 				1A0000132C00000000000001 /* ImagePicker.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
@@ -136,6 +151,11 @@
 			files = (
 				1A0000012C00000000000001 /* OpenLensApp.swift in Sources */,
 				1A0000022C00000000000001 /* ContentView.swift in Sources */,
+				1A0000062C00000000000001 /* OpenLensController.swift in Sources */,
+				1A0000072C00000000000001 /* HotKeyManager.swift in Sources */,
+				1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */,
+				1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */,
+				1A0000092C00000000000001 /* AskPanel.swift in Sources */,
 				1A0000032C00000000000001 /* OpenAIClient.swift in Sources */,
 				1A0000042C00000000000001 /* ImagePicker.swift in Sources */,
 			);

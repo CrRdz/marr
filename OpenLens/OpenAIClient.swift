@@ -1,11 +1,11 @@
 import Foundation
 
-protocol VisionAIClient {
+protocol VisionAIClient: Sendable {
     func ask(imageData: Data, mimeType: String, question: String, model: String, apiKey: String) async throws -> String
     func ask(imageData: Data, mimeType: String, question: String, model: String, connection: InferenceConnection) async throws -> String
 }
 
-enum OpenAIClientError: LocalizedError {
+enum OpenAIClientError: LocalizedError, Sendable {
     case invalidURL
     case invalidResponse
     case apiError(String)
@@ -25,14 +25,14 @@ enum OpenAIClientError: LocalizedError {
     }
 }
 
-enum InferenceProvider: String, CaseIterable, Identifiable {
+enum InferenceProvider: String, CaseIterable, Identifiable, Sendable {
     case openAI = "OpenAI"
     case gateway = "Gateway"
 
     var id: String { rawValue }
 }
 
-enum GatewayAuthScheme: String, CaseIterable, Identifiable {
+enum GatewayAuthScheme: String, CaseIterable, Identifiable, Sendable {
     case bearer = "Bearer"
     case xAPIKey = "x-api-key"
     case none = "None"
@@ -40,14 +40,14 @@ enum GatewayAuthScheme: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum GatewayAPIFormat: String, CaseIterable, Identifiable {
+enum GatewayAPIFormat: String, CaseIterable, Identifiable, Sendable {
     case openAIResponses = "OpenAI Responses"
     case anthropicMessages = "Anthropic Messages"
 
     var id: String { rawValue }
 }
 
-struct InferenceConnection {
+struct InferenceConnection: Sendable {
     var provider: InferenceProvider
     var baseURL: String
     var apiKey: String
