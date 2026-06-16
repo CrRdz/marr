@@ -3,14 +3,15 @@ import SwiftUI
 
 @MainActor
 final class ScreenshotOverlayController {
-    var onCapture: ((PickedImage, CGRect) -> Void)?
+    var onCapture: ((PickedImage, CGRect, String) -> Void)?
     var onCancel: (() -> Void)?
 
     private var windows: [NSWindow] = []
 
     func show() {
+        close()
         windows = NSScreen.screens.map { screen in
-            let window = NSWindow(
+            let window = OverlayWindow(
                 contentRect: screen.frame,
                 styleMask: [.borderless],
                 backing: .buffered,
@@ -31,8 +32,8 @@ final class ScreenshotOverlayController {
                 onCancel: { [weak self] in
                     self?.cancel()
                 },
-                onCapture: { [weak self] rect in
-                    self?.capture(rect: rect, on: screen)
+                onCapture: { [weak self] rect, question in
+                    self?.capture(rect: rect, question: question, on: screen)
                 }
             )
             window.contentView = NSHostingView(rootView: view)
@@ -57,7 +58,7 @@ final class ScreenshotOverlayController {
         onCancel?()
     }
 
-    private func capture(rect: CGRect, on screen: NSScreen) {
+    private func capture(rect: CGRect, question: String, on screen: NSScreen) {
         close()
 
         guard let image = ScreenCapture.capture(rect: rect, screen: screen) else {
@@ -65,7 +66,43 @@ final class ScreenshotOverlayController {
             return
         }
 
-        onCapture?(image, rect)
+        showFrozenCapture(image: image, rect: rect)
+        onCapture?(image, rect, question)
+    }
+
+    private func showFrozenCapture(image: PickedImage, rect: CGRect) {
+        windows = NSScreen.screens.map { screen in
+            let window = OverlayWindow(
+                contentRect: screen.frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false,
+                screen: screen
+            )
+            window.level = .floating
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = false
+            window.animationBehavior = .none
+            window.isReleasedWhenClosed = false
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            window.ignoresMouseEvents = true
+            window.contentView = NSHostingView(
+                rootView: FrozenScreenshotView(screen: screen, image: image.image, captureRect: rect)
+            )
+            window.orderFrontRegardless()
+            return window
+        }
+    }
+}
+
+private final class OverlayWindow: NSWindow {
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
     }
 }
 
@@ -96,53 +133,84 @@ private enum ResizeHandle: CaseIterable, Hashable {
 struct ScreenshotSelectionView: View {
     let screen: NSScreen
     let onCancel: () -> Void
-    let onCapture: (CGRect) -> Void
+    let onCapture: (CGRect, String) -> Void
 
+    @State private var question = ""
     @State private var selection: CGRect = .zero
     @State private var dragStart: CGRect = .zero
     @State private var isMovingSelection = false
     @State private var activeResizeHandle: ResizeHandle?
+    @FocusState private var questionFocused: Bool
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                Color.black.opacity(0.38)
-                    .ignoresSafeArea()
-
                 if selection != .zero {
+                    dimmedBackdrop(in: geometry.size)
                     selectionLayer(in: geometry.size)
-                    instructionBar(in: geometry.size)
+                    promptBar(in: geometry.size)
+                } else {
+                    Color.black.opacity(0.32)
+                        .ignoresSafeArea()
                 }
             }
             .onAppear {
                 selection = defaultSelection(in: geometry.size)
+                DispatchQueue.main.async {
+                    questionFocused = true
+                }
             }
         }
     }
 
+    private func dimmedBackdrop(in bounds: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(.black.opacity(0.36))
+                .frame(width: bounds.width, height: selection.minY)
+
+            Rectangle()
+                .fill(.black.opacity(0.36))
+                .frame(width: bounds.width, height: max(0, bounds.height - selection.maxY))
+                .position(x: bounds.width / 2, y: selection.maxY + max(0, bounds.height - selection.maxY) / 2)
+
+            Rectangle()
+                .fill(.black.opacity(0.36))
+                .frame(width: selection.minX, height: selection.height)
+                .position(x: selection.minX / 2, y: selection.midY)
+
+            Rectangle()
+                .fill(.black.opacity(0.36))
+                .frame(width: max(0, bounds.width - selection.maxX), height: selection.height)
+                .position(x: selection.maxX + max(0, bounds.width - selection.maxX) / 2, y: selection.midY)
+        }
+        .ignoresSafeArea()
+    }
+
     private func selectionLayer(in bounds: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(Color.white.opacity(0.04))
+            Rectangle()
+                .fill(.clear)
                 .frame(width: selection.width, height: selection.height)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(Color.white, lineWidth: 1.5)
+                    Rectangle()
+                        .stroke(
+                            .white.opacity(0.88),
+                            style: StrokeStyle(lineWidth: 1.2, dash: [4, 3])
+                        )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(Color.accentColor, lineWidth: 2.5)
-                        .padding(-1)
+                    Rectangle()
+                        .stroke(.black.opacity(0.24), lineWidth: 1)
+                        .padding(1)
                 )
+                .contentShape(Rectangle())
                 .position(x: selection.midX, y: selection.midY)
                 .gesture(moveGesture)
 
             ForEach(ResizeHandle.allCases, id: \.self) { handle in
                 resizeHandle(handle)
             }
-
-            captureControls
-                .position(x: selection.midX, y: controlsY(in: bounds))
         }
     }
 
@@ -164,9 +232,10 @@ struct ScreenshotSelectionView: View {
 
     private func resizeHandle(_ handle: ResizeHandle) -> some View {
         Circle()
-            .fill(Color.white)
-            .frame(width: 12, height: 12)
-            .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+            .fill(.white.opacity(0.94))
+            .frame(width: 9, height: 9)
+            .overlay(Circle().stroke(.black.opacity(0.30), lineWidth: 1))
+            .shadow(color: .black.opacity(0.28), radius: 3, x: 0, y: 1)
             .position(position(for: handle))
             .onHover { inside in
                 if inside {
@@ -191,42 +260,59 @@ struct ScreenshotSelectionView: View {
             )
     }
 
-    private var captureControls: some View {
-        HStack(spacing: 8) {
-            Button {
-                onCancel()
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .help("Cancel")
+    private var questionControls: some View {
+        HStack(spacing: 10) {
+            TextField("Ask about this area", text: $question, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 18, weight: .regular))
+                .lineLimit(1...2)
+                .foregroundStyle(.primary)
+                .focused($questionFocused)
+                .onSubmit {
+                    sendQuestion()
+                }
 
             Button {
-                onCapture(globalSelectionRect())
+                sendQuestion()
             } label: {
-                Label("Capture", systemImage: "camera")
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 20, weight: .medium))
+                    .frame(width: 42, height: 42)
             }
-            .keyboardShortcut(.return, modifiers: [])
+            .sendCircleButton(isEnabled: canSend)
+            .keyboardShortcut(.return, modifiers: [.command])
+            .disabled(!canSend)
+            .help("Send")
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.regular)
-        .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .shadow(radius: 12)
+        .padding(.leading, 18)
+        .padding(.trailing, 9)
+        .padding(.vertical, 8)
+        .frame(width: 520)
+        .frame(minHeight: 56)
+        .liquidGlassSurface(cornerRadius: 28, isClear: true)
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
+        .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
     }
 
-    private func instructionBar(in size: CGSize) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "crop")
-            Text("\(Int(selection.width)) x \(Int(selection.height))")
-                .font(.system(.callout, design: .monospaced))
-            Text("Drag the frame or handles, then capture.")
-                .foregroundStyle(.secondary)
+    private func promptBar(in size: CGSize) -> some View {
+        questionControls
+        .position(x: toolbarX(in: size), y: toolbarY(in: size))
+    }
+
+    private var canSend: Bool {
+        !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func sendQuestion() {
+        guard canSend else {
+            return
         }
-        .font(.callout)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .position(x: size.width / 2, y: 34)
+
+        onCapture(globalSelectionRect(), question)
     }
 
     private func defaultSelection(in size: CGSize) -> CGRect {
@@ -261,13 +347,18 @@ struct ScreenshotSelectionView: View {
         }
     }
 
-    private func controlsY(in bounds: CGSize) -> CGFloat {
-        let lowerY = selection.maxY + 36
-        if lowerY < bounds.height - 34 {
-            return lowerY
+    private func toolbarX(in bounds: CGSize) -> CGFloat {
+        min(max(selection.midX, 335), bounds.width - 335)
+    }
+
+    private func toolbarY(in bounds: CGSize) -> CGFloat {
+        let toolbarHeight: CGFloat = 66
+        let preferredBelow = selection.maxY + toolbarHeight / 2 + 14
+        if preferredBelow <= bounds.height - toolbarHeight / 2 - 8 {
+            return preferredBelow
         }
 
-        return max(selection.minY - 36, 34)
+        return max(selection.minY - toolbarHeight / 2 - 14, toolbarHeight / 2 + 8)
     }
 
     private func resize(_ rect: CGRect, handle: ResizeHandle, translation: CGSize, bounds: CGSize) -> CGRect {
@@ -336,6 +427,116 @@ struct ScreenshotSelectionView: View {
             width: selection.width,
             height: selection.height
         )
+    }
+}
+
+private struct FrozenScreenshotView: View {
+    let screen: NSScreen
+    let image: NSImage
+    let captureRect: CGRect
+
+    var body: some View {
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+
+                if screen.frame.intersects(captureRect) {
+                    frozenCapture
+                }
+            }
+        }
+    }
+
+    private var frozenCapture: some View {
+        let rect = localRect
+
+        return Image(nsImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: rect.width, height: rect.height)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(.white.opacity(0.70), lineWidth: 1.2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.80), lineWidth: 2)
+                    .padding(-2)
+            )
+            .shadow(color: .black.opacity(0.30), radius: 24, x: 0, y: 12)
+            .position(x: rect.midX, y: rect.midY)
+    }
+
+    private var localRect: CGRect {
+        CGRect(
+            x: captureRect.minX - screen.frame.minX,
+            y: screen.frame.maxY - captureRect.maxY,
+            width: captureRect.width,
+            height: captureRect.height
+        )
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func liquidGlassSurface(cornerRadius: CGFloat, isClear: Bool = false) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(
+                isClear ? .clear.interactive() : .regular.interactive(),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            self
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.white.opacity(isClear ? 0.05 : 0.10))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(.white.opacity(isClear ? 0.22 : 0.34), lineWidth: 1)
+                )
+        }
+    }
+
+    @ViewBuilder
+    func liquidGlassProminentButton() -> some View {
+        if #available(macOS 26.0, *) {
+            self.buttonStyle(.glassProminent)
+        } else {
+            self
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                )
+        }
+    }
+
+    @ViewBuilder
+    func liquidGlassIconButton(isActive: Bool = false) -> some View {
+        if #available(macOS 26.0, *) {
+            self
+                .buttonStyle(.glass)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
+        } else {
+            self
+                .buttonStyle(.plain)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
+        }
+    }
+
+    @ViewBuilder
+    func sendCircleButton(isEnabled: Bool) -> some View {
+        self
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(isEnabled ? Color(nsColor: .labelColor) : Color.secondary.opacity(0.46), in: Circle())
+            .shadow(color: .black.opacity(isEnabled ? 0.18 : 0.06), radius: 8, x: 0, y: 4)
     }
 }
 

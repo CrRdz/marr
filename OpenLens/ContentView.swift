@@ -8,31 +8,45 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 22) {
             header
 
-            Divider()
-
             captureSection
-
-            Divider()
 
             connectionSection
 
             Spacer(minLength: 0)
         }
-        .padding(28)
+        .padding(30)
         .frame(minWidth: 760, minHeight: 620)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.20),
+                        Color.accentColor.opacity(0.06),
+                        .clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        )
     }
 
     private var header: some View {
         HStack(alignment: .center, spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.accentColor.opacity(0.14))
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.thinMaterial)
                 Image(systemName: "viewfinder")
                     .font(.system(size: 25, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             }
             .frame(width: 52, height: 52)
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.white.opacity(0.38), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 14, x: 0, y: 8)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("OpenLens")
@@ -52,6 +66,12 @@ struct ContentView: View {
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
         }
+        .padding(18)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(.white.opacity(0.26), lineWidth: 1)
+        )
     }
 
     private var captureSection: some View {
@@ -82,6 +102,12 @@ struct ContentView: View {
                     .font(.callout)
             }
         }
+        .padding(18)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
+        )
     }
 
     private func flowStep(icon: String, title: String, detail: String) -> some View {
@@ -101,10 +127,10 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.secondary.opacity(0.12))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.24), lineWidth: 1)
         )
     }
 
@@ -139,6 +165,12 @@ struct ContentView: View {
                     .textFieldStyle(.roundedBorder)
             }
         }
+        .padding(18)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
+        )
     }
 
     private var gatewaySettings: some View {
@@ -201,10 +233,10 @@ struct ContentView: View {
             }
         }
         .padding(14)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.secondary.opacity(0.14))
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
         )
     }
 }

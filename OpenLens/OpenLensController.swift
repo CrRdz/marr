@@ -44,31 +44,7 @@ final class OpenLensController: ObservableObject {
     }
 
     func startScreenCapture() {
-        overlayController?.close()
-        askPanelController?.close()
-        nativeScreenshotController?.cancel()
-
-        let screenshotController = NativeScreenshotController()
-        nativeScreenshotController = screenshotController
-        statusMessage = "Select an area with the macOS screenshot tool."
-
-        screenshotController.capture { [weak self] result in
-            Task { @MainActor in
-                guard let self else {
-                    return
-                }
-
-                self.nativeScreenshotController = nil
-
-                switch result {
-                case .success(let image):
-                    self.showQuestionPanel(for: image, near: self.defaultAskPanelAnchor())
-                    self.statusMessage = "Screenshot captured."
-                case .failure(let error):
-                    self.statusMessage = self.userFacingMessage(for: error)
-                }
-            }
-        }
+        startCustomOverlayCapture()
     }
 
     func startCustomOverlayCapture() {
@@ -79,10 +55,9 @@ final class OpenLensController: ObservableObject {
                 self?.statusMessage = "Capture cancelled."
             }
         }
-        overlay.onCapture = { [weak self] image, rect in
+        overlay.onCapture = { [weak self] image, rect, question in
             Task { @MainActor in
-                self?.overlayController = nil
-                self?.showQuestionPanel(for: image, near: rect)
+                self?.showQuestionPanel(for: image, near: rect, question: question)
                 self?.statusMessage = "Screenshot captured."
             }
         }
@@ -151,6 +126,16 @@ final class OpenLensController: ObservableObject {
         NSPasteboard.general.setString(answer, forType: .string)
     }
 
+    func dismissCaptureSession() {
+        askPanelController?.close()
+        askPanelController = nil
+        overlayController?.close()
+        overlayController = nil
+        nativeScreenshotController?.cancel()
+        nativeScreenshotController = nil
+        statusMessage = "Ready. Press Command Shift 0 to capture."
+    }
+
     func userFacingMessage(for error: Error) -> String {
         if let userFacingError = error as? UserFacingError {
             return userFacingError.message
@@ -167,8 +152,8 @@ final class OpenLensController: ObservableObject {
         return error.localizedDescription
     }
 
-    private func showQuestionPanel(for image: PickedImage, near rect: CGRect) {
-        let panel = AskPanelController(controller: self, image: image, anchorRect: rect)
+    private func showQuestionPanel(for image: PickedImage, near rect: CGRect, question: String = "") {
+        let panel = AskPanelController(controller: self, image: image, anchorRect: rect, initialQuestion: question)
         askPanelController = panel
         panel.show()
     }
