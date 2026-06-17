@@ -8,11 +8,16 @@ final class ScreenshotOverlayController {
     var onCancel: (() -> Void)?
 
     private var windows: [NSWindow] = []
-    private var escapeMonitor: Any?
+    private var keyMonitor: Any?
+    private let mode: ScreenshotOverlayMode
+
+    init(mode: ScreenshotOverlayMode = .ask) {
+        self.mode = mode
+    }
 
     func show() {
         close()
-        installEscapeMonitor()
+        installKeyMonitor()
         windows = NSScreen.screens.map { screen in
             let window = OverlayWindow(
                 contentRect: screen.frame,
@@ -32,6 +37,7 @@ final class ScreenshotOverlayController {
 
             let view = ScreenshotSelectionView(
                 screen: screen,
+                mode: mode,
                 onCancel: { [weak self] in
                     self?.cancel()
                 },
@@ -48,7 +54,7 @@ final class ScreenshotOverlayController {
     }
 
     func close() {
-        removeEscapeMonitor()
+        removeKeyMonitor()
         windows.forEach { window in
             window.orderOut(nil)
             window.contentView = nil
@@ -62,21 +68,26 @@ final class ScreenshotOverlayController {
         onCancel?()
     }
 
-    private func installEscapeMonitor() {
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == kVK_Escape else {
-                return event
+    private func installKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == kVK_Escape {
+                self?.cancel()
+                return nil
             }
 
-            self?.cancel()
-            return nil
+            if self?.mode == .selectionOnly, [kVK_Return, kVK_ANSI_KeypadEnter].contains(Int(event.keyCode)) {
+                NotificationCenter.default.post(name: .captureSelectionOnlyScreenshot, object: nil)
+                return nil
+            }
+
+            return event
         }
     }
 
-    private func removeEscapeMonitor() {
-        if let escapeMonitor {
-            NSEvent.removeMonitor(escapeMonitor)
-            self.escapeMonitor = nil
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
         }
     }
 
@@ -88,34 +99,18 @@ final class ScreenshotOverlayController {
             return
         }
 
-        showFrozenCapture(image: image, rect: rect)
         onCapture?(image, rect, question)
     }
 
-    private func showFrozenCapture(image: PickedImage, rect: CGRect) {
-        windows = NSScreen.screens.map { screen in
-            let window = OverlayWindow(
-                contentRect: screen.frame,
-                styleMask: [.borderless],
-                backing: .buffered,
-                defer: false,
-                screen: screen
-            )
-            window.level = .floating
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = false
-            window.animationBehavior = .none
-            window.isReleasedWhenClosed = false
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            window.ignoresMouseEvents = true
-            window.contentView = NSHostingView(
-                rootView: FrozenScreenshotView(screen: screen, image: image.image, captureRect: rect)
-            )
-            window.orderFrontRegardless()
-            return window
-        }
-    }
+}
+
+enum ScreenshotOverlayMode {
+    case ask
+    case selectionOnly
+}
+
+private extension Notification.Name {
+    static let captureSelectionOnlyScreenshot = Notification.Name("OpenLensCaptureSelectionOnlyScreenshot")
 }
 
 private final class OverlayWindow: NSWindow {
@@ -154,6 +149,7 @@ private enum ResizeHandle: CaseIterable, Hashable {
 
 struct ScreenshotSelectionView: View {
     let screen: NSScreen
+    let mode: ScreenshotOverlayMode
     let onCancel: () -> Void
     let onCapture: (CGRect, String) -> Void
 
@@ -162,7 +158,13 @@ struct ScreenshotSelectionView: View {
     @State private var dragStart: CGRect = .zero
     @State private var isMovingSelection = false
     @State private var activeResizeHandle: ResizeHandle?
+    @State private var isSending = false
+    @State private var pendingCapture: DispatchWorkItem?
     @FocusState private var questionFocused: Bool
+
+    private let questionBarWidth: CGFloat = 420
+    private let chatCapsuleScale: CGFloat = 1
+    private let capsuleTransitionDuration = 0.42
 
     var body: some View {
         GeometryReader { geometry in
@@ -170,7 +172,9 @@ struct ScreenshotSelectionView: View {
                 if selection != .zero {
                     dimmedBackdrop(in: geometry.size)
                     selectionLayer(in: geometry.size)
-                    promptBar(in: geometry.size)
+                    if mode == .ask {
+                        promptBar(in: geometry.size)
+                    }
                 } else {
                     Color.black.opacity(0.32)
                         .ignoresSafeArea()
@@ -179,8 +183,15 @@ struct ScreenshotSelectionView: View {
             .onAppear {
                 selection = defaultSelection(in: geometry.size)
                 DispatchQueue.main.async {
-                    questionFocused = true
+                    questionFocused = mode == .ask
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .captureSelectionOnlyScreenshot)) { _ in
+                captureSelectionOnlyQuestion()
+            }
+            .onDisappear {
+                pendingCapture?.cancel()
+                pendingCapture = nil
             }
         }
     }
@@ -306,10 +317,11 @@ struct ScreenshotSelectionView: View {
             .disabled(!canSend)
             .help("Send")
         }
+        .disabled(isSending)
         .padding(.leading, 14)
         .padding(.trailing, 7)
         .padding(.vertical, 6)
-        .frame(width: 420)
+        .frame(width: questionBarWidth)
         .frame(minHeight: 46)
         .liquidGlassSurface(cornerRadius: 23, isClear: true)
         .overlay(
@@ -322,19 +334,44 @@ struct ScreenshotSelectionView: View {
 
     private func promptBar(in size: CGSize) -> some View {
         questionControls
-        .position(x: toolbarX(in: size), y: toolbarY(in: size))
+        .position(isSending ? chatCapsulePosition(in: size) : CGPoint(x: toolbarX(in: size), y: toolbarY(in: size)))
     }
 
     private var canSend: Bool {
-        !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isSending && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func sendQuestion() {
-        guard canSend else {
+    private func captureSelectionOnlyQuestion() {
+        guard mode == .selectionOnly, !isSending, NSApp.keyWindow?.screen == screen else {
             return
         }
 
-        onCapture(globalSelectionRect(), question)
+        isSending = true
+        onCapture(globalSelectionRect(), "")
+    }
+
+    private func sendQuestion() {
+        let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isSending, !trimmedQuestion.isEmpty else {
+            return
+        }
+
+        let rect = globalSelectionRect()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            questionFocused = false
+        }
+
+        withAnimation(.easeInOut(duration: capsuleTransitionDuration)) {
+            isSending = true
+        }
+
+        let capture = DispatchWorkItem {
+            onCapture(rect, trimmedQuestion)
+        }
+        pendingCapture = capture
+        DispatchQueue.main.asyncAfter(deadline: .now() + capsuleTransitionDuration + 0.08, execute: capture)
     }
 
     private func defaultSelection(in size: CGSize) -> CGRect {
@@ -381,6 +418,27 @@ struct ScreenshotSelectionView: View {
         }
 
         return max(selection.minY - toolbarHeight / 2 - 14, toolbarHeight / 2 + 8)
+    }
+
+    private func chatCapsulePosition(in bounds: CGSize) -> CGPoint {
+        let visibleFrame = screen.visibleFrame
+        let panelWidth: CGFloat = 544
+        let panelMargin: CGFloat = 22
+        let panelContentPadding: CGFloat = 12
+        let composerVisualHeight: CGFloat = 46
+
+        let globalX = visibleFrame.maxX - panelMargin - panelWidth / 2
+        let globalY = visibleFrame.minY + panelMargin + panelContentPadding + composerVisualHeight / 2
+
+        let localX = globalX - screen.frame.minX
+        let localY = screen.frame.maxY - globalY
+        let halfWidth = questionBarWidth * chatCapsuleScale / 2
+        let halfHeight = composerVisualHeight * chatCapsuleScale / 2
+
+        return CGPoint(
+            x: min(max(localX, halfWidth + 12), bounds.width - halfWidth - 12),
+            y: min(max(localY, halfHeight + 12), bounds.height - halfHeight - 12)
+        )
     }
 
     private func resize(_ rect: CGRect, handle: ResizeHandle, translation: CGSize, bounds: CGSize) -> CGRect {
@@ -448,44 +506,6 @@ struct ScreenshotSelectionView: View {
             y: screen.frame.maxY - selection.maxY,
             width: selection.width,
             height: selection.height
-        )
-    }
-}
-
-private struct FrozenScreenshotView: View {
-    let screen: NSScreen
-    let image: NSImage
-    let captureRect: CGRect
-
-    var body: some View {
-        GeometryReader { _ in
-            ZStack(alignment: .topLeading) {
-                Color.black.opacity(0.18)
-                    .ignoresSafeArea()
-
-                if screen.frame.intersects(captureRect) {
-                    frozenCapture
-                }
-            }
-        }
-    }
-
-    private var frozenCapture: some View {
-        let rect = localRect
-
-        return Image(nsImage: image)
-            .resizable()
-            .scaledToFill()
-            .frame(width: rect.width, height: rect.height)
-            .position(x: rect.midX, y: rect.midY)
-    }
-
-    private var localRect: CGRect {
-        CGRect(
-            x: captureRect.minX - screen.frame.minX,
-            y: screen.frame.maxY - captureRect.maxY,
-            width: captureRect.width,
-            height: captureRect.height
         )
     }
 }

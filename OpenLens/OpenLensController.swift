@@ -44,10 +44,24 @@ final class OpenLensController: ObservableObject {
     }
 
     func startScreenCapture() {
-        startCustomOverlayCapture()
+        guard overlayController == nil else {
+            statusMessage = "Capture already active."
+            return
+        }
+
+        if answerPanelController != nil {
+            startAppendScreenshotCapture()
+        } else {
+            startCustomOverlayCapture()
+        }
     }
 
     func startCustomOverlayCapture() {
+        guard overlayController == nil else {
+            statusMessage = "Capture already active."
+            return
+        }
+
         let overlay = ScreenshotOverlayController()
         overlay.onCancel = { [weak self] in
             Task { @MainActor in
@@ -57,6 +71,7 @@ final class OpenLensController: ObservableObject {
         }
         overlay.onCapture = { [weak self] image, rect, question in
             Task { @MainActor in
+                self?.overlayController = nil
                 self?.showAnswerPanel(for: image, near: rect, question: question)
                 self?.statusMessage = "Screenshot captured."
             }
@@ -64,6 +79,31 @@ final class OpenLensController: ObservableObject {
         overlayController = overlay
         overlay.show()
         statusMessage = "Drag or resize the selection, then capture."
+    }
+
+    func startAppendScreenshotCapture() {
+        guard overlayController == nil else {
+            statusMessage = "Capture already active."
+            return
+        }
+
+        let overlay = ScreenshotOverlayController(mode: .selectionOnly)
+        overlay.onCancel = { [weak self] in
+            Task { @MainActor in
+                self?.overlayController = nil
+                self?.statusMessage = "Capture cancelled."
+            }
+        }
+        overlay.onCapture = { [weak self] image, _, _ in
+            Task { @MainActor in
+                self?.overlayController = nil
+                self?.answerPanelController?.appendScreenshot(image)
+                self?.statusMessage = "Screenshot added to the current conversation."
+            }
+        }
+        overlayController = overlay
+        overlay.show()
+        statusMessage = "Select an area, then press Return to add it to the current conversation."
     }
 
     func useCCSwitchClaudeDesktopPreset() {

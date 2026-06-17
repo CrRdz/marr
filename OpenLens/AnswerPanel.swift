@@ -5,24 +5,20 @@ import SwiftUI
 @MainActor
 final class AnswerPanelController {
     private let window: AnswerPanelWindow
+    private let session: AnswerPanelSession
     private var escapeMonitor: Any?
     private var onClose: (() -> Void)?
+    private var allowsWindowDragging = false
 
     init(controller: OpenLensController, image: PickedImage, anchorRect: CGRect, initialQuestion: String) {
-        let panelSize = NSSize(width: 536, height: 346)
+        session = AnswerPanelSession(image: image)
+        let panelSize = NSSize(width: 544, height: 398)
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
         let margin: CGFloat = 22
-        let gap: CGFloat = 16
-        let preferredBelow = anchorRect.minY - panelSize.height - gap
-        let preferredAbove = anchorRect.maxY + gap
-        let x: CGFloat
-        let y: CGFloat
 
-        x = min(max(anchorRect.midX - panelSize.width / 2, visibleFrame.minX + margin), visibleFrame.maxX - panelSize.width - margin)
-        y = preferredBelow >= visibleFrame.minY + margin
-            ? preferredBelow
-            : min(preferredAbove, visibleFrame.maxY - panelSize.height - margin)
+        let x = visibleFrame.maxX - panelSize.width - margin
+        let y = visibleFrame.minY + margin
 
         window = AnswerPanelWindow(
             contentRect: CGRect(origin: CGPoint(x: x, y: y), size: panelSize),
@@ -34,15 +30,17 @@ final class AnswerPanelController {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = allowsWindowDragging
         window.animationBehavior = .none
         window.isReleasedWhenClosed = false
         window.level = .screenSaver
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.contentView = NSHostingView(
+        window.acceptsMouseMovedEvents = true
+        window.ignoresMouseEvents = false
+        window.contentView = AnswerPanelHostingView(
             rootView: AnswerPanelView(
                 controller: controller,
-                image: image,
+                session: session,
                 initialQuestion: initialQuestion
             )
         )
@@ -60,6 +58,18 @@ final class AnswerPanelController {
     func close() {
         removeEscapeMonitor()
         window.close()
+    }
+
+    func setWindowDraggingEnabled(_ isEnabled: Bool) {
+        allowsWindowDragging = isEnabled
+        window.isMovableByWindowBackground = isEnabled
+    }
+
+    func appendScreenshot(_ image: PickedImage) {
+        session.image = image
+        session.focusRequestID += 1
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func installEscapeMonitor() {
@@ -82,6 +92,15 @@ final class AnswerPanelController {
     }
 }
 
+private final class AnswerPanelSession: ObservableObject {
+    @Published var image: PickedImage
+    @Published var focusRequestID = 0
+
+    init(image: PickedImage) {
+        self.image = image
+    }
+}
+
 private final class AnswerPanelWindow: NSWindow {
     override var canBecomeKey: Bool {
         true
@@ -92,79 +111,107 @@ private final class AnswerPanelWindow: NSWindow {
     }
 }
 
+private final class AnswerPanelHostingView<Content: View>: NSHostingView<Content> {
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) ?? (bounds.contains(point) ? self : nil)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        if let scrollView = firstScrollView(in: self) {
+            scrollView.scrollWheel(with: event)
+        }
+        // Keep wheel events inside the transparent answer panel instead of
+        // allowing them to pass through to whatever is behind the window.
+    }
+
+    private func firstScrollView(in view: NSView) -> NSScrollView? {
+        if let scrollView = view as? NSScrollView {
+            return scrollView
+        }
+
+        for subview in view.subviews {
+            if let scrollView = firstScrollView(in: subview) {
+                return scrollView
+            }
+        }
+
+        return nil
+    }
+}
+
 private struct ConversationTurn: Identifiable, Equatable {
     let id: UUID
     var question: String
     var answer: String
     var errorMessage: String?
     var isLoading: Bool
+    var showsAssistant: Bool
 }
 
-struct AnswerPanelView: View {
+private struct AnswerPanelView: View {
     @ObservedObject var controller: OpenLensController
-    let image: PickedImage
+    @ObservedObject var session: AnswerPanelSession
     let initialQuestion: String
 
     @State private var question = ""
     @State private var turns: [ConversationTurn] = []
-    @State private var showsHistory = false
+    @State private var lastAutoScrolledTurnCount = 0
     @FocusState private var questionFocused: Bool
 
+    private let composerWidth: CGFloat = 420
+    private let assistantRevealDelay = 0.30
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 10) {
             conversationBody
             composer
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(width: 520, height: 330)
-        .padding(8)
+        .frame(width: 520, height: 374, alignment: .bottom)
+        .padding(12)
         .onAppear {
             DispatchQueue.main.async {
                 questionFocused = true
                 send(initialQuestion)
             }
         }
+        .onChange(of: session.focusRequestID) { _, _ in
+            questionFocused = true
+        }
     }
 
     private var conversationBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if showsHistory {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(turns) { turn in
-                            turnView(turn, isCompact: false, showsUserMessage: true)
-                        }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(turns) { turn in
+                        turnView(turn, isCompact: false, showsUserMessage: true)
+                            .id(turn.id)
                     }
-                    .padding(.vertical, 2)
                 }
-            } else {
-                if hiddenTurnCount > 0 {
-                    Button {
-                        withAnimation(.snappy(duration: 0.22)) {
-                            showsHistory = true
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 12, weight: .medium))
-                            Text("View previous messages")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.primary.opacity(0.72))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .liquidGlassSurface(cornerRadius: 15, isClear: true)
+                .padding(.top, 4)
+                .padding(.bottom, 2)
+                .frame(width: composerWidth, alignment: .topLeading)
+                .frame(minHeight: 276, alignment: .bottom)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .onChange(of: turns.count) { _, nextCount in
+                guard nextCount > lastAutoScrolledTurnCount, let lastID = turns.last?.id else {
+                    return
                 }
 
-                if let latestTurn {
-                    turnView(latestTurn, isCompact: true, showsUserMessage: true)
+                lastAutoScrolledTurnCount = nextCount
+                DispatchQueue.main.async {
+                    proxy.scrollTo(lastID, anchor: .bottom)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: 276)
     }
 
     private func turnView(_ turn: ConversationTurn, isCompact: Bool, showsUserMessage: Bool) -> some View {
@@ -175,19 +222,33 @@ struct AnswerPanelView: View {
                     Text(turn.question)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.primary)
-                        .lineLimit(isCompact ? 2 : nil)
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color(nsColor: .controlAccentColor).opacity(0.92), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                         .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 5)
+                        .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 3)
                 }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
             }
 
-            HStack(alignment: .top) {
-                assistantMessage(turn, isCompact: isCompact)
-                Spacer(minLength: 72)
+            if turn.showsAssistant {
+                if turn.errorMessage != nil {
+                    errorMessage(turn)
+                        .transition(.opacity)
+                } else {
+                    HStack(alignment: .top) {
+                        assistantMessage(turn, isCompact: isCompact)
+                        Spacer(minLength: 72)
+                    }
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -196,47 +257,42 @@ struct AnswerPanelView: View {
     @ViewBuilder
     private func assistantMessage(_ turn: ConversationTurn, isCompact: Bool) -> some View {
         if turn.isLoading {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Thinking...")
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(.primary)
+            TypingIndicatorView()
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .liquidGlassSurface(cornerRadius: 15, isClear: true)
-            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
-        } else if let errorMessage = turn.errorMessage {
-            Text(errorMessage)
-                .font(.system(size: 13))
-                .foregroundStyle(.red)
-                .lineSpacing(3)
-                .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .liquidGlassSurface(cornerRadius: 15, isClear: true)
-                .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
+            .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
         } else {
             Text(turn.answer.isEmpty ? " " : turn.answer)
                 .font(.system(size: 13))
                 .foregroundStyle(.primary)
                 .lineSpacing(3)
-                .lineLimit(isCompact ? 7 : nil)
                 .textSelection(.enabled)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
                 .liquidGlassSurface(cornerRadius: 15, isClear: true)
-                .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
         }
+    }
+
+    private func errorMessage(_ turn: ConversationTurn) -> some View {
+        Text(turn.errorMessage ?? "")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.red)
+            .multilineTextAlignment(.center)
+            .lineSpacing(3)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 6)
     }
 
     private var composer: some View {
         HStack(spacing: 10) {
             TextField("Ask a follow-up", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .lineLimit(1...3)
+                .font(.system(size: 15, weight: .regular))
+                .lineLimit(1...2)
+                .foregroundStyle(.primary)
                 .focused($questionFocused)
                 .onSubmit {
                     sendCurrentQuestion()
@@ -246,8 +302,8 @@ struct AnswerPanelView: View {
                 sendCurrentQuestion()
             } label: {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 32, height: 32)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 34, height: 34)
             }
             .sendCircleButton(isEnabled: canSend)
             .keyboardShortcut(.return, modifiers: [.command])
@@ -255,16 +311,17 @@ struct AnswerPanelView: View {
             .help("Send")
         }
         .padding(.leading, 14)
-        .padding(.trailing, 8)
-        .padding(.vertical, 10)
-        .liquidGlassSurface(cornerRadius: 22, isClear: true)
+        .padding(.trailing, 7)
+        .padding(.vertical, 6)
+        .frame(width: composerWidth)
+        .frame(minHeight: 46)
+        .liquidGlassSurface(cornerRadius: 23, isClear: true)
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 23, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.8)
         )
-        .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 7)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
+        .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
+        .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
     }
 
     private var canSend: Bool {
@@ -273,14 +330,6 @@ struct AnswerPanelView: View {
 
     private var hasLoadingTurn: Bool {
         turns.contains { $0.isLoading }
-    }
-
-    private var latestTurn: ConversationTurn? {
-        turns.last
-    }
-
-    private var hiddenTurnCount: Int {
-        max(0, turns.count - 1)
     }
 
     private func sendCurrentQuestion() {
@@ -297,20 +346,28 @@ struct AnswerPanelView: View {
 
         let turnID = UUID()
         let contextPrompt = prompt(for: trimmedQuestion)
-        turns.append(
-            ConversationTurn(
-                id: turnID,
-                question: trimmedQuestion,
-                answer: "",
-                errorMessage: nil,
-                isLoading: true
+        withAnimation(.easeOut(duration: 0.20)) {
+            turns.append(
+                ConversationTurn(
+                    id: turnID,
+                    question: trimmedQuestion,
+                    answer: "",
+                    errorMessage: nil,
+                    isLoading: true,
+                    showsAssistant: false
+                )
             )
-        )
-        showsHistory = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + assistantRevealDelay) {
+            withAnimation(.easeOut(duration: 0.20)) {
+                showAssistantMessage(id: turnID)
+            }
+        }
 
         Task {
             do {
-                let response = try await controller.submit(image: image, question: contextPrompt)
+                let response = try await controller.submit(image: session.image, question: contextPrompt)
                 await MainActor.run {
                     updateTurn(id: turnID, answer: response, errorMessage: nil)
                 }
@@ -327,10 +384,20 @@ struct AnswerPanelView: View {
             return
         }
 
-        turns[index].answer = answer
-        turns[index].errorMessage = errorMessage
-        turns[index].isLoading = false
+        withAnimation(.easeOut(duration: 0.18)) {
+            turns[index].answer = answer
+            turns[index].errorMessage = errorMessage
+            turns[index].isLoading = false
+        }
         questionFocused = true
+    }
+
+    private func showAssistantMessage(id: UUID) {
+        guard let index = turns.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        turns[index].showsAssistant = true
     }
 
     private func prompt(for newQuestion: String) -> String {
@@ -352,6 +419,33 @@ struct AnswerPanelView: View {
         Latest user question:
         \(newQuestion)
         """
+    }
+}
+
+private struct TypingIndicatorView: View {
+    @State private var activeDot = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(.primary.opacity(index == activeDot ? 0.72 : 0.28))
+                    .frame(width: 5, height: 5)
+                    .offset(y: index == activeDot ? -1 : 0)
+            }
+        }
+        .frame(height: 16)
+        .onAppear {
+            timer?.invalidate()
+            timer = Timer.scheduledTimer(withTimeInterval: 0.22, repeats: true) { _ in
+                activeDot = (activeDot + 1) % 3
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
+        }
     }
 }
 
