@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import SwiftUI
 
 @MainActor
@@ -7,9 +8,11 @@ final class ScreenshotOverlayController {
     var onCancel: (() -> Void)?
 
     private var windows: [NSWindow] = []
+    private var escapeMonitor: Any?
 
     func show() {
         close()
+        installEscapeMonitor()
         windows = NSScreen.screens.map { screen in
             let window = OverlayWindow(
                 contentRect: screen.frame,
@@ -45,6 +48,7 @@ final class ScreenshotOverlayController {
     }
 
     func close() {
+        removeEscapeMonitor()
         windows.forEach { window in
             window.orderOut(nil)
             window.contentView = nil
@@ -56,6 +60,24 @@ final class ScreenshotOverlayController {
     private func cancel() {
         close()
         onCancel?()
+    }
+
+    private func installEscapeMonitor() {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == kVK_Escape else {
+                return event
+            }
+
+            self?.cancel()
+            return nil
+        }
+    }
+
+    private func removeEscapeMonitor() {
+        if let escapeMonitor {
+            NSEvent.removeMonitor(escapeMonitor)
+            self.escapeMonitor = nil
+        }
     }
 
     private func capture(rect: CGRect, question: String, on screen: NSScreen) {
@@ -264,7 +286,7 @@ struct ScreenshotSelectionView: View {
         HStack(spacing: 10) {
             TextField("Ask about this area", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 15, weight: .regular))
                 .lineLimit(1...2)
                 .foregroundStyle(.primary)
                 .focused($questionFocused)
@@ -276,22 +298,22 @@ struct ScreenshotSelectionView: View {
                 sendQuestion()
             } label: {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 20, weight: .medium))
-                    .frame(width: 42, height: 42)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 34, height: 34)
             }
             .sendCircleButton(isEnabled: canSend)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
             .help("Send")
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 9)
-        .padding(.vertical, 8)
-        .frame(width: 520)
-        .frame(minHeight: 56)
-        .liquidGlassSurface(cornerRadius: 28, isClear: true)
+        .padding(.leading, 14)
+        .padding(.trailing, 7)
+        .padding(.vertical, 6)
+        .frame(width: 420)
+        .frame(minHeight: 46)
+        .liquidGlassSurface(cornerRadius: 23, isClear: true)
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: 23, style: .continuous)
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
         )
         .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
@@ -348,11 +370,11 @@ struct ScreenshotSelectionView: View {
     }
 
     private func toolbarX(in bounds: CGSize) -> CGFloat {
-        min(max(selection.midX, 335), bounds.width - 335)
+        min(max(selection.midX, 260), bounds.width - 260)
     }
 
     private func toolbarY(in bounds: CGSize) -> CGFloat {
-        let toolbarHeight: CGFloat = 66
+        let toolbarHeight: CGFloat = 54
         let preferredBelow = selection.maxY + toolbarHeight / 2 + 14
         if preferredBelow <= bounds.height - toolbarHeight / 2 - 8 {
             return preferredBelow
@@ -455,17 +477,6 @@ private struct FrozenScreenshotView: View {
             .resizable()
             .scaledToFill()
             .frame(width: rect.width, height: rect.height)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(.white.opacity(0.70), lineWidth: 1.2)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.accentColor.opacity(0.80), lineWidth: 2)
-                    .padding(-2)
-            )
-            .shadow(color: .black.opacity(0.30), radius: 24, x: 0, y: 12)
             .position(x: rect.midX, y: rect.midY)
     }
 

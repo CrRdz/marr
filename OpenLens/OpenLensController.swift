@@ -17,7 +17,7 @@ final class OpenLensController: ObservableObject {
     private let client: VisionAIClient
     private var hotKeyManager: HotKeyManager?
     private var overlayController: ScreenshotOverlayController?
-    private var askPanelController: AskPanelController?
+    private var answerPanelController: AnswerPanelController?
     private var nativeScreenshotController: NativeScreenshotController?
 
     init(client: VisionAIClient) {
@@ -57,7 +57,7 @@ final class OpenLensController: ObservableObject {
         }
         overlay.onCapture = { [weak self] image, rect, question in
             Task { @MainActor in
-                self?.showQuestionPanel(for: image, near: rect, question: question)
+                self?.showAnswerPanel(for: image, near: rect, question: question)
                 self?.statusMessage = "Screenshot captured."
             }
         }
@@ -127,8 +127,8 @@ final class OpenLensController: ObservableObject {
     }
 
     func dismissCaptureSession() {
-        askPanelController?.close()
-        askPanelController = nil
+        answerPanelController?.close()
+        answerPanelController = nil
         overlayController?.close()
         overlayController = nil
         nativeScreenshotController?.cancel()
@@ -152,15 +152,11 @@ final class OpenLensController: ObservableObject {
         return error.localizedDescription
     }
 
-    private func showQuestionPanel(for image: PickedImage, near rect: CGRect, question: String = "") {
-        let panel = AskPanelController(controller: self, image: image, anchorRect: rect, initialQuestion: question)
-        askPanelController = panel
+    private func showAnswerPanel(for image: PickedImage, near rect: CGRect, question: String) {
+        answerPanelController?.close()
+        let panel = AnswerPanelController(controller: self, image: image, anchorRect: rect, initialQuestion: question)
+        answerPanelController = panel
         panel.show()
-    }
-
-    private func defaultAskPanelAnchor() -> CGRect {
-        let mouseLocation = NSEvent.mouseLocation
-        return CGRect(x: mouseLocation.x, y: mouseLocation.y, width: 1, height: 1)
     }
 
     private func connection(openAIKey: String, gatewayBaseURL: String, gatewayKey: String) -> InferenceConnection {
