@@ -19,6 +19,15 @@ final class AnswerPanelController {
 
         let x = visibleFrame.maxX - panelSize.width - margin
         let y = visibleFrame.minY + margin
+        let composerRect = CGRect(
+            x: x + (panelSize.width - 420) / 2,
+            y: y + 12,
+            width: 420,
+            height: 46
+        )
+        let usesRegularComposerGlass = screen.map {
+            BackgroundBrightnessSampler.isNearlyWhite(in: composerRect, on: $0)
+        } ?? false
 
         window = AnswerPanelWindow(
             contentRect: CGRect(origin: CGPoint(x: x, y: y), size: panelSize),
@@ -37,13 +46,17 @@ final class AnswerPanelController {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.acceptsMouseMovedEvents = true
         window.ignoresMouseEvents = false
-        window.contentView = AnswerPanelHostingView(
+        let hostingView = AnswerPanelHostingView(
             rootView: AnswerPanelView(
                 controller: controller,
                 session: session,
-                initialQuestion: initialQuestion
+                initialQuestion: initialQuestion,
+                usesRegularComposerGlass: usesRegularComposerGlass
             )
         )
+        window.contentView = hostingView
+        hostingView.layoutSubtreeIfNeeded()
+        hostingView.displayIfNeeded()
         onClose = { [weak controller] in
             controller?.dismissCaptureSession()
         }
@@ -89,6 +102,65 @@ final class AnswerPanelController {
             NSEvent.removeMonitor(escapeMonitor)
             self.escapeMonitor = nil
         }
+    }
+}
+
+private enum BackgroundBrightnessSampler {
+    static func isNearlyWhite(in rect: CGRect, on screen: NSScreen) -> Bool {
+        guard
+            let displayNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            return false
+        }
+
+        let scale = screen.backingScaleFactor
+        let pixelRect = CGRect(
+            x: (rect.minX - screen.frame.minX) * scale,
+            y: (screen.frame.maxY - rect.maxY) * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).integral
+        let displayID = CGDirectDisplayID(displayNumber.uint32Value)
+
+        guard
+            let image = CGDisplayCreateImage(displayID, rect: pixelRect),
+            let bitmap = NSBitmapImageRep(cgImage: image).retagging(with: .sRGB)
+        else {
+            return false
+        }
+
+        let columns = 32
+        let rows = 6
+        var luminanceTotal: CGFloat = 0
+        var nearWhiteSamples = 0
+        var sampleCount = 0
+
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let x = min(bitmap.pixelsWide - 1, (column * bitmap.pixelsWide + bitmap.pixelsWide / 2) / columns)
+                let y = min(bitmap.pixelsHigh - 1, (row * bitmap.pixelsHigh + bitmap.pixelsHigh / 2) / rows)
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else {
+                    continue
+                }
+
+                let luminance = 0.2126 * color.redComponent
+                    + 0.7152 * color.greenComponent
+                    + 0.0722 * color.blueComponent
+                luminanceTotal += luminance
+                if luminance >= 0.93 && color.saturationComponent <= 0.08 {
+                    nearWhiteSamples += 1
+                }
+                sampleCount += 1
+            }
+        }
+
+        guard sampleCount > 0 else {
+            return false
+        }
+
+        let averageLuminance = luminanceTotal / CGFloat(sampleCount)
+        let nearWhiteRatio = CGFloat(nearWhiteSamples) / CGFloat(sampleCount)
+        return averageLuminance >= 0.90 && nearWhiteRatio >= 0.72
     }
 }
 
@@ -156,14 +228,38 @@ private struct AnswerPanelView: View {
     @ObservedObject var controller: OpenLensController
     @ObservedObject var session: AnswerPanelSession
     let initialQuestion: String
+    let usesRegularComposerGlass: Bool
 
     @State private var question = ""
-    @State private var turns: [ConversationTurn] = []
+    @State private var turns: [ConversationTurn]
     @State private var lastAutoScrolledTurnCount = 0
+    @State private var hasSubmittedInitialQuestion = false
     @FocusState private var questionFocused: Bool
 
     private let composerWidth: CGFloat = 420
     private let assistantRevealDelay = 0.30
+
+    init(
+        controller: OpenLensController,
+        session: AnswerPanelSession,
+        initialQuestion: String,
+        usesRegularComposerGlass: Bool
+    ) {
+        self.controller = controller
+        self.session = session
+        self.initialQuestion = initialQuestion
+        self.usesRegularComposerGlass = usesRegularComposerGlass
+        _turns = State(initialValue: [
+            ConversationTurn(
+                id: UUID(),
+                question: initialQuestion,
+                answer: "",
+                errorMessage: nil,
+                isLoading: true,
+                showsAssistant: true
+            )
+        ])
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -176,7 +272,7 @@ private struct AnswerPanelView: View {
         .onAppear {
             DispatchQueue.main.async {
                 questionFocused = true
-                send(initialQuestion)
+                submitInitialQuestion()
             }
         }
         .onChange(of: session.focusRequestID) { _, _ in
@@ -315,12 +411,11 @@ private struct AnswerPanelView: View {
         .padding(.vertical, 6)
         .frame(width: composerWidth)
         .frame(minHeight: 46)
-        .liquidGlassSurface(cornerRadius: 23, isClear: true)
+        .liquidGlassSurface(cornerRadius: 23, isClear: !usesRegularComposerGlass)
         .overlay(
             RoundedRectangle(cornerRadius: 23, style: .continuous)
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
         )
-        .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
         .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
     }
 
@@ -365,6 +460,27 @@ private struct AnswerPanelView: View {
             }
         }
 
+        Task {
+            do {
+                let response = try await controller.submit(image: session.image, question: contextPrompt)
+                await MainActor.run {
+                    updateTurn(id: turnID, answer: response, errorMessage: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    updateTurn(id: turnID, answer: "", errorMessage: controller.userFacingMessage(for: error))
+                }
+            }
+        }
+    }
+
+    private func submitInitialQuestion() {
+        guard !hasSubmittedInitialQuestion, let turnID = turns.first?.id else {
+            return
+        }
+
+        hasSubmittedInitialQuestion = true
+        let contextPrompt = prompt(for: initialQuestion)
         Task {
             do {
                 let response = try await controller.submit(image: session.image, question: contextPrompt)
