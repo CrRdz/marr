@@ -1,8 +1,7 @@
 import Foundation
 
 protocol VisionAIClient: Sendable {
-    func ask(imageData: Data, mimeType: String, question: String, model: String, apiKey: String) async throws -> String
-    func ask(imageData: Data, mimeType: String, question: String, model: String, connection: InferenceConnection) async throws -> String
+    func ask(request: VisionRequest, model: String, connection: InferenceConnection) async throws -> String
 }
 
 enum OpenAIClientError: LocalizedError, Sendable {
@@ -68,17 +67,7 @@ struct InferenceConnection: Sendable {
 }
 
 struct OpenAIClient: VisionAIClient {
-    func ask(imageData: Data, mimeType: String, question: String, model: String, apiKey: String) async throws -> String {
-        try await ask(
-            imageData: imageData,
-            mimeType: mimeType,
-            question: question,
-            model: model,
-            connection: .openAI(apiKey: apiKey)
-        )
-    }
-
-    func ask(imageData: Data, mimeType: String, question: String, model: String, connection: InferenceConnection) async throws -> String {
+    func ask(request: VisionRequest, model: String, connection: InferenceConnection) async throws -> String {
         let endpoint: URL?
 
         switch connection.apiFormat {
@@ -96,18 +85,14 @@ struct OpenAIClient: VisionAIClient {
         case .openAIResponses:
             return try await askOpenAIResponses(
                 endpoint: endpoint,
-                imageData: imageData,
-                mimeType: mimeType,
-                question: question,
+                visionRequest: request,
                 model: model,
                 connection: connection
             )
         case .anthropicMessages:
             return try await askAnthropicMessages(
                 endpoint: endpoint,
-                imageData: imageData,
-                mimeType: mimeType,
-                question: question,
+                visionRequest: request,
                 model: model,
                 connection: connection
             )
@@ -116,25 +101,13 @@ struct OpenAIClient: VisionAIClient {
 
     private func askOpenAIResponses(
         endpoint: URL,
-        imageData: Data,
-        mimeType: String,
-        question: String,
+        visionRequest: VisionRequest,
         model: String,
         connection: InferenceConnection
     ) async throws -> String {
-        let dataURL = "data:\(mimeType);base64,\(imageData.base64EncodedString())"
-
         let requestBody = ResponsesRequest(
             model: model,
-            input: [
-                .init(
-                    role: "user",
-                    content: [
-                        .init(type: "input_text", text: question, imageURL: nil),
-                        .init(type: "input_image", text: nil, imageURL: dataURL)
-                    ]
-                )
-            ]
+            input: openAIInputMessages(from: visionRequest)
         )
 
         var request = URLRequest(url: endpoint)
@@ -162,24 +135,15 @@ struct OpenAIClient: VisionAIClient {
 
     private func askAnthropicMessages(
         endpoint: URL,
-        imageData: Data,
-        mimeType: String,
-        question: String,
+        visionRequest: VisionRequest,
         model: String,
         connection: InferenceConnection
     ) async throws -> String {
         let requestBody = AnthropicMessagesRequest(
             model: model,
             maxTokens: 1024,
-            messages: [
-                .init(
-                    role: "user",
-                    content: [
-                        .init(type: "image", text: nil, source: .init(type: "base64", mediaType: mimeType, data: imageData.base64EncodedString())),
-                        .init(type: "text", text: question, source: nil)
-                    ]
-                )
-            ]
+            system: visionRequest.systemPrompt,
+            messages: anthropicMessages(from: visionRequest)
         )
 
         var request = URLRequest(url: endpoint)
@@ -204,6 +168,59 @@ struct OpenAIClient: VisionAIClient {
         }
 
         throw OpenAIClientError.emptyAnswer
+    }
+
+    private func openAIInputMessages(from request: VisionRequest) -> [ResponsesRequest.InputMessage] {
+        var messages = [
+            ResponsesRequest.InputMessage(
+                role: "system",
+                content: [.init(type: "input_text", text: request.systemPrompt, imageURL: nil)]
+            )
+        ]
+
+        messages.append(contentsOf: request.messages.map { message in
+            ResponsesRequest.InputMessage(
+                role: message.role.rawValue,
+                content: message.content.map { content in
+                    switch content {
+                    case .text(let text):
+                        return .init(
+                            type: message.role == .assistant ? "output_text" : "input_text",
+                            text: text,
+                            imageURL: nil
+                        )
+                    case .image(let image):
+                        let dataURL = "data:\(image.mimeType);base64,\(image.data.base64EncodedString())"
+                        return .init(type: "input_image", text: nil, imageURL: dataURL)
+                    }
+                }
+            )
+        })
+        return messages
+    }
+
+    private func anthropicMessages(from request: VisionRequest) -> [AnthropicMessagesRequest.Message] {
+        request.messages.map { message in
+            AnthropicMessagesRequest.Message(
+                role: message.role.rawValue,
+                content: message.content.map { content in
+                    switch content {
+                    case .text(let text):
+                        return .init(type: "text", text: text, source: nil)
+                    case .image(let image):
+                        return .init(
+                            type: "image",
+                            text: nil,
+                            source: .init(
+                                type: "base64",
+                                mediaType: image.mimeType,
+                                data: image.data.base64EncodedString()
+                            )
+                        )
+                    }
+                }
+            )
+        }
     }
 
     private func apiEndpoint(from baseURLString: String, finalPathComponents: [String]) -> URL? {
@@ -350,11 +367,13 @@ private struct ResponsesRequest: Encodable {
 private struct AnthropicMessagesRequest: Encodable {
     let model: String
     let maxTokens: Int
+    let system: String
     let messages: [Message]
 
     enum CodingKeys: String, CodingKey {
         case model
         case maxTokens = "max_tokens"
+        case system
         case messages
     }
 

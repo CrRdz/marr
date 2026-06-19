@@ -17,7 +17,19 @@
 		1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000182C00000000000001 /* ScreenshotOverlay.swift */; };
 		1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* NativeScreenshotController.swift */; };
 		1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001B2C00000000000001 /* AnswerPanel.swift */; };
+		1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001C2C00000000000001 /* ConversationHarness.swift */; };
+		1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000102C00000000000001 /* ConversationHarnessTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1B0000802C00000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000802C00000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A0000502C00000000000001;
+			remoteInfo = OpenLens;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		1A0000102C00000000000001 /* OpenLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensApp.swift; sourceTree = "<group>"; };
@@ -31,11 +43,21 @@
 		1A0000182C00000000000001 /* ScreenshotOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotOverlay.swift; sourceTree = "<group>"; };
 		1A00001A2C00000000000001 /* NativeScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenshotController.swift; sourceTree = "<group>"; };
 		1A00001B2C00000000000001 /* AnswerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanel.swift; sourceTree = "<group>"; };
+		1A00001C2C00000000000001 /* ConversationHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarness.swift; sourceTree = "<group>"; };
 		1A0000202C00000000000001 /* OpenLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
+		1B0000202C00000000000001 /* OpenLensTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenLensTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		1A0000302C00000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B0000302C00000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -49,6 +71,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000412C00000000000001 /* OpenLens */,
+				1B0000412C00000000000001 /* OpenLensTests */,
 				1A0000422C00000000000001 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -63,6 +86,7 @@
 				1A00001A2C00000000000001 /* NativeScreenshotController.swift */,
 				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
 				1A00001B2C00000000000001 /* AnswerPanel.swift */,
+				1A00001C2C00000000000001 /* ConversationHarness.swift */,
 				1A0000122C00000000000001 /* OpenAIClient.swift */,
 				1A0000132C00000000000001 /* ImagePicker.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
@@ -75,8 +99,17 @@
 			isa = PBXGroup;
 			children = (
 				1A0000202C00000000000001 /* OpenLens.app */,
+				1B0000202C00000000000001 /* OpenLensTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1B0000412C00000000000001 /* OpenLensTests */ = {
+			isa = PBXGroup;
+			children = (
+				1B0000102C00000000000001 /* ConversationHarnessTests.swift */,
+			);
+			path = OpenLensTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -99,6 +132,23 @@
 			productReference = 1A0000202C00000000000001 /* OpenLens.app */;
 			productType = "com.apple.product-type.application";
 		};
+		1B0000502C00000000000001 /* OpenLensTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "OpenLensTests" */;
+			buildPhases = (
+				1B0000602C00000000000001 /* Sources */,
+				1B0000302C00000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1B0000812C00000000000001 /* PBXTargetDependency */,
+			);
+			name = OpenLensTests;
+			productName = OpenLensTests;
+			productReference = 1B0000202C00000000000001 /* OpenLensTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -111,6 +161,10 @@
 				TargetAttributes = {
 					1A0000502C00000000000001 = {
 						CreatedOnToolsVersion = 26.4.1;
+					};
+					1B0000502C00000000000001 = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = 1A0000502C00000000000001;
 					};
 				};
 			};
@@ -129,6 +183,7 @@
 			projectRoot = "";
 			targets = (
 				1A0000502C00000000000001 /* OpenLens */,
+				1B0000502C00000000000001 /* OpenLensTests */,
 			);
 		};
 /* End PBXProject section */
@@ -156,12 +211,29 @@
 				1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */,
 				1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */,
 				1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */,
+				1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */,
 				1A0000032C00000000000001 /* OpenAIClient.swift in Sources */,
 				1A0000042C00000000000001 /* ImagePicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1B0000602C00000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1B0000812C00000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A0000502C00000000000001 /* OpenLens */;
+			targetProxy = 1B0000802C00000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A0000822C00000000000001 /* Debug */ = {
@@ -337,6 +409,34 @@
 			};
 			name = Release;
 		};
+		1B0000912C00000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.openlens.OpenLensTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenLens.app/Contents/MacOS/OpenLens";
+			};
+			name = Debug;
+		};
+		1B0000922C00000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.openlens.OpenLensTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenLens.app/Contents/MacOS/OpenLens";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -354,6 +454,15 @@
 			buildConfigurations = (
 				1A0000912C00000000000001 /* Debug */,
 				1A0000922C00000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "OpenLensTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B0000912C00000000000001 /* Debug */,
+				1B0000922C00000000000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

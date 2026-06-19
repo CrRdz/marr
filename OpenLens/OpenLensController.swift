@@ -114,8 +114,7 @@ final class OpenLensController: ObservableObject {
         model = "claude-sonnet-4-6"
     }
 
-    func submit(image: PickedImage, question: String) async throws -> String {
-        let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
+    func submit(request: VisionRequest) async throws -> String {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedGatewayBaseURL = gatewayBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -133,8 +132,8 @@ final class OpenLensController: ObservableObject {
             throw UserFacingError("Please enter a Gateway API Key, or set Gateway Auth Scheme to None.")
         }
 
-        guard !trimmedQuestion.isEmpty else {
-            throw UserFacingError("Please enter a question.")
+        guard !request.messages.isEmpty else {
+            throw UserFacingError("The conversation request is empty.")
         }
 
         guard !trimmedModel.isEmpty else {
@@ -147,14 +146,9 @@ final class OpenLensController: ObservableObject {
             gatewayKey: trimmedGatewayAPIKey
         )
         let client = client
-        let imageData = image.data
-        let mimeType = image.mimeType
-
         return try await Task.detached(priority: .userInitiated) {
             try await client.ask(
-                imageData: imageData,
-                mimeType: mimeType,
-                question: trimmedQuestion,
+                request: request,
                 model: trimmedModel,
                 connection: requestConnection
             )
