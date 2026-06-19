@@ -5,13 +5,13 @@ import SwiftUI
 @MainActor
 final class AnswerPanelController {
     private let window: AnswerPanelWindow
-    private let session: AnswerPanelSession
+    private let session: ConversationSession
     private var escapeMonitor: Any?
     private var onClose: (() -> Void)?
     private var allowsWindowDragging = false
 
     init(controller: OpenLensController, image: PickedImage, anchorRect: CGRect, initialQuestion: String) {
-        session = AnswerPanelSession(image: image)
+        session = ConversationSession(initialImage: image, initialQuestion: initialQuestion)
         let panelSize = NSSize(width: 544, height: 398)
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
@@ -50,7 +50,6 @@ final class AnswerPanelController {
             rootView: AnswerPanelView(
                 controller: controller,
                 session: session,
-                initialQuestion: initialQuestion,
                 usesRegularComposerGlass: usesRegularComposerGlass
             )
         )
@@ -79,8 +78,7 @@ final class AnswerPanelController {
     }
 
     func appendScreenshot(_ image: PickedImage) {
-        session.image = image
-        session.focusRequestID += 1
+        session.appendScreenshot(image)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -164,15 +162,6 @@ private enum BackgroundBrightnessSampler {
     }
 }
 
-private final class AnswerPanelSession: ObservableObject {
-    @Published var image: PickedImage
-    @Published var focusRequestID = 0
-
-    init(image: PickedImage) {
-        self.image = image
-    }
-}
-
 private final class AnswerPanelWindow: NSWindow {
     override var canBecomeKey: Bool {
         true
@@ -215,23 +204,12 @@ private final class AnswerPanelHostingView<Content: View>: NSHostingView<Content
     }
 }
 
-private struct ConversationTurn: Identifiable, Equatable {
-    let id: UUID
-    var question: String
-    var answer: String
-    var errorMessage: String?
-    var isLoading: Bool
-    var showsAssistant: Bool
-}
-
 private struct AnswerPanelView: View {
     @ObservedObject var controller: OpenLensController
-    @ObservedObject var session: AnswerPanelSession
-    let initialQuestion: String
+    @ObservedObject var session: ConversationSession
     let usesRegularComposerGlass: Bool
 
     @State private var question = ""
-    @State private var turns: [ConversationTurn]
     @State private var lastAutoScrolledTurnCount = 0
     @State private var hasSubmittedInitialQuestion = false
     @FocusState private var questionFocused: Bool
@@ -241,29 +219,27 @@ private struct AnswerPanelView: View {
 
     init(
         controller: OpenLensController,
-        session: AnswerPanelSession,
-        initialQuestion: String,
+        session: ConversationSession,
         usesRegularComposerGlass: Bool
     ) {
         self.controller = controller
         self.session = session
-        self.initialQuestion = initialQuestion
         self.usesRegularComposerGlass = usesRegularComposerGlass
-        _turns = State(initialValue: [
-            ConversationTurn(
-                id: UUID(),
-                question: initialQuestion,
-                answer: "",
-                errorMessage: nil,
-                isLoading: true,
-                showsAssistant: true
-            )
-        ])
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             conversationBody
+            if !session.pendingImageIDs.isEmpty {
+                Label(
+                    "\(session.pendingImageIDs.count) screenshot\(session.pendingImageIDs.count == 1 ? "" : "s") attached to the next question",
+                    systemImage: "photo.on.rectangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
             composer
                 .frame(maxWidth: .infinity, alignment: .center)
         }
@@ -284,7 +260,7 @@ private struct AnswerPanelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(turns) { turn in
+                    ForEach(session.turns) { turn in
                         turnView(turn, isCompact: false, showsUserMessage: true)
                             .id(turn.id)
                     }
@@ -295,8 +271,8 @@ private struct AnswerPanelView: View {
                 .frame(minHeight: 276, alignment: .bottom)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
-            .onChange(of: turns.count) { _, nextCount in
-                guard nextCount > lastAutoScrolledTurnCount, let lastID = turns.last?.id else {
+            .onChange(of: session.turns.count) { _, nextCount in
+                guard nextCount > lastAutoScrolledTurnCount, let lastID = session.turns.last?.id else {
                     return
                 }
 
@@ -376,14 +352,21 @@ private struct AnswerPanelView: View {
     }
 
     private func errorMessage(_ turn: ConversationTurn) -> some View {
-        Text(turn.errorMessage ?? "")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.red)
-            .multilineTextAlignment(.center)
-            .lineSpacing(3)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 6)
+        VStack(spacing: 8) {
+            Text(turn.errorMessage ?? "")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.red)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .textSelection(.enabled)
+            Button("Retry") {
+                retry(turn.id)
+            }
+            .controlSize(.small)
+            .disabled(session.hasLoadingTurn)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 6)
     }
 
     private var composer: some View {
@@ -424,11 +407,7 @@ private struct AnswerPanelView: View {
     }
 
     private var canSend: Bool {
-        !hasLoadingTurn && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var hasLoadingTurn: Bool {
-        turns.contains { $0.isLoading }
+        !session.hasLoadingTurn && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func sendCurrentQuestion() {
@@ -439,106 +418,56 @@ private struct AnswerPanelView: View {
 
     private func send(_ rawQuestion: String) {
         let trimmedQuestion = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuestion.isEmpty, !hasLoadingTurn else {
+        guard !trimmedQuestion.isEmpty, !session.hasLoadingTurn else {
             return
         }
 
-        let turnID = UUID()
-        let contextPrompt = prompt(for: trimmedQuestion)
-        withAnimation(.easeOut(duration: 0.20)) {
-            turns.append(
-                ConversationTurn(
-                    id: turnID,
-                    question: trimmedQuestion,
-                    answer: "",
-                    errorMessage: nil,
-                    isLoading: true,
-                    showsAssistant: false
-                )
-            )
-        }
+        guard let turnID = session.beginTurn(question: trimmedQuestion) else { return }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + assistantRevealDelay) {
             withAnimation(.easeOut(duration: 0.20)) {
-                showAssistantMessage(id: turnID)
+                session.revealAssistant(for: turnID)
             }
         }
-
-        Task {
-            do {
-                let response = try await controller.submit(image: session.image, question: contextPrompt)
-                await MainActor.run {
-                    updateTurn(id: turnID, answer: response, errorMessage: nil)
-                }
-            } catch {
-                await MainActor.run {
-                    updateTurn(id: turnID, answer: "", errorMessage: controller.userFacingMessage(for: error))
-                }
-            }
-        }
+        submit(turnID)
     }
 
     private func submitInitialQuestion() {
-        guard !hasSubmittedInitialQuestion, let turnID = turns.first?.id else {
+        guard !hasSubmittedInitialQuestion, let turnID = session.turns.first?.id else {
             return
         }
 
         hasSubmittedInitialQuestion = true
-        let contextPrompt = prompt(for: initialQuestion)
+        submit(turnID)
+    }
+
+    private func retry(_ turnID: UUID) {
+        guard session.prepareRetry(turnID) else { return }
+        submit(turnID)
+    }
+
+    private func submit(_ turnID: UUID) {
+        guard let request = session.request(for: turnID) else {
+            session.fail(turnID, message: "Could not build the conversation context.")
+            return
+        }
+
         Task {
             do {
-                let response = try await controller.submit(image: session.image, question: contextPrompt)
+                let response = try await controller.submit(request: request)
                 await MainActor.run {
-                    updateTurn(id: turnID, answer: response, errorMessage: nil)
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        session.complete(turnID, answer: response)
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    updateTurn(id: turnID, answer: "", errorMessage: controller.userFacingMessage(for: error))
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        session.fail(turnID, message: controller.userFacingMessage(for: error))
+                    }
                 }
             }
         }
-    }
-
-    private func updateTurn(id: UUID, answer: String, errorMessage: String?) {
-        guard let index = turns.firstIndex(where: { $0.id == id }) else {
-            return
-        }
-
-        withAnimation(.easeOut(duration: 0.18)) {
-            turns[index].answer = answer
-            turns[index].errorMessage = errorMessage
-            turns[index].isLoading = false
-        }
-        questionFocused = true
-    }
-
-    private func showAssistantMessage(id: UUID) {
-        guard let index = turns.firstIndex(where: { $0.id == id }) else {
-            return
-        }
-
-        turns[index].showsAssistant = true
-    }
-
-    private func prompt(for newQuestion: String) -> String {
-        let previousTurns = turns
-            .filter { !$0.isLoading && $0.errorMessage == nil && !$0.answer.isEmpty }
-            .map { "User: \($0.question)\nAssistant: \($0.answer)" }
-            .joined(separator: "\n\n")
-
-        guard !previousTurns.isEmpty else {
-            return newQuestion
-        }
-
-        return """
-        You are continuing a conversation about the same screenshot. Use the previous conversation as context, but answer the latest user question directly.
-
-        Previous conversation:
-        \(previousTurns)
-
-        Latest user question:
-        \(newQuestion)
-        """
     }
 }
 
