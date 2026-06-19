@@ -19,5 +19,11 @@ struct OpenLensApp: App {
                 .accessibilityLabel("OpenLens")
         }
         .menuBarExtraStyle(.window)
+
+        Window("OpenLens History", id: "history") {
+            HistoryView(store: controller.historyStore)
+        }
+        .defaultSize(width: 840, height: 560)
+        .windowResizability(.contentMinSize)
     }
 }

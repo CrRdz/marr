@@ -15,13 +15,13 @@ struct ConversationImageAsset: Identifiable, Equatable, Sendable {
     }
 }
 
-enum ConversationTurnStatus: Equatable, Sendable {
+enum ConversationTurnStatus: String, Codable, Equatable, Sendable {
     case loading
     case completed
     case failed
 }
 
-struct ConversationTurn: Identifiable, Equatable, Sendable {
+struct ConversationTurn: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let question: String
     let imageIDs: [UUID]
@@ -177,18 +177,25 @@ struct ConversationContextBuilder: Sendable {
 
 @MainActor
 final class ConversationSession: ObservableObject {
+    let id: UUID
+    let createdAt: Date
     @Published private(set) var turns: [ConversationTurn]
     @Published private(set) var images: [UUID: ConversationImageAsset]
     @Published private(set) var pendingImageIDs: [UUID]
     @Published var focusRequestID = 0
 
     private let contextBuilder: ConversationContextBuilder
+    private var updatedAt: Date
+    private var archiveHandler: ((ConversationArchive) -> Void)?
 
     init(
         initialImage: PickedImage,
         initialQuestion: String,
         contextBuilder: ConversationContextBuilder = ConversationContextBuilder()
     ) {
+        id = UUID()
+        createdAt = Date()
+        updatedAt = createdAt
         let asset = ConversationImageAsset(image: initialImage)
         let turn = ConversationTurn(
             id: UUID(),
@@ -209,12 +216,18 @@ final class ConversationSession: ObservableObject {
         turns.contains(where: \.isLoading)
     }
 
+    func setArchiveHandler(_ handler: @escaping (ConversationArchive) -> Void) {
+        archiveHandler = handler
+        handler(makeArchive())
+    }
+
     @discardableResult
     func appendScreenshot(_ image: PickedImage) -> UUID {
         let asset = ConversationImageAsset(image: image)
         images[asset.id] = asset
         pendingImageIDs.append(asset.id)
         focusRequestID += 1
+        archiveChanges()
         return asset.id
     }
 
@@ -233,6 +246,7 @@ final class ConversationSession: ObservableObject {
         )
         pendingImageIDs = []
         turns.append(turn)
+        archiveChanges()
         return turn.id
     }
 
@@ -252,6 +266,7 @@ final class ConversationSession: ObservableObject {
             $0.showsAssistant = true
         }
         focusRequestID += 1
+        archiveChanges()
     }
 
     func fail(_ turnID: UUID, message: String) {
@@ -262,6 +277,7 @@ final class ConversationSession: ObservableObject {
             $0.showsAssistant = true
         }
         focusRequestID += 1
+        archiveChanges()
     }
 
     func prepareRetry(_ turnID: UUID) -> Bool {
@@ -272,6 +288,7 @@ final class ConversationSession: ObservableObject {
         turns[index].errorMessage = nil
         turns[index].status = .loading
         turns[index].showsAssistant = true
+        archiveChanges()
         return true
     }
 
@@ -280,4 +297,19 @@ final class ConversationSession: ObservableObject {
         mutation(&turns[index])
     }
 
+    private func archiveChanges() {
+        updatedAt = Date()
+        archiveHandler?(makeArchive())
+    }
+
+    private func makeArchive() -> ConversationArchive {
+        ConversationArchive(
+            id: id,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            turns: turns,
+            images: Array(images.values),
+            pendingImageIDs: pendingImageIDs
+        )
+    }
 }

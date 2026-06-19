@@ -15,6 +15,16 @@ OpenLens uses a structured multimodal conversation harness rather than flattenin
 - `VisionAIClient` receives a provider-neutral `VisionRequest`; `OpenAIClient` encodes it as OpenAI Responses or Anthropic Messages payloads.
 - Failed turns remain visible and can be retried with the same structured context.
 
+## Local history
+
+Every conversation is saved inside the app sandbox under `Application Support/OpenLens/History`.
+
+- `conversation.json` stores turn text, status, timestamps, and image references.
+- Original PNG/JPEG bytes are stored once in the conversation's `images` directory.
+- The menu-bar History entry opens a resizable window with conversation and screenshot details.
+- Deleting a conversation removes both its manifest and stored screenshots.
+- API keys, gateway credentials, custom headers, and connection settings are never written to history.
+
 Run the harness tests with:
 
 ```sh

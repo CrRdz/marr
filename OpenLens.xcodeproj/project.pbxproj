@@ -18,6 +18,8 @@
 		1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* NativeScreenshotController.swift */; };
 		1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001B2C00000000000001 /* AnswerPanel.swift */; };
 		1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001C2C00000000000001 /* ConversationHarness.swift */; };
+		1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001D2C00000000000001 /* ConversationHistoryStore.swift */; };
+		1A00000E2C00000000000001 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001E2C00000000000001 /* HistoryView.swift */; };
 		1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000102C00000000000001 /* ConversationHarnessTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +46,8 @@
 		1A00001A2C00000000000001 /* NativeScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenshotController.swift; sourceTree = "<group>"; };
 		1A00001B2C00000000000001 /* AnswerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanel.swift; sourceTree = "<group>"; };
 		1A00001C2C00000000000001 /* ConversationHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarness.swift; sourceTree = "<group>"; };
+		1A00001D2C00000000000001 /* ConversationHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHistoryStore.swift; sourceTree = "<group>"; };
+		1A00001E2C00000000000001 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		1A0000202C00000000000001 /* OpenLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
 		1B0000202C00000000000001 /* OpenLensTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenLensTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -87,6 +91,8 @@
 				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
 				1A00001B2C00000000000001 /* AnswerPanel.swift */,
 				1A00001C2C00000000000001 /* ConversationHarness.swift */,
+				1A00001D2C00000000000001 /* ConversationHistoryStore.swift */,
+				1A00001E2C00000000000001 /* HistoryView.swift */,
 				1A0000122C00000000000001 /* OpenAIClient.swift */,
 				1A0000132C00000000000001 /* ImagePicker.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
@@ -212,6 +218,8 @@
 				1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */,
 				1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */,
 				1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */,
+				1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */,
+				1A00000E2C00000000000001 /* HistoryView.swift in Sources */,
 				1A0000032C00000000000001 /* OpenAIClient.swift in Sources */,
 				1A0000042C00000000000001 /* ImagePicker.swift in Sources */,
 			);

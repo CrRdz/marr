@@ -3,7 +3,14 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var controller: OpenLensController
+    @ObservedObject private var historyStore: ConversationHistoryStore
+    @Environment(\.openWindow) private var openWindow
     @State private var showsConnectionSettings = false
+
+    init(controller: OpenLensController) {
+        self.controller = controller
+        historyStore = controller.historyStore
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,6 +21,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     captureSection
+                    historySection
                     connectionSection
                 }
                 .padding(16)
@@ -111,6 +119,23 @@ struct ContentView: View {
             Label("Connection", systemImage: "network")
                 .font(.system(size: 13, weight: .semibold))
         }
+    }
+
+    private var historySection: some View {
+        Button {
+            openWindow(id: "history")
+        } label: {
+            HStack {
+                Label("History", systemImage: "clock.arrow.circlepath")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Text("\(historyStore.conversations.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var gatewaySettings: some View {
