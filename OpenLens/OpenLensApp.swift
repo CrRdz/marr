@@ -1,16 +1,23 @@
 import SwiftUI
 
 @main
+@MainActor
 struct OpenLensApp: App {
-    @StateObject private var controller = OpenLensController(client: OpenAIClient())
+    @StateObject private var controller: OpenLensController
+
+    init() {
+        let controller = OpenLensController(client: OpenAIClient())
+        _controller = StateObject(wrappedValue: controller)
+        controller.installHotKeyIfNeeded()
+    }
 
     var body: some Scene {
-        WindowGroup {
+        MenuBarExtra {
             ContentView(controller: controller)
-                .onAppear {
-                    controller.installHotKeyIfNeeded()
-                }
+        } label: {
+            Image(systemName: "viewfinder")
+                .accessibilityLabel("OpenLens")
         }
-        .windowResizability(.contentMinSize)
+        .menuBarExtraStyle(.window)
     }
 }
