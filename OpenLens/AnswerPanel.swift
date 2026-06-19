@@ -306,8 +306,15 @@ private struct AnswerPanelView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .frame(height: 276)
+        .frame(width: composerWidth + 24, height: 276)
+        .liquidGlassSurface(cornerRadius: 24, isClear: true)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.8)
+                .allowsHitTesting(false)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 16, x: 0, y: 7)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func turnView(_ turn: ConversationTurn, isCompact: Bool, showsUserMessage: Bool) -> some View {
@@ -359,10 +366,7 @@ private struct AnswerPanelView: View {
             .liquidGlassSurface(cornerRadius: 15, isClear: true)
             .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
         } else {
-            Text(turn.answer.isEmpty ? " " : turn.answer)
-                .font(.system(size: 13))
-                .foregroundStyle(.primary)
-                .lineSpacing(3)
+            MarkdownResponseView(source: turn.answer.isEmpty ? " " : turn.answer)
                 .textSelection(.enabled)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
@@ -535,6 +539,248 @@ private struct AnswerPanelView: View {
         Latest user question:
         \(newQuestion)
         """
+    }
+}
+
+private struct MarkdownResponseView: View {
+    let source: String
+
+    private var blocks: [MarkdownBlock] {
+        MarkdownBlockParser.parse(source)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                blockView(block)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: MarkdownBlock) -> some View {
+        switch block {
+        case let .heading(level, content):
+            Text(inlineMarkdown(content))
+                .font(.system(size: headingSize(level), weight: .semibold))
+                .lineSpacing(2)
+                .padding(.top, level == 1 ? 2 : 0)
+
+        case let .paragraph(content):
+            Text(inlineMarkdown(content))
+                .font(.system(size: 13))
+                .lineSpacing(3)
+
+        case let .unorderedList(items):
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("•")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(inlineMarkdown(item))
+                            .font(.system(size: 13))
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+
+        case let .orderedList(items):
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(index + 1).")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 17, alignment: .trailing)
+                        Text(inlineMarkdown(item))
+                            .font(.system(size: 13))
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+
+        case let .quote(content):
+            HStack(alignment: .top, spacing: 9) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(.secondary.opacity(0.45))
+                    .frame(width: 3)
+                Text(inlineMarkdown(content))
+                    .font(.system(size: 13))
+                    .italic()
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+        case let .code(content):
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(verbatim: content)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineSpacing(3)
+                    .padding(10)
+            }
+            .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+        case .divider:
+            Rectangle()
+                .fill(.separator.opacity(0.65))
+                .frame(height: 1)
+                .padding(.vertical, 2)
+        }
+    }
+
+    private func inlineMarkdown(_ content: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
+        return (try? AttributedString(markdown: content, options: options)) ?? AttributedString(content)
+    }
+
+    private func headingSize(_ level: Int) -> CGFloat {
+        switch level {
+        case 1: 18
+        case 2: 16
+        default: 14
+        }
+    }
+}
+
+private enum MarkdownBlock {
+    case heading(level: Int, content: String)
+    case paragraph(String)
+    case unorderedList([String])
+    case orderedList([String])
+    case quote(String)
+    case code(String)
+    case divider
+}
+
+private enum MarkdownBlockParser {
+    static func parse(_ source: String) -> [MarkdownBlock] {
+        let lines = source.components(separatedBy: .newlines)
+        var blocks: [MarkdownBlock] = []
+        var index = 0
+
+        while index < lines.count {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                index += 1
+                continue
+            }
+
+            if trimmed.hasPrefix("```") {
+                index += 1
+                var codeLines: [String] = []
+                while index < lines.count, !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                    codeLines.append(lines[index])
+                    index += 1
+                }
+                if index < lines.count {
+                    index += 1
+                }
+                blocks.append(.code(codeLines.joined(separator: "\n")))
+                continue
+            }
+
+            if let heading = heading(from: trimmed) {
+                blocks.append(.heading(level: heading.level, content: heading.content))
+                index += 1
+                continue
+            }
+
+            if isDivider(trimmed) {
+                blocks.append(.divider)
+                index += 1
+                continue
+            }
+
+            if unorderedItem(from: trimmed) != nil {
+                var items: [String] = []
+                while index < lines.count, let item = unorderedItem(from: lines[index].trimmingCharacters(in: .whitespaces)) {
+                    items.append(item)
+                    index += 1
+                }
+                blocks.append(.unorderedList(items))
+                continue
+            }
+
+            if orderedItem(from: trimmed) != nil {
+                var items: [String] = []
+                while index < lines.count, let item = orderedItem(from: lines[index].trimmingCharacters(in: .whitespaces)) {
+                    items.append(item)
+                    index += 1
+                }
+                blocks.append(.orderedList(items))
+                continue
+            }
+
+            if trimmed.hasPrefix(">") {
+                var quoteLines: [String] = []
+                while index < lines.count {
+                    let line = lines[index].trimmingCharacters(in: .whitespaces)
+                    guard line.hasPrefix(">") else { break }
+                    quoteLines.append(String(line.dropFirst()).trimmingCharacters(in: .whitespaces))
+                    index += 1
+                }
+                blocks.append(.quote(quoteLines.joined(separator: "\n")))
+                continue
+            }
+
+            var paragraphLines: [String] = []
+            while index < lines.count {
+                let line = lines[index].trimmingCharacters(in: .whitespaces)
+                guard !line.isEmpty, !startsBlock(line) else { break }
+                paragraphLines.append(line)
+                index += 1
+            }
+            blocks.append(.paragraph(paragraphLines.joined(separator: " ")))
+        }
+
+        return blocks
+    }
+
+    private static func startsBlock(_ line: String) -> Bool {
+        line.hasPrefix("```")
+            || line.hasPrefix(">")
+            || heading(from: line) != nil
+            || unorderedItem(from: line) != nil
+            || orderedItem(from: line) != nil
+            || isDivider(line)
+    }
+
+    private static func heading(from line: String) -> (level: Int, content: String)? {
+        let level = line.prefix(while: { $0 == "#" }).count
+        guard (1...6).contains(level) else { return nil }
+        let content = line.dropFirst(level)
+        guard content.first?.isWhitespace == true else { return nil }
+        return (level, content.trimmingCharacters(in: .whitespaces))
+    }
+
+    private static func unorderedItem(from line: String) -> String? {
+        for prefix in ["- ", "* ", "+ "] where line.hasPrefix(prefix) {
+            return String(line.dropFirst(prefix.count))
+        }
+        return nil
+    }
+
+    private static func orderedItem(from line: String) -> String? {
+        guard let period = line.firstIndex(of: ".") else { return nil }
+        let number = line[..<period]
+        let remainder = line[line.index(after: period)...]
+        guard Int(number) != nil, remainder.first?.isWhitespace == true else { return nil }
+        return remainder.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func isDivider(_ line: String) -> Bool {
+        let compact = line.replacingOccurrences(of: " ", with: "")
+        guard compact.count >= 3, let marker = compact.first else { return false }
+        return ["-", "*", "_"].contains(String(marker)) && compact.allSatisfy { $0 == marker }
     }
 }
 
