@@ -10,8 +10,17 @@ final class AnswerPanelController {
     private var onClose: (() -> Void)?
     private var allowsWindowDragging = false
 
-    init(controller: OpenLensController, image: PickedImage, anchorRect: CGRect, initialQuestion: String) {
+    init(
+        controller: OpenLensController,
+        historyStore: ConversationHistoryStore,
+        image: PickedImage,
+        anchorRect: CGRect,
+        initialQuestion: String
+    ) {
         session = ConversationSession(initialImage: image, initialQuestion: initialQuestion)
+        session.setArchiveHandler { [weak historyStore] archive in
+            historyStore?.save(archive)
+        }
         let panelSize = NSSize(width: 544, height: 398)
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero

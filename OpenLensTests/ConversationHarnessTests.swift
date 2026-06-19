@@ -81,6 +81,48 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertNotNil(session.request(for: turnID))
     }
 
+    func testHistoryStorePersistsTurnsAndImageDataAcrossReload() throws {
+        let rootURL = makeTemporaryHistoryURL()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let store = ConversationHistoryStore(rootURL: rootURL)
+        let session = ConversationSession(
+            initialImage: makeImage(name: "persisted.png", byte: 42),
+            initialQuestion: "Remember this screenshot"
+        )
+        session.setArchiveHandler { store.save($0) }
+        let turnID = try XCTUnwrap(session.turns.first?.id)
+        let imageID = try XCTUnwrap(session.turns.first?.imageIDs.first)
+        session.complete(turnID, answer: "Stored safely")
+
+        let reloaded = ConversationHistoryStore(rootURL: rootURL)
+        let record = try XCTUnwrap(reloaded.conversations.first)
+
+        XCTAssertEqual(record.title, "Remember this screenshot")
+        XCTAssertEqual(record.turns.first?.answer, "Stored safely")
+        XCTAssertEqual(record.completedTurnCount, 1)
+        XCTAssertEqual(reloaded.imageData(conversationID: record.id, imageID: imageID), Data([42]))
+    }
+
+    func testHistoryStorePersistsPendingScreenshotAndDeletesConversation() throws {
+        let rootURL = makeTemporaryHistoryURL()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let store = ConversationHistoryStore(rootURL: rootURL)
+        let session = ConversationSession(
+            initialImage: makeImage(name: "first.png", byte: 1),
+            initialQuestion: "First"
+        )
+        session.setArchiveHandler { store.save($0) }
+        let pendingID = session.appendScreenshot(makeImage(name: "pending.png", byte: 2))
+
+        let record = try XCTUnwrap(store.conversations.first)
+        XCTAssertEqual(record.pendingImageIDs, [pendingID])
+        XCTAssertEqual(record.images.count, 2)
+
+        store.delete(record.id)
+        XCTAssertTrue(store.conversations.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent(record.id.uuidString).path))
+    }
+
     private func makeImage(name: String, byte: UInt8) -> PickedImage {
         PickedImage(
             data: Data([byte]),
@@ -88,6 +130,11 @@ final class ConversationHarnessTests: XCTestCase {
             fileName: name,
             image: NSImage(size: NSSize(width: 1, height: 1))
         )
+    }
+
+    private func makeTemporaryHistoryURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenLensHistoryTests-\(UUID().uuidString)", isDirectory: true)
     }
 
     private func imageCount(in message: VisionMessage) -> Int {

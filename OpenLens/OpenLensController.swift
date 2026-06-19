@@ -13,6 +13,7 @@ final class OpenLensController: ObservableObject {
     @Published var customHeadersText = ""
     @Published var model = "claude-sonnet-4-6"
     @Published var statusMessage: String?
+    let historyStore: ConversationHistoryStore
 
     private let client: VisionAIClient
     private var hotKeyManager: HotKeyManager?
@@ -20,8 +21,12 @@ final class OpenLensController: ObservableObject {
     private var answerPanelController: AnswerPanelController?
     private var nativeScreenshotController: NativeScreenshotController?
 
-    init(client: VisionAIClient) {
+    init(
+        client: VisionAIClient,
+        historyStore: ConversationHistoryStore? = nil
+    ) {
         self.client = client
+        self.historyStore = historyStore ?? ConversationHistoryStore()
     }
 
     func installHotKeyIfNeeded() {
@@ -188,7 +193,13 @@ final class OpenLensController: ObservableObject {
 
     private func showAnswerPanel(for image: PickedImage, near rect: CGRect, question: String) {
         answerPanelController?.close()
-        let panel = AnswerPanelController(controller: self, image: image, anchorRect: rect, initialQuestion: question)
+        let panel = AnswerPanelController(
+            controller: self,
+            historyStore: historyStore,
+            image: image,
+            anchorRect: rect,
+            initialQuestion: question
+        )
         answerPanelController = panel
         panel.show()
     }
