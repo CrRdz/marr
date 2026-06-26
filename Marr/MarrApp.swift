@@ -21,7 +21,7 @@ struct MarrApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Marr History", id: "history") {
-            HistoryView(store: controller.historyStore)
+            HistoryView(controller: controller)
         }
         .defaultSize(width: 840, height: 560)
         .windowResizability(.contentMinSize)

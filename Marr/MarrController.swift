@@ -54,7 +54,12 @@ final class MarrController: ObservableObject {
             return
         }
 
-        if answerPanelController != nil {
+        if let answerPanelController {
+            if answerPanelController.isMinimized {
+                answerPanelController.restore()
+                statusMessage = "Answer panel restored."
+                return
+            }
             startAppendScreenshotCapture()
         } else {
             startCustomOverlayCapture()
@@ -126,23 +131,23 @@ final class MarrController: ObservableObject {
         let trimmedGatewayAPIKey = gatewayAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard provider != .openAI || !trimmedAPIKey.isEmpty else {
-            throw UserFacingError("Please enter an OpenAI API Key.")
+            throw UserFacingError("OpenAI API Key required.")
         }
 
         guard provider != .gateway || !trimmedGatewayBaseURL.isEmpty else {
-            throw UserFacingError("Please enter a Gateway Base URL.")
+            throw UserFacingError("Gateway Base URL required.")
         }
 
         guard provider != .gateway || gatewayAuthScheme == .none || !trimmedGatewayAPIKey.isEmpty else {
-            throw UserFacingError("Please enter a Gateway API Key, or set Gateway Auth Scheme to None.")
+            throw UserFacingError("Gateway API Key required, or set auth to None.")
         }
 
         guard !request.messages.isEmpty else {
-            throw UserFacingError("The conversation request is empty.")
+            throw UserFacingError("Conversation request is empty.")
         }
 
         guard !trimmedModel.isEmpty else {
-            throw UserFacingError("Please enter a model name.")
+            throw UserFacingError("Model name required.")
         }
 
         let requestConnection = connection(
@@ -173,6 +178,11 @@ final class MarrController: ObservableObject {
         nativeScreenshotController?.cancel()
         nativeScreenshotController = nil
         statusMessage = "Ready. Press Command Shift 0 to capture."
+    }
+
+    func minimizeAnswerPanel() {
+        answerPanelController?.minimize()
+        statusMessage = "Answer panel minimized. Press Command Shift 0 to restore it."
     }
 
     func userFacingMessage(for error: Error) -> String {
