@@ -53,6 +53,22 @@ jobs:
         cp -R build/release/Build/Products/Release/Marr.app build/dmg/
         ln -s /Applications build/dmg/Applications
         hdiutil create -volname Marr -srcfolder build/dmg -ov -format UDZO build/artifacts/Marr.dmg
+    - name: Generate release notes
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        TAG_NAME="${{ steps.metadata.outputs.tag_name }}"
+        REPO="${{ github.repository }}"
+
+        gh api "repos/${REPO}/releases/generate-notes" \
+          --method POST \
+          --field tag_name="$TAG_NAME" \
+          --field target_commitish="$GITHUB_SHA" \
+          --jq '.body' > build/release-notes.md
+
+        perl -0pi -e 's{ by @\S+ in https://github\.com/'"$REPO"'/pull/([0-9]+)}{ ([#$1](https://github.com/'"$REPO"'/pull/$1))}g; s{(?<!\]\()https://github\.com/'"$REPO"'/pull/([0-9]+)}{([#$1](https://github.com/'"$REPO"'/pull/$1))}g' build/release-notes.md
     - name: Create GitHub release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -63,4 +79,4 @@ jobs:
         gh release create "$TAG_NAME" build/artifacts/Marr.dmg \
           --target "$GITHUB_SHA" \
           --title "Marr ${TAG_NAME}" \
-          --generate-notes
+          --notes-file build/release-notes.md
