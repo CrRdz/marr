@@ -9,6 +9,7 @@ final class AnswerPanelController {
     private var escapeMonitor: Any?
     private var onClose: (() -> Void)?
     private var allowsWindowDragging = false
+    private(set) var isMinimized = false
 
     init(
         controller: MarrController,
@@ -71,9 +72,24 @@ final class AnswerPanelController {
     }
 
     func show() {
+        isMinimized = false
         installEscapeMonitor()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func minimize() {
+        isMinimized = true
+        removeEscapeMonitor()
+        window.orderOut(nil)
+    }
+
+    func restore() {
+        isMinimized = false
+        installEscapeMonitor()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        session.requestFocus()
     }
 
     func close() {
@@ -88,6 +104,8 @@ final class AnswerPanelController {
 
     func appendScreenshot(_ image: PickedImage) {
         session.appendScreenshot(image)
+        isMinimized = false
+        installEscapeMonitor()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -265,6 +283,20 @@ private struct AnswerPanelView: View {
         }
     }
 
+    private var panelControls: some View {
+        HStack(spacing: 8) {
+            PanelControlButton(color: Color(red: 1.0, green: 0.36, blue: 0.34), borderColor: Color(red: 0.82, green: 0.20, blue: 0.19)) {
+                controller.dismissCaptureSession()
+            }
+            .help("Close")
+
+            PanelControlButton(color: Color(red: 1.0, green: 0.78, blue: 0.13), borderColor: Color(red: 0.82, green: 0.58, blue: 0.02)) {
+                controller.minimizeAnswerPanel()
+            }
+            .help("Minimize")
+        }
+    }
+
     private var conversationBody: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -274,7 +306,7 @@ private struct AnswerPanelView: View {
                             .id(turn.id)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 32)
                 .padding(.bottom, 2)
                 .frame(width: composerWidth, alignment: .topLeading)
                 .frame(minHeight: 276, alignment: .bottom)
@@ -298,6 +330,11 @@ private struct AnswerPanelView: View {
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
                 .allowsHitTesting(false)
         )
+        .overlay(alignment: .topLeading) {
+            panelControls
+                .padding(.leading, 14)
+                .padding(.top, 12)
+        }
         .shadow(color: .black.opacity(0.14), radius: 16, x: 0, y: 7)
         .frame(maxWidth: .infinity, alignment: .center)
     }
@@ -363,10 +400,11 @@ private struct AnswerPanelView: View {
     private func errorMessage(_ turn: ConversationTurn) -> some View {
         VStack(spacing: 8) {
             Text(turn.errorMessage ?? "")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(.red)
                 .multilineTextAlignment(.center)
-                .lineSpacing(3)
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
                 .textSelection(.enabled)
             Button("Retry") {
                 retry(turn.id)
@@ -375,6 +413,7 @@ private struct AnswerPanelView: View {
             .disabled(session.hasLoadingTurn)
         }
         .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }
 
@@ -477,6 +516,32 @@ private struct AnswerPanelView: View {
                 }
             }
         }
+    }
+}
+
+private struct PanelControlButton: View {
+    let color: Color
+    let borderColor: Color
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .overlay(
+                    Circle()
+                        .stroke(borderColor.opacity(0.72), lineWidth: 0.7)
+                )
+                .shadow(color: .black.opacity(isHovering ? 0.16 : 0.08), radius: isHovering ? 3 : 2, x: 0, y: 1)
+                .frame(width: 13, height: 13)
+                .scaleEffect(isHovering ? 1.05 : 1)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 18, height: 18)
+        .contentShape(Circle())
+        .onHover { isHovering = $0 }
     }
 }
 

@@ -123,6 +123,62 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent(record.id.uuidString).path))
     }
 
+    func testHistoryStoreMigratesLegacyJSONHistoryIntoSQLite() throws {
+        let rootURL = makeTemporaryHistoryURL()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let conversationID = UUID()
+        let turnID = UUID()
+        let imageID = UUID()
+        let createdAt = Date()
+        let storedFileName = imageID.uuidString + ".png"
+        let legacyConversationURL = rootURL
+            .appendingPathComponent("History", isDirectory: true)
+            .appendingPathComponent(conversationID.uuidString, isDirectory: true)
+        let legacyImagesURL = legacyConversationURL.appendingPathComponent("images", isDirectory: true)
+        try FileManager.default.createDirectory(at: legacyImagesURL, withIntermediateDirectories: true)
+        try Data([77]).write(to: legacyImagesURL.appendingPathComponent(storedFileName))
+
+        let record = ConversationHistoryRecord(
+            id: conversationID,
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            turns: [
+                ConversationTurn(
+                    id: turnID,
+                    question: "Legacy question",
+                    imageIDs: [imageID],
+                    answer: "Legacy answer",
+                    errorMessage: nil,
+                    status: .completed,
+                    showsAssistant: true
+                )
+            ],
+            images: [
+                ConversationImageReference(
+                    id: imageID,
+                    mimeType: "image/png",
+                    fileName: "legacy.png",
+                    storedFileName: storedFileName
+                )
+            ],
+            pendingImageIDs: []
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(record).write(to: legacyConversationURL.appendingPathComponent("conversation.json"))
+
+        let store = ConversationHistoryStore(rootURL: rootURL)
+        let migrated = try XCTUnwrap(store.conversations.first)
+
+        XCTAssertEqual(migrated.id, conversationID)
+        XCTAssertEqual(migrated.turns.first?.answer, "Legacy answer")
+        XCTAssertEqual(store.imageData(conversationID: conversationID, imageID: imageID), Data([77]))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("marr.sqlite").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent("Attachments").appendingPathComponent(storedFileName).path))
+    }
+
     private func makeImage(name: String, byte: UInt8) -> PickedImage {
         PickedImage(
             data: Data([byte]),

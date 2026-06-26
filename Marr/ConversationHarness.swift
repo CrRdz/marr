@@ -7,6 +7,13 @@ struct ConversationImageAsset: Identifiable, Equatable, Sendable {
     let mimeType: String
     let fileName: String
 
+    init(id: UUID, data: Data, mimeType: String, fileName: String) {
+        self.id = id
+        self.data = data
+        self.mimeType = mimeType
+        self.fileName = fileName
+    }
+
     init(id: UUID = UUID(), image: PickedImage) {
         self.id = id
         data = image.data
@@ -229,6 +236,10 @@ final class ConversationSession: ObservableObject {
         focusRequestID += 1
         archiveChanges()
         return asset.id
+    }
+
+    func requestFocus() {
+        focusRequestID += 1
     }
 
     func beginTurn(question rawQuestion: String) -> UUID? {
