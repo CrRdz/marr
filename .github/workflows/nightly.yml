@@ -1,0 +1,71 @@
+# This workflow refreshes the nightly pre-release after main passes CI.
+
+name: Nightly
+
+on:
+  workflow_run:
+    workflows: [ "Swift" ]
+    branches: [ "main" ]
+    types: [ completed ]
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      contents: write
+
+    runs-on: macos-26
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+        fetch-depth: 0
+    - name: Resolve build metadata
+      id: metadata
+      run: |
+        set -euo pipefail
+
+        SHA="$(git rev-parse HEAD)"
+        SHORT_SHA="$(git rev-parse --short HEAD)"
+
+        echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+        echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+    - name: Verify
+      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+    - name: Build release app
+      run: xcodebuild build -project Marr.xcodeproj -scheme Marr -configuration Release -destination 'platform=macOS' -derivedDataPath build/nightly CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+    - name: Package DMG
+      run: |
+        set -euo pipefail
+
+        mkdir -p build/artifacts build/dmg
+        cp -R build/nightly/Build/Products/Release/Marr.app build/dmg/
+        ln -s /Applications build/dmg/Applications
+        hdiutil create -volname Marr -srcfolder build/dmg -ov -format UDZO build/artifacts/Marr-nightly.dmg
+    - name: Update nightly pre-release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        git tag -f nightly "${{ steps.metadata.outputs.sha }}"
+        git push -f origin nightly
+
+        NOTES="Nightly build for commit ${{ steps.metadata.outputs.sha }}."
+        if gh release view nightly >/dev/null 2>&1; then
+          gh release edit nightly \
+            --target "${{ steps.metadata.outputs.sha }}" \
+            --title "Marr Nightly (${{ steps.metadata.outputs.short_sha }})" \
+            --notes "$NOTES" \
+            --prerelease
+          gh release upload nightly build/artifacts/Marr-nightly.dmg --clobber
+        else
+          gh release create nightly build/artifacts/Marr-nightly.dmg \
+            --target "${{ steps.metadata.outputs.sha }}" \
+            --title "Marr Nightly (${{ steps.metadata.outputs.short_sha }})" \
+            --notes "$NOTES" \
+            --prerelease
+        fi
