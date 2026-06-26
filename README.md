@@ -1,12 +1,12 @@
-# OpenLens
+# Marr
 
 Ask AI anywhere on your screen.
 
-OpenLens is an early-stage macOS app concept for selecting any area of the screen and asking AI questions about it directly.
+Marr is an early-stage macOS app concept for selecting any area of the screen and asking AI questions about it directly.
 
 ## Conversation harness
 
-OpenLens uses a structured multimodal conversation harness rather than flattening chat history into a prompt string.
+Marr uses a structured multimodal conversation harness rather than flattening chat history into a prompt string.
 
 - `ConversationSession` owns turns, immutable screenshot assets, pending attachments, retries, and UI-observable state.
 - `ConversationContextBuilder` compiles successful turns into role-preserving messages with text, turn, and image budgets.
@@ -17,7 +17,7 @@ OpenLens uses a structured multimodal conversation harness rather than flattenin
 
 ## Local history
 
-Every conversation is saved inside the app sandbox under `Application Support/OpenLens/History`.
+Every conversation is saved inside the app sandbox under `Application Support/Marr/History`.
 
 - `conversation.json` stores turn text, status, timestamps, and image references.
 - Original PNG/JPEG bytes are stored once in the conversation's `images` directory.
@@ -28,5 +28,5 @@ Every conversation is saved inside the app sandbox under `Application Support/Op
 Run the harness tests with:
 
 ```sh
-xcodebuild -project OpenLens.xcodeproj -scheme OpenLens -derivedDataPath /tmp/OpenLensDerivedData CODE_SIGNING_ALLOWED=NO test
+xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' -derivedDataPath /tmp/MarrDerivedData CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```

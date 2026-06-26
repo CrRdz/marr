@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import OpenLens
+@testable import Marr
 
 @MainActor
 final class ConversationHarnessTests: XCTestCase {
@@ -134,7 +134,7 @@ final class ConversationHarnessTests: XCTestCase {
 
     private func makeTemporaryHistoryURL() -> URL {
         FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenLensHistoryTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("MarrHistoryTests-\(UUID().uuidString)", isDirectory: true)
     }
 
     private func imageCount(in message: VisionMessage) -> Int {

@@ -110,7 +110,7 @@ enum ScreenshotOverlayMode {
 }
 
 private extension Notification.Name {
-    static let captureSelectionOnlyScreenshot = Notification.Name("OpenLensCaptureSelectionOnlyScreenshot")
+    static let captureSelectionOnlyScreenshot = Notification.Name("MarrCaptureSelectionOnlyScreenshot")
 }
 
 private final class OverlayWindow: NSWindow {

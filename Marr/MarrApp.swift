@@ -2,11 +2,11 @@ import SwiftUI
 
 @main
 @MainActor
-struct OpenLensApp: App {
-    @StateObject private var controller: OpenLensController
+struct MarrApp: App {
+    @StateObject private var controller: MarrController
 
     init() {
-        let controller = OpenLensController(client: OpenAIClient())
+        let controller = MarrController(client: OpenAIClient())
         _controller = StateObject(wrappedValue: controller)
         controller.installHotKeyIfNeeded()
     }
@@ -16,11 +16,11 @@ struct OpenLensApp: App {
             ContentView(controller: controller)
         } label: {
             Image(systemName: "viewfinder")
-                .accessibilityLabel("OpenLens")
+                .accessibilityLabel("Marr")
         }
         .menuBarExtraStyle(.window)
 
-        Window("OpenLens History", id: "history") {
+        Window("Marr History", id: "history") {
             HistoryView(store: controller.historyStore)
         }
         .defaultSize(width: 840, height: 560)

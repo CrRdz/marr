@@ -3,7 +3,7 @@ import Carbon
 import SwiftUI
 
 @MainActor
-final class OpenLensController: ObservableObject {
+final class MarrController: ObservableObject {
     @Published var provider: InferenceProvider = .gateway
     @Published var apiKey = ""
     @Published var gatewayBaseURL = "http://127.0.0.1:15721/claude-desktop"

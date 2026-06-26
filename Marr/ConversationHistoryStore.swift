@@ -50,7 +50,7 @@ final class ConversationHistoryStore: ObservableObject {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first ?? FileManager.default.temporaryDirectory
-        self.init(rootURL: applicationSupport.appendingPathComponent("OpenLens/History", isDirectory: true))
+        self.init(rootURL: applicationSupport.appendingPathComponent("Marr/History", isDirectory: true))
     }
 
     init(rootURL: URL, fileManager: FileManager = .default) {

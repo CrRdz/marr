@@ -16,17 +16,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Verify
-      run: xcodebuild test -project OpenLens.xcodeproj -scheme OpenLens -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     - name: Build release app
-      run: xcodebuild build -project OpenLens.xcodeproj -scheme OpenLens -configuration Release -destination 'platform=macOS' -derivedDataPath build/release CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: xcodebuild build -project Marr.xcodeproj -scheme Marr -configuration Release -destination 'platform=macOS' -derivedDataPath build/release CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     - name: Package DMG
       run: |
         set -euo pipefail
 
         mkdir -p build/artifacts build/dmg
-        cp -R build/release/Build/Products/Release/OpenLens.app build/dmg/
+        cp -R build/release/Build/Products/Release/Marr.app build/dmg/
         ln -s /Applications build/dmg/Applications
-        hdiutil create -volname OpenLens -srcfolder build/dmg -ov -format UDZO build/artifacts/OpenLens.dmg
+        hdiutil create -volname Marr -srcfolder build/dmg -ov -format UDZO build/artifacts/Marr.dmg
     - name: Create GitHub release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -34,7 +34,7 @@ jobs:
         set -euo pipefail
 
         TAG_NAME="main-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
-        gh release create "$TAG_NAME" build/artifacts/OpenLens.dmg \
+        gh release create "$TAG_NAME" build/artifacts/Marr.dmg \
           --target "$GITHUB_SHA" \
-          --title "OpenLens ${TAG_NAME}" \
+          --title "Marr ${TAG_NAME}" \
           --notes "Automated macOS release for commit ${GITHUB_SHA}."
