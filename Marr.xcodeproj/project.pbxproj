@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1A0000012C00000000000001 /* OpenLensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000102C00000000000001 /* OpenLensApp.swift */; };
+		1A0000012C00000000000001 /* MarrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000102C00000000000001 /* MarrApp.swift */; };
 		1A0000022C00000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000112C00000000000001 /* ContentView.swift */; };
 		1A0000032C00000000000001 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000122C00000000000001 /* OpenAIClient.swift */; };
 		1A0000042C00000000000001 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* ImagePicker.swift */; };
 		1A0000052C00000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000142C00000000000001 /* Assets.xcassets */; };
-		1A0000062C00000000000001 /* OpenLensController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000162C00000000000001 /* OpenLensController.swift */; };
+		1A0000062C00000000000001 /* MarrController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000162C00000000000001 /* MarrController.swift */; };
 		1A0000072C00000000000001 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000172C00000000000001 /* HotKeyManager.swift */; };
 		1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000182C00000000000001 /* ScreenshotOverlay.swift */; };
 		1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* NativeScreenshotController.swift */; };
@@ -29,18 +29,18 @@
 			containerPortal = 1A0000802C00000000000001 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1A0000502C00000000000001;
-			remoteInfo = OpenLens;
+			remoteInfo = Marr;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		1A0000102C00000000000001 /* OpenLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensApp.swift; sourceTree = "<group>"; };
+		1A0000102C00000000000001 /* MarrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrApp.swift; sourceTree = "<group>"; };
 		1A0000112C00000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A0000122C00000000000001 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		1A0000132C00000000000001 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		1A0000142C00000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		1A0000152C00000000000001 /* OpenLens.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenLens.entitlements; sourceTree = "<group>"; };
-		1A0000162C00000000000001 /* OpenLensController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLensController.swift; sourceTree = "<group>"; };
+		1A0000152C00000000000001 /* Marr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Marr.entitlements; sourceTree = "<group>"; };
+		1A0000162C00000000000001 /* MarrController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrController.swift; sourceTree = "<group>"; };
 		1A0000172C00000000000001 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		1A0000182C00000000000001 /* ScreenshotOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotOverlay.swift; sourceTree = "<group>"; };
 		1A00001A2C00000000000001 /* NativeScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenshotController.swift; sourceTree = "<group>"; };
@@ -48,9 +48,9 @@
 		1A00001C2C00000000000001 /* ConversationHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarness.swift; sourceTree = "<group>"; };
 		1A00001D2C00000000000001 /* ConversationHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHistoryStore.swift; sourceTree = "<group>"; };
 		1A00001E2C00000000000001 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
-		1A0000202C00000000000001 /* OpenLens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenLens.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000202C00000000000001 /* Marr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Marr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
-		1B0000202C00000000000001 /* OpenLensTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenLensTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B0000202C00000000000001 /* MarrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MarrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,18 +74,18 @@
 		1A0000402C00000000000001 = {
 			isa = PBXGroup;
 			children = (
-				1A0000412C00000000000001 /* OpenLens */,
-				1B0000412C00000000000001 /* OpenLensTests */,
+				1A0000412C00000000000001 /* Marr */,
+				1B0000412C00000000000001 /* MarrTests */,
 				1A0000422C00000000000001 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		1A0000412C00000000000001 /* OpenLens */ = {
+		1A0000412C00000000000001 /* Marr */ = {
 			isa = PBXGroup;
 			children = (
-				1A0000102C00000000000001 /* OpenLensApp.swift */,
+				1A0000102C00000000000001 /* MarrApp.swift */,
 				1A0000112C00000000000001 /* ContentView.swift */,
-				1A0000162C00000000000001 /* OpenLensController.swift */,
+				1A0000162C00000000000001 /* MarrController.swift */,
 				1A0000172C00000000000001 /* HotKeyManager.swift */,
 				1A00001A2C00000000000001 /* NativeScreenshotController.swift */,
 				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
@@ -96,34 +96,34 @@
 				1A0000122C00000000000001 /* OpenAIClient.swift */,
 				1A0000132C00000000000001 /* ImagePicker.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
-				1A0000152C00000000000001 /* OpenLens.entitlements */,
+				1A0000152C00000000000001 /* Marr.entitlements */,
 			);
-			path = OpenLens;
+			path = Marr;
 			sourceTree = "<group>";
 		};
 		1A0000422C00000000000001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1A0000202C00000000000001 /* OpenLens.app */,
-				1B0000202C00000000000001 /* OpenLensTests.xctest */,
+				1A0000202C00000000000001 /* Marr.app */,
+				1B0000202C00000000000001 /* MarrTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		1B0000412C00000000000001 /* OpenLensTests */ = {
+		1B0000412C00000000000001 /* MarrTests */ = {
 			isa = PBXGroup;
 			children = (
 				1B0000102C00000000000001 /* ConversationHarnessTests.swift */,
 			);
-			path = OpenLensTests;
+			path = MarrTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		1A0000502C00000000000001 /* OpenLens */ = {
+		1A0000502C00000000000001 /* Marr */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1A0000902C00000000000001 /* Build configuration list for PBXNativeTarget "OpenLens" */;
+			buildConfigurationList = 1A0000902C00000000000001 /* Build configuration list for PBXNativeTarget "Marr" */;
 			buildPhases = (
 				1A0000602C00000000000001 /* Sources */,
 				1A0000302C00000000000001 /* Frameworks */,
@@ -133,14 +133,14 @@
 			);
 			dependencies = (
 			);
-			name = OpenLens;
-			productName = OpenLens;
-			productReference = 1A0000202C00000000000001 /* OpenLens.app */;
+			name = Marr;
+			productName = Marr;
+			productReference = 1A0000202C00000000000001 /* Marr.app */;
 			productType = "com.apple.product-type.application";
 		};
-		1B0000502C00000000000001 /* OpenLensTests */ = {
+		1B0000502C00000000000001 /* MarrTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "OpenLensTests" */;
+			buildConfigurationList = 1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "MarrTests" */;
 			buildPhases = (
 				1B0000602C00000000000001 /* Sources */,
 				1B0000302C00000000000001 /* Frameworks */,
@@ -150,9 +150,9 @@
 			dependencies = (
 				1B0000812C00000000000001 /* PBXTargetDependency */,
 			);
-			name = OpenLensTests;
-			productName = OpenLensTests;
-			productReference = 1B0000202C00000000000001 /* OpenLensTests.xctest */;
+			name = MarrTests;
+			productName = MarrTests;
+			productReference = 1B0000202C00000000000001 /* MarrTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -174,7 +174,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 1A0000812C00000000000001 /* Build configuration list for PBXProject "OpenLens" */;
+			buildConfigurationList = 1A0000812C00000000000001 /* Build configuration list for PBXProject "Marr" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -188,8 +188,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				1A0000502C00000000000001 /* OpenLens */,
-				1B0000502C00000000000001 /* OpenLensTests */,
+				1A0000502C00000000000001 /* Marr */,
+				1B0000502C00000000000001 /* MarrTests */,
 			);
 		};
 /* End PBXProject section */
@@ -210,9 +210,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1A0000012C00000000000001 /* OpenLensApp.swift in Sources */,
+				1A0000012C00000000000001 /* MarrApp.swift in Sources */,
 				1A0000022C00000000000001 /* ContentView.swift in Sources */,
-				1A0000062C00000000000001 /* OpenLensController.swift in Sources */,
+				1A0000062C00000000000001 /* MarrController.swift in Sources */,
 				1A0000072C00000000000001 /* HotKeyManager.swift in Sources */,
 				1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */,
 				1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */,
@@ -238,7 +238,7 @@
 /* Begin PBXTargetDependency section */
 		1B0000812C00000000000001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 1A0000502C00000000000001 /* OpenLens */;
+			target = 1A0000502C00000000000001 /* Marr */;
 			targetProxy = 1B0000802C00000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -363,7 +363,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = OpenLens/OpenLens.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Marr/Marr.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -371,7 +371,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = OpenLens;
+				INFOPLIST_KEY_CFBundleDisplayName = Marr;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = NO;
@@ -381,7 +381,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openlens.OpenLens;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marr.Marr;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -393,14 +393,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = OpenLens/OpenLens.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Marr/Marr.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TFG8WUM38S;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = OpenLens;
+				INFOPLIST_KEY_CFBundleDisplayName = Marr;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = NO;
@@ -410,7 +410,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openlens.OpenLens;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marr.Marr;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -424,10 +424,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openlens.OpenLensTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marr.MarrTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenLens.app/Contents/MacOS/OpenLens";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Marr.app/Contents/MacOS/Marr";
 			};
 			name = Debug;
 		};
@@ -438,17 +438,17 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openlens.OpenLensTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marr.MarrTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenLens.app/Contents/MacOS/OpenLens";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Marr.app/Contents/MacOS/Marr";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1A0000812C00000000000001 /* Build configuration list for PBXProject "OpenLens" */ = {
+		1A0000812C00000000000001 /* Build configuration list for PBXProject "Marr" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1A0000822C00000000000001 /* Debug */,
@@ -457,7 +457,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1A0000902C00000000000001 /* Build configuration list for PBXNativeTarget "OpenLens" */ = {
+		1A0000902C00000000000001 /* Build configuration list for PBXNativeTarget "Marr" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1A0000912C00000000000001 /* Debug */,
@@ -466,7 +466,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "OpenLensTests" */ = {
+		1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "MarrTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1B0000912C00000000000001 /* Debug */,

@@ -2,12 +2,12 @@ import AppKit
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var controller: OpenLensController
+    @ObservedObject var controller: MarrController
     @ObservedObject private var historyStore: ConversationHistoryStore
     @Environment(\.openWindow) private var openWindow
     @State private var showsConnectionSettings = false
 
-    init(controller: OpenLensController) {
+    init(controller: MarrController) {
         self.controller = controller
         historyStore = controller.historyStore
     }
@@ -44,7 +44,7 @@ struct ContentView: View {
                 .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("OpenLens")
+                Text("Marr")
                     .font(.headline)
                 Text("Ask AI about anything on your screen")
                     .font(.caption)
@@ -201,13 +201,13 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack {
-            Text("OpenLens runs from the menu bar")
+            Text("Marr runs from the menu bar")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
             Spacer()
 
-            Button("Quit OpenLens") {
+            Button("Quit Marr") {
                 NSApp.terminate(nil)
             }
             .buttonStyle(.plain)

@@ -18,6 +18,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: xcodebuild build -project OpenLens.xcodeproj -scheme OpenLens -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: xcodebuild build -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     - name: Run tests
-      run: xcodebuild test -project OpenLens.xcodeproj -scheme OpenLens -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=

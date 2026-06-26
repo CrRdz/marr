@@ -7,7 +7,7 @@ final class NativeScreenshotController {
 
     func capture(completion: @escaping (Result<PickedImage, Error>) -> Void) {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenLens-\(UUID().uuidString)")
+            .appendingPathComponent("Marr-\(UUID().uuidString)")
             .appendingPathExtension("png")
         temporaryURL = url
 

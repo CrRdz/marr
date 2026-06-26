@@ -11,7 +11,7 @@ final class AnswerPanelController {
     private var allowsWindowDragging = false
 
     init(
-        controller: OpenLensController,
+        controller: MarrController,
         historyStore: ConversationHistoryStore,
         image: PickedImage,
         anchorRect: CGRect,
@@ -44,7 +44,7 @@ final class AnswerPanelController {
             backing: .buffered,
             defer: false
         )
-        window.title = "OpenLens"
+        window.title = "Marr"
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
@@ -214,7 +214,7 @@ private final class AnswerPanelHostingView<Content: View>: NSHostingView<Content
 }
 
 private struct AnswerPanelView: View {
-    @ObservedObject var controller: OpenLensController
+    @ObservedObject var controller: MarrController
     @ObservedObject var session: ConversationSession
     let usesRegularComposerGlass: Bool
 
@@ -227,7 +227,7 @@ private struct AnswerPanelView: View {
     private let assistantRevealDelay = 0.30
 
     init(
-        controller: OpenLensController,
+        controller: MarrController,
         session: ConversationSession,
         usesRegularComposerGlass: Bool
     ) {
