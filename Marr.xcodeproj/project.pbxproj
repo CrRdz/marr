@@ -12,6 +12,7 @@
 		1A0000032C00000000000001 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000122C00000000000001 /* OpenAIClient.swift */; };
 		1A0000042C00000000000001 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* ImagePicker.swift */; };
 		1A0000052C00000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000142C00000000000001 /* Assets.xcassets */; };
+		1A0000092C00000000000001 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000212C00000000000001 /* Fonts */; };
 		1A0000062C00000000000001 /* MarrController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000162C00000000000001 /* MarrController.swift */; };
 		1A0000072C00000000000001 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000172C00000000000001 /* HotKeyManager.swift */; };
 		1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000182C00000000000001 /* ScreenshotOverlay.swift */; };
@@ -20,6 +21,10 @@
 		1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001C2C00000000000001 /* ConversationHarness.swift */; };
 		1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001D2C00000000000001 /* ConversationHistoryStore.swift */; };
 		1A00000E2C00000000000001 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001E2C00000000000001 /* HistoryView.swift */; };
+		1A00000F2C00000000000001 /* MarrTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001F2C00000000000001 /* MarrTypography.swift */; };
+		1A0000222C00000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000242C00000000000001 /* SettingsView.swift */; };
+		1A0000232C00000000000001 /* MarrSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000252C00000000000001 /* MarrSurface.swift */; };
+		1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000272C00000000000001 /* MarrBubbleColor.swift */; };
 		1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000102C00000000000001 /* ConversationHarnessTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -48,7 +53,12 @@
 		1A00001C2C00000000000001 /* ConversationHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarness.swift; sourceTree = "<group>"; };
 		1A00001D2C00000000000001 /* ConversationHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHistoryStore.swift; sourceTree = "<group>"; };
 		1A00001E2C00000000000001 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		1A00001F2C00000000000001 /* MarrTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrTypography.swift; sourceTree = "<group>"; };
 		1A0000202C00000000000001 /* Marr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Marr.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000212C00000000000001 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Fonts; sourceTree = "<group>"; };
+		1A0000242C00000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		1A0000252C00000000000001 /* MarrSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrSurface.swift; sourceTree = "<group>"; };
+		1A0000272C00000000000001 /* MarrBubbleColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrBubbleColor.swift; sourceTree = "<group>"; };
 		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
 		1B0000202C00000000000001 /* MarrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MarrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -93,9 +103,14 @@
 				1A00001C2C00000000000001 /* ConversationHarness.swift */,
 				1A00001D2C00000000000001 /* ConversationHistoryStore.swift */,
 				1A00001E2C00000000000001 /* HistoryView.swift */,
+				1A00001F2C00000000000001 /* MarrTypography.swift */,
+				1A0000252C00000000000001 /* MarrSurface.swift */,
+				1A0000272C00000000000001 /* MarrBubbleColor.swift */,
+				1A0000242C00000000000001 /* SettingsView.swift */,
 				1A0000122C00000000000001 /* OpenAIClient.swift */,
 				1A0000132C00000000000001 /* ImagePicker.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
+				1A0000212C00000000000001 /* Fonts */,
 				1A0000152C00000000000001 /* Marr.entitlements */,
 			);
 			path = Marr;
@@ -200,6 +215,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A0000052C00000000000001 /* Assets.xcassets in Resources */,
+				1A0000092C00000000000001 /* Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -220,6 +236,10 @@
 				1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */,
 				1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */,
 				1A00000E2C00000000000001 /* HistoryView.swift in Sources */,
+				1A00000F2C00000000000001 /* MarrTypography.swift in Sources */,
+				1A0000232C00000000000001 /* MarrSurface.swift in Sources */,
+				1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */,
+				1A0000222C00000000000001 /* SettingsView.swift in Sources */,
 				1A0000032C00000000000001 /* OpenAIClient.swift in Sources */,
 				1A0000042C00000000000001 /* ImagePicker.swift in Sources */,
 			);

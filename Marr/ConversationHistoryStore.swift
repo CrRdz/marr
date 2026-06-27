@@ -122,6 +122,26 @@ final class ConversationHistoryStore: ObservableObject {
         }
     }
 
+    func deleteAll() {
+        do {
+            try prepareDatabase()
+            try execute("DELETE FROM conversations")
+
+            if fileManager.fileExists(atPath: attachmentsURL.path) {
+                try fileManager.removeItem(at: attachmentsURL)
+            }
+            if fileManager.fileExists(atPath: legacyHistoryURL.path) {
+                try fileManager.removeItem(at: legacyHistoryURL)
+            }
+            try fileManager.createDirectory(at: attachmentsURL, withIntermediateDirectories: true)
+
+            conversations.removeAll()
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = "Could not clear conversation history: \(error.localizedDescription)"
+        }
+    }
+
     func beginTurn(conversationID: UUID, question rawQuestion: String) -> UUID? {
         let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard

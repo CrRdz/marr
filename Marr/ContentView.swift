@@ -5,7 +5,7 @@ struct ContentView: View {
     @ObservedObject var controller: MarrController
     @ObservedObject private var historyStore: ConversationHistoryStore
     @Environment(\.openWindow) private var openWindow
-    @State private var showsConnectionSettings = false
+    @AppStorage("general.showProviderInMenu") private var showProviderInMenu = true
 
     init(controller: MarrController) {
         self.controller = controller
@@ -16,223 +16,140 @@ struct ContentView: View {
         VStack(spacing: 0) {
             header
 
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    captureSection
-                    historySection
-                    connectionSection
+            VStack(alignment: .leading, spacing: 10) {
+                menuAction(
+                    title: "History",
+                    subtitle: "\(historyStore.conversations.count) saved",
+                    systemImage: "clock.arrow.circlepath"
+                ) {
+                    openWindow(id: "history")
                 }
-                .padding(16)
+                menuAction(
+                    title: "Settings",
+                    subtitle: showProviderInMenu ? controller.provider.rawValue : "",
+                    systemImage: "gearshape"
+                ) {
+                    openWindow(id: "settings")
+                }
             }
+            .padding(14)
 
             Divider()
+
             footer
         }
-        .frame(width: 390)
-        .frame(minHeight: 310, maxHeight: showsConnectionSettings ? 650 : 430)
+        .frame(width: 360)
         .background(.ultraThinMaterial)
     }
 
     private var header: some View {
         HStack(spacing: 11) {
             Image(systemName: "viewfinder")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 32, height: 32)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+                .frame(width: 34, height: 34)
+                .marrGlassSurface(cornerRadius: 10, isClear: true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Marr")
-                    .font(.headline)
-                Text("Ask AI about anything on your screen")
-                    .font(.caption)
+                    .font(MarrTypography.display(size: 22, weight: .semibold))
+                Text("Screen-aware AI companion")
+                    .font(MarrTypography.latin(size: 12))
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-    }
 
-    private var captureSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                controller.startScreenCapture()
-            } label: {
-                Label("Capture Screen Area", systemImage: "camera.viewfinder")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            HStack(spacing: 7) {
+                if statusTitle == "Needs attention" {
+                    Text(statusTitle)
+                        .font(MarrTypography.body(size: 11, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                }
 
-            HStack(spacing: 8) {
-                Image(systemName: statusIcon)
-                    .foregroundStyle(statusColor)
-
-                Text(controller.statusMessage ?? "Ready to capture.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-
-                Spacer(minLength: 4)
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 7, height: 7)
+                    .help(statusDetail)
 
                 Text("⌘⇧0")
-                    .font(.system(.caption, design: .rounded).weight(.semibold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    .font(MarrTypography.mono(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
-    private var connectionSection: some View {
-        DisclosureGroup(isExpanded: $showsConnectionSettings) {
-            VStack(alignment: .leading, spacing: 13) {
-                Picker("Provider", selection: $controller.provider) {
-                    ForEach(InferenceProvider.allCases) { provider in
-                        Text(provider.rawValue).tag(provider)
-                    }
-                }
-                .pickerStyle(.segmented)
+    private func menuAction(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
 
-                if controller.provider == .openAI {
-                    field("OpenAI API Key") {
-                        SecureField("sk-...", text: $controller.apiKey)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                } else {
-                    gatewaySettings
-                }
+                Text(title)
+                    .font(MarrTypography.body(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
 
-                field("Model") {
-                    TextField("Model", text: $controller.model)
-                        .textFieldStyle(.roundedBorder)
-                }
-            }
-            .padding(.top, 12)
-        } label: {
-            Label("Connection", systemImage: "network")
-                .font(.system(size: 13, weight: .semibold))
-        }
-    }
-
-    private var historySection: some View {
-        Button {
-            openWindow(id: "history")
-        } label: {
-            HStack {
-                Label("History", systemImage: "clock.arrow.circlepath")
-                    .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Text("\(historyStore.conversations.count)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 
-    private var gatewaySettings: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Gateway")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Use CC Switch") {
-                    controller.useCCSwitchClaudeDesktopPreset()
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(MarrTypography.body(size: 12))
+                        .foregroundStyle(.secondary)
                 }
-                .controlSize(.small)
-            }
 
-            field("Base URL") {
-                TextField("https://gateway.example.com/v1", text: $controller.gatewayBaseURL)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            field("API Format") {
-                Picker("API Format", selection: $controller.gatewayAPIFormat) {
-                    ForEach(GatewayAPIFormat.allCases) { format in
-                        Text(format.rawValue).tag(format)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            field("API Key") {
-                SecureField("Gateway key", text: $controller.gatewayAPIKey)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            field("Auth Scheme") {
-                Picker("Auth Scheme", selection: $controller.gatewayAuthScheme) {
-                    ForEach(GatewayAuthScheme.allCases) { scheme in
-                        Text(scheme.rawValue).tag(scheme)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Custom Headers")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextEditor(text: $controller.customHeadersText)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(height: 58)
-                    .scrollContentBackground(.hidden)
-                    .padding(5)
-                    .background(Color(nsColor: .textBackgroundColor).opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.22)))
-                Text("One header per line, for example X-Tenant-ID: demo")
-                    .font(.caption2)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .marrGlassSurface(cornerRadius: 12, isClear: true)
     }
 
     private var footer: some View {
         HStack {
-            Text("Marr runs from the menu bar")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-
-            Spacer()
-
-            Button("Quit Marr") {
+            Button("Quit") {
                 NSApp.terminate(nil)
             }
             .buttonStyle(.plain)
-            .font(.caption)
+            .font(MarrTypography.body(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
+
+            Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
     }
 
-    private var statusIcon: String {
-        guard let message = controller.statusMessage else { return "checkmark.circle.fill" }
-        return message.localizedCaseInsensitiveContains("could not") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+    private var statusTitle: String {
+        guard let message = controller.statusMessage else { return "Ready" }
+        if message.localizedCaseInsensitiveContains("could not") { return "Needs attention" }
+        if message.localizedCaseInsensitiveContains("active") { return "Capturing" }
+        if message.localizedCaseInsensitiveContains("drag") || message.localizedCaseInsensitiveContains("select") { return "Capturing" }
+        if message.localizedCaseInsensitiveContains("cancelled") { return "Ready" }
+        return "Ready"
+    }
+
+    private var statusDetail: String {
+        controller.statusMessage ?? "Use the shortcut to ask about anything on your screen."
     }
 
     private var statusColor: Color {
-        statusIcon == "exclamationmark.triangle.fill" ? .orange : .green
-    }
-
-    private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            content()
-        }
+        statusTitle == "Needs attention" ? .orange : .green
     }
 }

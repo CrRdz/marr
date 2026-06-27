@@ -160,6 +160,7 @@ struct ScreenshotSelectionView: View {
     @State private var activeResizeHandle: ResizeHandle?
     @State private var isSending = false
     @State private var pendingCapture: DispatchWorkItem?
+    @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
     private let questionBarWidth: CGFloat = 420
@@ -297,7 +298,7 @@ struct ScreenshotSelectionView: View {
         HStack(spacing: 10) {
             TextField("Ask about this area", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .regular))
+                .font(MarrTypography.body(size: 15))
                 .lineLimit(1...2)
                 .foregroundStyle(.primary)
                 .focused($questionFocused)
@@ -312,7 +313,7 @@ struct ScreenshotSelectionView: View {
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 34, height: 34)
             }
-            .sendCircleButton(isEnabled: canSend)
+            .sendCircleButton(isEnabled: canSend, color: bubbleTint)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
             .help("Send")
@@ -339,6 +340,10 @@ struct ScreenshotSelectionView: View {
 
     private var canSend: Bool {
         !isSending && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var bubbleTint: Color {
+        MarrBubbleColor.resolve(bubbleColor).color
     }
 
     private func captureSelectionOnlyQuestion() {
@@ -562,11 +567,11 @@ private extension View {
     }
 
     @ViewBuilder
-    func sendCircleButton(isEnabled: Bool) -> some View {
+    func sendCircleButton(isEnabled: Bool, color: Color) -> some View {
         self
             .buttonStyle(.plain)
             .foregroundStyle(.white)
-            .background(isEnabled ? Color(nsColor: .labelColor) : Color.secondary.opacity(0.46), in: Circle())
+            .background(isEnabled ? color : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(isEnabled ? 0.18 : 0.06), radius: 8, x: 0, y: 4)
     }
 }
