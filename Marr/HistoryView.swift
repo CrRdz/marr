@@ -88,7 +88,7 @@ struct HistoryView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(displayTitle(for: conversation))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MarrTypography.body(size: 13, weight: .semibold))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -100,7 +100,7 @@ struct HistoryView: View {
                             .labelStyle(.titleAndIcon)
                     }
                 }
-                .font(.caption2)
+                .font(MarrTypography.caption2())
                 .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -175,6 +175,7 @@ private struct ConversationHistoryDetail: View {
     @State private var submittingTurnID: UUID?
     @State private var hoveredQuestionTurnID: UUID?
     @State private var previewImage: HistoryImagePreview?
+    @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
     var body: some View {
@@ -189,7 +190,7 @@ private struct ConversationHistoryDetail: View {
                     if !conversation.pendingImageIDs.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("Unsent attachments", systemImage: "paperclip")
-                                .font(.headline)
+                                .font(MarrTypography.display(size: 17, weight: .semibold))
                             imageGrid(ids: conversation.pendingImageIDs)
                         }
                     }
@@ -223,10 +224,10 @@ private struct ConversationHistoryDetail: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(conversation.title)
-                .font(.title2.weight(.semibold))
+                .font(MarrTypography.display(size: 22, weight: .semibold))
                 .textSelection(.enabled)
             Text(conversation.createdAt, format: .dateTime.year().month().day().hour().minute())
-                .font(.caption)
+                .font(MarrTypography.caption())
                 .foregroundStyle(.secondary)
         }
     }
@@ -241,12 +242,12 @@ private struct ConversationHistoryDetail: View {
                 Spacer(minLength: 60)
                 VStack(alignment: .trailing, spacing: 5) {
                     Text(turn.question)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MarrTypography.body(size: 13, weight: .medium))
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .foregroundStyle(.white)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                        .background(bubbleTint, in: RoundedRectangle(cornerRadius: 14))
 
                     if hoveredQuestionTurnID == turn.id {
                         questionActions(for: turn)
@@ -265,7 +266,7 @@ private struct ConversationHistoryDetail: View {
                 if !turn.answer.isEmpty {
                     Text(markdown: turn.answer)
                         .textSelection(.enabled)
-                        .font(.system(size: 13))
+                        .font(MarrTypography.body(size: 13))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 9)
                         .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
@@ -300,14 +301,14 @@ private struct ConversationHistoryDetail: View {
             .buttonStyle(.plain)
             .help("Edit this question")
         }
-        .font(.caption)
+        .font(MarrTypography.caption())
         .foregroundStyle(.secondary)
         .padding(.trailing, 4)
     }
 
     private func statusMessage(_ message: String, systemImage: String, color: Color) -> some View {
         Label(message, systemImage: systemImage)
-            .font(.system(size: 13, weight: .medium))
+            .font(MarrTypography.body(size: 13, weight: .medium))
             .foregroundStyle(color)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, alignment: .center)
@@ -344,7 +345,7 @@ private struct ConversationHistoryDetail: View {
         HStack(spacing: 10) {
             TextField("Ask a follow-up", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15))
+                .font(MarrTypography.body(size: 15))
                 .lineLimit(1...3)
                 .focused($questionFocused)
                 .onSubmit {
@@ -360,7 +361,7 @@ private struct ConversationHistoryDetail: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white)
-            .background(canSend ? Color.accentColor : Color.secondary.opacity(0.46), in: Circle())
+            .background(canSend ? bubbleTint : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(canSend ? 0.16 : 0.04), radius: 7, x: 0, y: 3)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
@@ -379,6 +380,10 @@ private struct ConversationHistoryDetail: View {
 
     private var canSend: Bool {
         submittingTurnID == nil && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var bubbleTint: Color {
+        MarrBubbleColor.resolve(bubbleColor).color
     }
 
     private func sendCurrentQuestion() {

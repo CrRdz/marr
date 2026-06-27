@@ -239,6 +239,7 @@ private struct AnswerPanelView: View {
     @State private var question = ""
     @State private var lastAutoScrolledTurnCount = 0
     @State private var hasSubmittedInitialQuestion = false
+    @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
     private let composerWidth: CGFloat = 420
@@ -262,7 +263,7 @@ private struct AnswerPanelView: View {
                     "\(session.pendingImageIDs.count) screenshot\(session.pendingImageIDs.count == 1 ? "" : "s") attached to the next question",
                     systemImage: "photo.on.rectangle"
                 )
-                .font(.caption)
+                .font(MarrTypography.caption())
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -345,12 +346,12 @@ private struct AnswerPanelView: View {
                 HStack {
                     Spacer(minLength: 72)
                     Text(turn.question)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MarrTypography.body(size: 13, weight: .medium))
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(Color(nsColor: .controlAccentColor).opacity(0.92), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                        .background(bubbleTint.opacity(0.92), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 3)
                 }
@@ -400,7 +401,7 @@ private struct AnswerPanelView: View {
     private func errorMessage(_ turn: ConversationTurn) -> some View {
         VStack(spacing: 8) {
             Text(turn.errorMessage ?? "")
-                .font(.system(size: 12.5, weight: .medium))
+                .font(MarrTypography.body(size: 12.5, weight: .medium))
                 .foregroundStyle(.red)
                 .multilineTextAlignment(.center)
                 .lineLimit(1)
@@ -421,7 +422,7 @@ private struct AnswerPanelView: View {
         HStack(spacing: 10) {
             TextField("Ask a follow-up", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .regular))
+                .font(MarrTypography.body(size: 15))
                 .lineLimit(1...2)
                 .foregroundStyle(.primary)
                 .focused($questionFocused)
@@ -436,7 +437,7 @@ private struct AnswerPanelView: View {
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 34, height: 34)
             }
-            .sendCircleButton(isEnabled: canSend)
+            .sendCircleButton(isEnabled: canSend, color: bubbleTint)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
             .help("Send")
@@ -456,6 +457,10 @@ private struct AnswerPanelView: View {
 
     private var canSend: Bool {
         !session.hasLoadingTurn && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var bubbleTint: Color {
+        MarrBubbleColor.resolve(bubbleColor).color
     }
 
     private func sendCurrentQuestion() {
@@ -567,13 +572,13 @@ private struct MarkdownResponseView: View {
         switch block {
         case let .heading(level, content):
             Text(inlineMarkdown(content))
-                .font(.system(size: headingSize(level), weight: .semibold))
+                .font(MarrTypography.display(size: headingSize(level), weight: .semibold))
                 .lineSpacing(2)
                 .padding(.top, level == 1 ? 2 : 0)
 
         case let .paragraph(content):
             Text(inlineMarkdown(content))
-                .font(.system(size: 13))
+                .font(MarrTypography.body(size: 13))
                 .lineSpacing(3)
 
         case let .unorderedList(items):
@@ -581,10 +586,10 @@ private struct MarkdownResponseView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MarrTypography.body(size: 13, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Text(inlineMarkdown(item))
-                            .font(.system(size: 13))
+                            .font(MarrTypography.body(size: 13))
                             .lineSpacing(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -596,11 +601,11 @@ private struct MarkdownResponseView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("\(index + 1).")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(MarrTypography.mono(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .frame(minWidth: 17, alignment: .trailing)
                         Text(inlineMarkdown(item))
-                            .font(.system(size: 13))
+                            .font(MarrTypography.body(size: 13))
                             .lineSpacing(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -613,7 +618,7 @@ private struct MarkdownResponseView: View {
                     .fill(.secondary.opacity(0.45))
                     .frame(width: 3)
                 Text(inlineMarkdown(content))
-                    .font(.system(size: 13))
+                    .font(MarrTypography.body(size: 13))
                     .italic()
                     .foregroundStyle(.secondary)
                     .lineSpacing(3)
@@ -623,7 +628,7 @@ private struct MarkdownResponseView: View {
         case let .code(content):
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(verbatim: content)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(MarrTypography.mono(size: 12))
                     .lineSpacing(3)
                     .padding(10)
             }
@@ -850,11 +855,11 @@ private extension View {
     }
 
     @ViewBuilder
-    func sendCircleButton(isEnabled: Bool) -> some View {
+    func sendCircleButton(isEnabled: Bool, color: Color) -> some View {
         self
             .buttonStyle(.plain)
             .foregroundStyle(.white)
-            .background(isEnabled ? Color(nsColor: .labelColor) : Color.secondary.opacity(0.46), in: Circle())
+            .background(isEnabled ? color : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(isEnabled ? 0.18 : 0.06), radius: 8, x: 0, y: 4)
     }
 }
