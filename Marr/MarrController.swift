@@ -313,10 +313,6 @@ final class MarrController: ObservableObject {
         statusMessage = "Answer panel minimized. Press \(hotKeyConfiguration.displayString) to restore it."
     }
 
-    func setAnswerPanelHistoryExpanded(_ isExpanded: Bool) {
-        answerPanelController?.setHistoryExpanded(isExpanded)
-    }
-
     func userFacingMessage(for error: Error) -> String {
         if let userFacingError = error as? UserFacingError {
             return userFacingError.message
