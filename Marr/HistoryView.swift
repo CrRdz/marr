@@ -5,7 +5,9 @@ struct HistoryView: View {
     @ObservedObject var controller: MarrController
     @ObservedObject private var store: ConversationHistoryStore
     @State private var selection: UUID?
+    @State private var hoveredConversationID: UUID?
     @State private var conversationPendingDeletion: ConversationHistoryRecord?
+    @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
 
     init(controller: MarrController) {
         self.controller = controller
@@ -22,9 +24,19 @@ struct HistoryView: View {
                         description: Text("Captured conversations will appear here.")
                     )
                 } else {
-                    List(store.conversations, selection: $selection) { conversation in
-                        historyRow(conversation)
-                            .tag(conversation.id)
+                    List(store.conversations) { conversation in
+                        Button {
+                            selection = conversation.id
+                        } label: {
+                            historyRow(
+                                conversation,
+                                isActive: selection == conversation.id || hoveredConversationID == conversation.id
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isHovering in
+                            hoveredConversationID = isHovering ? conversation.id : nil
+                        }
                             .contextMenu {
                                 Button("Delete", role: .destructive) {
                                     conversationPendingDeletion = conversation
@@ -51,6 +63,8 @@ struct HistoryView: View {
         }
         .frame(minWidth: 760, idealWidth: 840, minHeight: 500, idealHeight: 560)
         .toolbar(removing: .sidebarToggle)
+        .tint(selectedAccentColor)
+        .accentColor(selectedAccentColor)
         .onAppear {
             store.reload()
             selectMostRecentIfNeeded()
@@ -82,13 +96,14 @@ struct HistoryView: View {
         store.conversations.first { $0.id == selection }
     }
 
-    private func historyRow(_ conversation: ConversationHistoryRecord) -> some View {
+    private func historyRow(_ conversation: ConversationHistoryRecord, isActive: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
             thumbnail(for: conversation)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(displayTitle(for: conversation))
                     .font(MarrTypography.body(size: 13, weight: .semibold))
+                    .foregroundStyle(isActive ? selectedAccent.foregroundColor : .primary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -101,11 +116,17 @@ struct HistoryView: View {
                     }
                 }
                 .font(MarrTypography.caption2())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isActive ? selectedAccent.secondaryForegroundColor : .secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isActive ? selectedAccentColor : .clear)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     @ViewBuilder
@@ -163,6 +184,14 @@ struct HistoryView: View {
             return
         }
         selection = store.conversations.first?.id
+    }
+
+    private var selectedAccentColor: Color {
+        selectedAccent.color
+    }
+
+    private var selectedAccent: MarrAccentColor {
+        MarrAccentColor.resolve(accentColor)
     }
 }
 
@@ -246,7 +275,7 @@ private struct ConversationHistoryDetail: View {
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(bubbleForegroundColor)
                         .background(bubbleTint, in: RoundedRectangle(cornerRadius: 14))
 
                     if hoveredQuestionTurnID == turn.id {
@@ -360,7 +389,7 @@ private struct ConversationHistoryDetail: View {
                     .frame(width: 34, height: 34)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.white)
+            .foregroundStyle(canSend ? bubbleForegroundColor : .white)
             .background(canSend ? bubbleTint : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(canSend ? 0.16 : 0.04), radius: 7, x: 0, y: 3)
             .keyboardShortcut(.return, modifiers: [.command])
@@ -383,7 +412,15 @@ private struct ConversationHistoryDetail: View {
     }
 
     private var bubbleTint: Color {
-        MarrBubbleColor.resolve(bubbleColor).color
+        selectedBubbleColor.color
+    }
+
+    private var bubbleForegroundColor: Color {
+        selectedBubbleColor.foregroundColor
+    }
+
+    private var selectedBubbleColor: MarrBubbleColor {
+        MarrBubbleColor.resolve(bubbleColor)
     }
 
     private func sendCurrentQuestion() {
