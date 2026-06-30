@@ -104,135 +104,6 @@ final class ScreenshotOverlayController {
 
 }
 
-@MainActor
-final class WindowCaptureOverlayController {
-    var onCapture: ((WindowCaptureCandidate) -> Void)?
-    var onCancel: (() -> Void)?
-
-    private var windows: [NSWindow] = []
-    private var keyMonitor: Any?
-    private var spaceChangeObserver: NSObjectProtocol?
-    private var appDeactivationObserver: NSObjectProtocol?
-    private let candidates: [WindowCaptureCandidate]
-
-    init(candidates: [WindowCaptureCandidate]) {
-        self.candidates = candidates
-    }
-
-    func show() {
-        close()
-        installKeyMonitor()
-        installInterruptionObservers()
-        windows = NSScreen.screens.map { screen in
-            let window = OverlayWindow(
-                contentRect: screen.frame,
-                styleMask: [.borderless],
-                backing: .buffered,
-                defer: false,
-                screen: screen
-            )
-            window.level = .screenSaver
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = false
-            window.animationBehavior = .none
-            window.isReleasedWhenClosed = false
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            window.ignoresMouseEvents = false
-
-            let screenCandidates = candidates.filter { $0.anchorRect.intersects(screen.frame) }
-            let view = WindowCaptureSelectionView(
-                screen: screen,
-                candidates: screenCandidates,
-                onCancel: { [weak self] in
-                    self?.cancel()
-                },
-                onCapture: { [weak self] candidate in
-                    self?.capture(candidate)
-                }
-            )
-            window.contentView = NSHostingView(rootView: view)
-            window.makeKeyAndOrderFront(nil)
-            return window
-        }
-
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func close() {
-        removeKeyMonitor()
-        removeInterruptionObservers()
-        windows.forEach { window in
-            window.orderOut(nil)
-            window.contentView = nil
-            window.close()
-        }
-        windows.removeAll()
-    }
-
-    private func capture(_ candidate: WindowCaptureCandidate) {
-        close()
-        onCapture?(candidate)
-    }
-
-    private func cancel() {
-        close()
-        onCancel?()
-    }
-
-    private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == kVK_Escape {
-                self?.cancel()
-                return nil
-            }
-
-            return event
-        }
-    }
-
-    private func installInterruptionObservers() {
-        spaceChangeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.activeSpaceDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.cancel()
-            }
-        }
-
-        appDeactivationObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification,
-            object: NSApp,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.cancel()
-            }
-        }
-    }
-
-    private func removeKeyMonitor() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-    }
-
-    private func removeInterruptionObservers() {
-        if let spaceChangeObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(spaceChangeObserver)
-            self.spaceChangeObserver = nil
-        }
-
-        if let appDeactivationObserver {
-            NotificationCenter.default.removeObserver(appDeactivationObserver)
-            self.appDeactivationObserver = nil
-        }
-    }
-}
-
 enum ScreenshotOverlayMode {
     case ask
     case selectionOnly
@@ -442,7 +313,7 @@ struct ScreenshotSelectionView: View {
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 34, height: 34)
             }
-            .sendCircleButton(isEnabled: canSend, color: bubbleTint, foregroundColor: bubbleForegroundColor)
+            .sendCircleButton(isEnabled: canSend, color: bubbleTint)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
             .help("Send")
@@ -472,15 +343,7 @@ struct ScreenshotSelectionView: View {
     }
 
     private var bubbleTint: Color {
-        selectedBubbleColor.color
-    }
-
-    private var bubbleForegroundColor: Color {
-        selectedBubbleColor.foregroundColor
-    }
-
-    private var selectedBubbleColor: MarrBubbleColor {
-        MarrBubbleColor.resolve(bubbleColor)
+        MarrBubbleColor.resolve(bubbleColor).color
     }
 
     private func captureSelectionOnlyQuestion() {
@@ -652,197 +515,6 @@ struct ScreenshotSelectionView: View {
     }
 }
 
-private struct WindowCaptureSelectionView: View {
-    let screen: NSScreen
-    let candidates: [WindowCaptureCandidate]
-    let onCancel: () -> Void
-    let onCapture: (WindowCaptureCandidate) -> Void
-
-    @State private var hoveredWindowID: CGWindowID?
-    @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture(perform: onCancel)
-
-                ForEach(candidates) { candidate in
-                    captureLabel(for: candidate, in: geometry.size)
-                }
-            }
-        }
-    }
-
-    private func captureLabel(for candidate: WindowCaptureCandidate, in size: CGSize) -> some View {
-        let rect = localRect(for: candidate)
-        let isHovered = hoveredWindowID == candidate.windowID
-        let labelOrigin = labelOrigin(for: candidate, rect: rect, in: size)
-
-        return Button {
-            onCapture(candidate)
-        } label: {
-            targetLabel(for: candidate, in: rect.size, isStageManager: candidate.isStageManagerSurface, isHovered: isHovered)
-        }
-        .buttonStyle(.plain)
-        .offset(x: labelOrigin.x, y: labelOrigin.y)
-        .onHover { isHovering in
-            hoveredWindowID = isHovering ? candidate.windowID : nil
-        }
-    }
-
-    private func targetLabel(
-        for candidate: WindowCaptureCandidate,
-        in size: CGSize,
-        isStageManager: Bool,
-        isHovered: Bool
-    ) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
-        let text = labelText(for: candidate)
-        let textWidth = labelTextWidth(for: text, targetSize: size, isStageManager: isStageManager)
-
-        return Text(text)
-            .font(.system(size: labelFontSize(for: size), weight: .regular))
-            .foregroundStyle(isHovered ? selectedAccent.foregroundColor : .black.opacity(0.92))
-            .lineLimit(isStageManager ? 5 : 2)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(width: textWidth, alignment: .leading)
-            .padding(.horizontal, labelHorizontalPadding(for: size))
-            .padding(.vertical, labelVerticalPadding(for: size))
-            .background {
-                if isHovered {
-                    shape.fill(selectedAccent.color)
-                }
-            }
-            .liquidGlassSurface(cornerRadius: 6, isClear: true)
-            .overlay(
-                shape.stroke(isHovered ? selectedAccent.color.opacity(0.90) : .white.opacity(0.18), lineWidth: 0.8)
-                    .allowsHitTesting(false)
-            )
-            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
-            .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
-            .animation(.easeOut(duration: 0.12), value: isHovered)
-    }
-
-    private func labelText(for candidate: WindowCaptureCandidate) -> String {
-        "Send a screenshot of \(candidate.title)"
-    }
-
-    private func labelTextWidth(
-        for text: String,
-        targetSize size: CGSize,
-        isStageManager: Bool
-    ) -> CGFloat {
-        let measuredWidth = measuredTextWidth(text, fontSize: labelFontSize(for: size))
-
-        if isStageManager {
-            return min(max(measuredWidth, 76), min(max(size.width * 0.40, 104), 126))
-        }
-
-        let maxWidth: CGFloat
-        if max(size.width, size.height) > 360 {
-            maxWidth = min(max(size.width * 0.62, 220), 420)
-        } else if max(size.width, size.height) > 180 {
-            maxWidth = min(max(size.width * 0.58, 126), 220)
-        } else {
-            maxWidth = min(max(size.width * 0.76, 96), 160)
-        }
-
-        return min(max(measuredWidth, 54), maxWidth)
-    }
-
-    private func labelVisualWidth(
-        for candidate: WindowCaptureCandidate,
-        size: CGSize,
-        isStageManager: Bool
-    ) -> CGFloat {
-        labelTextWidth(
-            for: labelText(for: candidate),
-            targetSize: size,
-            isStageManager: isStageManager
-        ) + labelHorizontalPadding(for: size) * 2
-    }
-
-    private func labelVisualHeight(
-        for candidate: WindowCaptureCandidate,
-        size: CGSize,
-        isStageManager: Bool
-    ) -> CGFloat {
-        let text = labelText(for: candidate)
-        let textWidth = labelTextWidth(for: text, targetSize: size, isStageManager: isStageManager)
-        let measuredWidth = measuredTextWidth(text, fontSize: labelFontSize(for: size))
-        let maxLines: CGFloat = isStageManager ? 5 : 2
-        let lineCount = min(max(1, ceil(measuredWidth / max(1, textWidth))), maxLines)
-
-        return lineCount * (labelFontSize(for: size) + 3) + labelVerticalPadding(for: size) * 2
-    }
-
-    private func measuredTextWidth(_ text: String, fontSize: CGFloat) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .regular)
-        let width = (text as NSString).size(withAttributes: [.font: font]).width
-        return ceil(width)
-    }
-
-    private func labelInset(for size: CGSize) -> CGFloat {
-        min(max(min(size.width, size.height) * 0.045, 8), 16)
-    }
-
-    private func labelFontSize(for size: CGSize) -> CGFloat {
-        min(size.width, size.height) < 110 ? 10 : 12
-    }
-
-    private func labelHorizontalPadding(for size: CGSize) -> CGFloat {
-        min(size.width, size.height) < 110 ? 6 : 9
-    }
-
-    private func labelVerticalPadding(for size: CGSize) -> CGFloat {
-        min(size.width, size.height) < 110 ? 3 : 5
-    }
-
-    private func labelOrigin(for candidate: WindowCaptureCandidate, rect: CGRect, in containerSize: CGSize) -> CGPoint {
-        let inset = labelInset(for: rect.size)
-        let estimatedWidth = labelVisualWidth(
-            for: candidate,
-            size: rect.size,
-            isStageManager: candidate.isStageManagerSurface
-        )
-        let estimatedHeight = labelVisualHeight(
-            for: candidate,
-            size: rect.size,
-            isStageManager: candidate.isStageManagerSurface
-        )
-        let preferredX: CGFloat
-        let preferredY: CGFloat
-        if candidate.isStageManagerSurface {
-            preferredX = rect.minX + rect.width * 0.31
-            preferredY = rect.minY + rect.height * 0.28
-        } else {
-            preferredX = rect.minX + inset
-            preferredY = rect.minY + inset
-        }
-        let x = min(max(preferredX, 6), max(6, containerSize.width - estimatedWidth - 6))
-        let y = min(max(preferredY, 6), max(6, containerSize.height - estimatedHeight - 6))
-        return CGPoint(x: x, y: y)
-    }
-
-    private func localRect(for candidate: WindowCaptureCandidate) -> CGRect {
-        let rect = candidate.anchorRect
-        return CGRect(
-            x: rect.minX - screen.frame.minX,
-            y: screen.frame.maxY - rect.maxY,
-            width: rect.width,
-            height: rect.height
-        )
-    }
-
-    private var selectedAccent: MarrAccentColor {
-        MarrAccentColor.resolve(accentColor)
-    }
-}
-
 private extension View {
     @ViewBuilder
     func liquidGlassSurface(cornerRadius: CGFloat, isClear: Bool = false) -> some View {
@@ -867,17 +539,13 @@ private extension View {
 
     @ViewBuilder
     func liquidGlassProminentButton() -> some View {
-        let selectedAccent = MarrAccentColor.resolve(
-            UserDefaults.standard.string(forKey: MarrAccentColor.storageKey) ?? MarrAccentColor.system.rawValue
-        )
-
         if #available(macOS 26.0, *) {
             self.buttonStyle(.glassProminent)
         } else {
             self
                 .buttonStyle(.plain)
-                .foregroundStyle(selectedAccent.foregroundColor)
-                .background(selectedAccent.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .foregroundStyle(.white)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(.white.opacity(0.18), lineWidth: 1)
@@ -887,26 +555,22 @@ private extension View {
 
     @ViewBuilder
     func liquidGlassIconButton(isActive: Bool = false) -> some View {
-        let accent = MarrAccentColor.resolve(
-            UserDefaults.standard.string(forKey: MarrAccentColor.storageKey) ?? MarrAccentColor.system.rawValue
-        ).color
-
         if #available(macOS 26.0, *) {
             self
                 .buttonStyle(.glass)
-                .foregroundStyle(isActive ? accent : .secondary)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
         } else {
             self
                 .buttonStyle(.plain)
-                .foregroundStyle(isActive ? accent : .secondary)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
         }
     }
 
     @ViewBuilder
-    func sendCircleButton(isEnabled: Bool, color: Color, foregroundColor: Color) -> some View {
+    func sendCircleButton(isEnabled: Bool, color: Color) -> some View {
         self
             .buttonStyle(.plain)
-            .foregroundStyle(isEnabled ? foregroundColor : .white)
+            .foregroundStyle(.white)
             .background(isEnabled ? color : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(isEnabled ? 0.18 : 0.06), radius: 8, x: 0, y: 4)
     }

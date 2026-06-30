@@ -239,8 +239,6 @@ private struct AnswerPanelView: View {
     @State private var question = ""
     @State private var lastAutoScrolledTurnCount = 0
     @State private var hasSubmittedInitialQuestion = false
-    @State private var hoveredQuestionTurnID: UUID?
-    @State private var editingTurnID: UUID?
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
@@ -345,29 +343,17 @@ private struct AnswerPanelView: View {
     private func turnView(_ turn: ConversationTurn, isCompact: Bool, showsUserMessage: Bool) -> some View {
         VStack(spacing: 10) {
             if showsUserMessage {
-                HStack(alignment: .bottom) {
+                HStack {
                     Spacer(minLength: 72)
-                    VStack(alignment: .trailing, spacing: 5) {
-                        Text(turn.question)
-                            .font(MarrTypography.body(size: 13, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .textSelection(.enabled)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(bubbleTint.opacity(0.92), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                            .foregroundStyle(bubbleForegroundColor)
-                            .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 3)
-
-                        if hoveredQuestionTurnID == turn.id, canEdit(turn) {
-                            questionActions(for: turn)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        }
-                    }
-                    .onHover { isHovering in
-                        withAnimation(.easeOut(duration: 0.12)) {
-                            hoveredQuestionTurnID = isHovering ? turn.id : nil
-                        }
-                    }
+                    Text(turn.question)
+                        .font(MarrTypography.body(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(bubbleTint.opacity(0.92), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 3)
                 }
                 .transition(.asymmetric(
                     insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -392,22 +378,6 @@ private struct AnswerPanelView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func questionActions(for turn: ConversationTurn) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                beginEditing(turn)
-            } label: {
-                Label("Edit", systemImage: "pencil")
-                    .labelStyle(.titleAndIcon)
-            }
-            .buttonStyle(.plain)
-            .help("Edit and regenerate")
-        }
-        .font(MarrTypography.caption())
-        .foregroundStyle(.secondary)
-        .padding(.trailing, 4)
     }
 
     @ViewBuilder
@@ -450,14 +420,7 @@ private struct AnswerPanelView: View {
 
     private var composer: some View {
         HStack(spacing: 10) {
-            if editingTurnID != nil {
-                Image(systemName: "pencil")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16)
-            }
-
-            TextField(editingTurnID == nil ? "Ask a follow-up" : "Edit latest message", text: $question, axis: .vertical)
+            TextField("Ask a follow-up", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(MarrTypography.body(size: 15))
                 .lineLimit(1...2)
@@ -467,19 +430,6 @@ private struct AnswerPanelView: View {
                     sendCurrentQuestion()
                 }
 
-            if editingTurnID != nil {
-                Button {
-                    cancelEditing()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Cancel editing")
-            }
-
             Button {
                 sendCurrentQuestion()
             } label: {
@@ -487,7 +437,7 @@ private struct AnswerPanelView: View {
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 34, height: 34)
             }
-            .sendCircleButton(isEnabled: canSend, color: bubbleTint, foregroundColor: bubbleForegroundColor)
+            .sendCircleButton(isEnabled: canSend, color: bubbleTint)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
             .help("Send")
@@ -510,25 +460,13 @@ private struct AnswerPanelView: View {
     }
 
     private var bubbleTint: Color {
-        selectedBubbleColor.color
-    }
-
-    private var bubbleForegroundColor: Color {
-        selectedBubbleColor.foregroundColor
-    }
-
-    private var selectedBubbleColor: MarrBubbleColor {
-        MarrBubbleColor.resolve(bubbleColor)
+        MarrBubbleColor.resolve(bubbleColor).color
     }
 
     private func sendCurrentQuestion() {
         let current = question
-        if let editingTurnID {
-            reviseAndResend(current, turnID: editingTurnID)
-        } else {
-            question = ""
-            send(current)
-        }
+        question = ""
+        send(current)
     }
 
     private func send(_ rawQuestion: String) {
@@ -544,40 +482,6 @@ private struct AnswerPanelView: View {
                 session.revealAssistant(for: turnID)
             }
         }
-        submit(turnID)
-    }
-
-    private func beginEditing(_ turn: ConversationTurn) {
-        guard canEdit(turn) else { return }
-        editingTurnID = turn.id
-        question = turn.question
-        questionFocused = true
-    }
-
-    private func cancelEditing() {
-        editingTurnID = nil
-        question = ""
-        questionFocused = true
-    }
-
-    private func canEdit(_ turn: ConversationTurn) -> Bool {
-        session.latestEditableTurnID == turn.id
-    }
-
-    private func reviseAndResend(_ rawQuestion: String, turnID: UUID) {
-        let trimmedQuestion = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuestion.isEmpty, !session.hasLoadingTurn else {
-            question = rawQuestion
-            return
-        }
-
-        guard session.reviseLatestTurn(turnID, question: trimmedQuestion) else {
-            question = rawQuestion
-            return
-        }
-
-        editingTurnID = nil
-        question = ""
         submit(turnID)
     }
 
@@ -951,10 +855,10 @@ private extension View {
     }
 
     @ViewBuilder
-    func sendCircleButton(isEnabled: Bool, color: Color, foregroundColor: Color) -> some View {
+    func sendCircleButton(isEnabled: Bool, color: Color) -> some View {
         self
             .buttonStyle(.plain)
-            .foregroundStyle(isEnabled ? foregroundColor : .white)
+            .foregroundStyle(.white)
             .background(isEnabled ? color : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(isEnabled ? 0.18 : 0.06), radius: 8, x: 0, y: 4)
     }

@@ -30,7 +30,7 @@ enum ConversationTurnStatus: String, Codable, Equatable, Sendable {
 
 struct ConversationTurn: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
-    var question: String
+    let question: String
     let imageIDs: [UUID]
     var answer: String
     var errorMessage: String?
@@ -223,13 +223,6 @@ final class ConversationSession: ObservableObject {
         turns.contains(where: \.isLoading)
     }
 
-    var latestEditableTurnID: UUID? {
-        guard let turn = turns.last, !turn.isLoading else {
-            return nil
-        }
-        return turn.id
-    }
-
     func setArchiveHandler(_ handler: @escaping (ConversationArchive) -> Void) {
         archiveHandler = handler
         handler(makeArchive())
@@ -274,26 +267,6 @@ final class ConversationSession: ObservableObject {
 
     func revealAssistant(for turnID: UUID) {
         update(turnID) { $0.showsAssistant = true }
-    }
-
-    func reviseLatestTurn(_ turnID: UUID, question rawQuestion: String) -> Bool {
-        let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            !question.isEmpty,
-            !hasLoadingTurn,
-            turns.last?.id == turnID,
-            let index = turns.indices.last
-        else {
-            return false
-        }
-
-        turns[index].question = question
-        turns[index].answer = ""
-        turns[index].errorMessage = nil
-        turns[index].status = .loading
-        turns[index].showsAssistant = true
-        archiveChanges()
-        return true
     }
 
     func complete(_ turnID: UUID, answer: String) {
