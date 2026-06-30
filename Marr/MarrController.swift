@@ -13,11 +13,15 @@ final class MarrController: ObservableObject {
     @Published var customHeadersText = ""
     @Published var model = "claude-sonnet-4-6"
     @Published var statusMessage: String?
+    @Published private(set) var hotKeyConfiguration = MarrHotKeyConfiguration.current
+    @Published private(set) var windowCaptureHotKeyConfiguration = MarrWindowCaptureHotKeyConfiguration.current
     let historyStore: ConversationHistoryStore
 
     private let client: VisionAIClient
-    private var hotKeyManager: HotKeyManager?
+    private var captureHotKeyManager: HotKeyManager?
+    private var windowCaptureHotKeyManager: HotKeyManager?
     private var overlayController: ScreenshotOverlayController?
+    private var windowCaptureOverlayController: WindowCaptureOverlayController?
     private var answerPanelController: AnswerPanelController?
     private var nativeScreenshotController: NativeScreenshotController?
 
@@ -30,21 +34,90 @@ final class MarrController: ObservableObject {
     }
 
     func installHotKeyIfNeeded() {
-        guard hotKeyManager == nil else {
+        guard captureHotKeyManager == nil, windowCaptureHotKeyManager == nil else {
             return
         }
 
-        hotKeyManager = HotKeyManager(keyCode: UInt32(kVK_ANSI_0), modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
+        registerHotKeys(
+            captureConfiguration: MarrHotKeyConfiguration.current,
+            windowConfiguration: MarrWindowCaptureHotKeyConfiguration.current
+        )
+    }
+
+    func reloadHotKey() {
+        registerHotKeys(
+            captureConfiguration: MarrHotKeyConfiguration.current,
+            windowConfiguration: MarrWindowCaptureHotKeyConfiguration.current
+        )
+    }
+
+    private func registerHotKeys(
+        captureConfiguration: MarrHotKeyConfiguration,
+        windowConfiguration: MarrWindowCaptureHotKeyConfiguration
+    ) {
+        captureHotKeyManager?.unregister()
+        windowCaptureHotKeyManager?.unregister()
+        captureHotKeyManager = nil
+        windowCaptureHotKeyManager = nil
+        hotKeyConfiguration = captureConfiguration
+        windowCaptureHotKeyConfiguration = windowConfiguration
+
+        guard captureConfiguration.scope != .disabled else {
+            statusMessage = "Capture shortcut disabled."
+            return
+        }
+
+        let nextCaptureHotKeyManager = HotKeyManager(
+            keyCode: captureConfiguration.keyCode,
+            modifiers: captureConfiguration.modifiers,
+            identifier: 1
+        ) { [weak self] in
             Task { @MainActor in
-                self?.startScreenCapture()
+                guard let self, self.hotKeyConfiguration.allowsCurrentFrontmostApplication() else {
+                    return
+                }
+                self.startScreenCapture()
             }
         }
 
+        let nextWindowCaptureHotKeyManager = HotKeyManager(
+            keyCode: windowConfiguration.keyCode,
+            modifiers: windowConfiguration.modifiers,
+            identifier: 2
+        ) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.hotKeyConfiguration.allowsCurrentFrontmostApplication() else {
+                    return
+                }
+                self.captureFrontmostWindow()
+            }
+        }
+
+        var readyMessages: [String] = []
+        var warningMessages: [String] = []
+
         do {
-            try hotKeyManager?.register()
-            statusMessage = "Ready. Press Command Shift 0 to capture."
+            try nextCaptureHotKeyManager.register()
+            captureHotKeyManager = nextCaptureHotKeyManager
+            readyMessages.append("\(captureConfiguration.displayString) to capture")
         } catch {
-            statusMessage = "Could not register Command Shift 0: \(error.localizedDescription)"
+            warningMessages.append("Could not register \(captureConfiguration.displayString): \(error.localizedDescription)")
+        }
+
+        do {
+            try nextWindowCaptureHotKeyManager.register()
+            windowCaptureHotKeyManager = nextWindowCaptureHotKeyManager
+            readyMessages.append("\(windowConfiguration.displayString) for window")
+        } catch {
+            warningMessages.append("Could not register \(windowConfiguration.displayString): \(error.localizedDescription)")
+        }
+
+        if readyMessages.isEmpty {
+            statusMessage = warningMessages.joined(separator: " ")
+        } else if warningMessages.isEmpty {
+            statusMessage = "Ready. Press \(readyMessages.joined(separator: ", "))."
+        } else {
+            statusMessage = "Ready. Press \(readyMessages.joined(separator: ", ")). \(warningMessages.joined(separator: " "))"
         }
     }
 
@@ -64,6 +137,59 @@ final class MarrController: ObservableObject {
         } else {
             startCustomOverlayCapture()
         }
+    }
+
+    func captureFrontmostWindow() {
+        guard overlayController == nil, windowCaptureOverlayController == nil else {
+            statusMessage = "Capture already active."
+            return
+        }
+
+        let candidates = WindowCapture.captureCandidates()
+        guard !candidates.isEmpty else {
+            statusMessage = "No capturable window found."
+            return
+        }
+
+        let overlay = WindowCaptureOverlayController(candidates: candidates)
+        overlay.onCancel = { [weak self] in
+            Task { @MainActor in
+                self?.windowCaptureOverlayController = nil
+                self?.statusMessage = "Window capture cancelled."
+            }
+        }
+        overlay.onCapture = { [weak self] candidate in
+            Task { @MainActor in
+                guard let self else {
+                    return
+                }
+
+                self.windowCaptureOverlayController = nil
+
+                do {
+                    let capturedWindow = try WindowCapture.capture(candidate)
+                    let question = "Send a screenshot of \(capturedWindow.title)"
+
+                    if let answerPanelController = self.answerPanelController {
+                        answerPanelController.appendScreenshot(capturedWindow.image)
+                    } else {
+                        self.showAnswerPanel(
+                            for: capturedWindow.image,
+                            near: capturedWindow.anchorRect,
+                            question: question
+                        )
+                    }
+
+                    self.statusMessage = "Window captured."
+                } catch {
+                    self.statusMessage = self.userFacingMessage(for: error)
+                }
+            }
+        }
+
+        windowCaptureOverlayController = overlay
+        overlay.show()
+        statusMessage = "Choose a window to capture."
     }
 
     func startCustomOverlayCapture() {
@@ -175,14 +301,16 @@ final class MarrController: ObservableObject {
         answerPanelController = nil
         overlayController?.close()
         overlayController = nil
+        windowCaptureOverlayController?.close()
+        windowCaptureOverlayController = nil
         nativeScreenshotController?.cancel()
         nativeScreenshotController = nil
-        statusMessage = "Ready. Press Command Shift 0 to capture."
+        statusMessage = "Ready. Press \(hotKeyConfiguration.displayString) to capture."
     }
 
     func minimizeAnswerPanel() {
         answerPanelController?.minimize()
-        statusMessage = "Answer panel minimized. Press Command Shift 0 to restore it."
+        statusMessage = "Answer panel minimized. Press \(hotKeyConfiguration.displayString) to restore it."
     }
 
     func userFacingMessage(for error: Error) -> String {
