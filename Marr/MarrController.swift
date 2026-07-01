@@ -13,11 +13,15 @@ final class MarrController: ObservableObject {
     @Published var customHeadersText = ""
     @Published var model = "claude-sonnet-4-6"
     @Published var statusMessage: String?
+    @Published private(set) var hotKeyConfiguration = MarrHotKeyConfiguration.current
+    @Published private(set) var windowCaptureHotKeyConfiguration = MarrWindowCaptureHotKeyConfiguration.current
     let historyStore: ConversationHistoryStore
 
     private let client: VisionAIClient
-    private var hotKeyManager: HotKeyManager?
+    private var captureHotKeyManager: HotKeyManager?
+    private var windowCaptureHotKeyManager: HotKeyManager?
     private var overlayController: ScreenshotOverlayController?
+    private var windowCaptureOverlayController: WindowCaptureOverlayController?
     private var answerPanelController: AnswerPanelController?
     private var nativeScreenshotController: NativeScreenshotController?
 
@@ -30,21 +34,90 @@ final class MarrController: ObservableObject {
     }
 
     func installHotKeyIfNeeded() {
-        guard hotKeyManager == nil else {
+        guard captureHotKeyManager == nil, windowCaptureHotKeyManager == nil else {
             return
         }
 
-        hotKeyManager = HotKeyManager(keyCode: UInt32(kVK_ANSI_0), modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
+        registerHotKeys(
+            captureConfiguration: MarrHotKeyConfiguration.current,
+            windowConfiguration: MarrWindowCaptureHotKeyConfiguration.current
+        )
+    }
+
+    func reloadHotKey() {
+        registerHotKeys(
+            captureConfiguration: MarrHotKeyConfiguration.current,
+            windowConfiguration: MarrWindowCaptureHotKeyConfiguration.current
+        )
+    }
+
+    private func registerHotKeys(
+        captureConfiguration: MarrHotKeyConfiguration,
+        windowConfiguration: MarrWindowCaptureHotKeyConfiguration
+    ) {
+        captureHotKeyManager?.unregister()
+        windowCaptureHotKeyManager?.unregister()
+        captureHotKeyManager = nil
+        windowCaptureHotKeyManager = nil
+        hotKeyConfiguration = captureConfiguration
+        windowCaptureHotKeyConfiguration = windowConfiguration
+
+        guard captureConfiguration.scope != .disabled else {
+            statusMessage = "Capture shortcut disabled."
+            return
+        }
+
+        let nextCaptureHotKeyManager = HotKeyManager(
+            keyCode: captureConfiguration.keyCode,
+            modifiers: captureConfiguration.modifiers,
+            identifier: 1
+        ) { [weak self] in
             Task { @MainActor in
-                self?.startScreenCapture()
+                guard let self, self.hotKeyConfiguration.allowsCurrentFrontmostApplication() else {
+                    return
+                }
+                self.startScreenCapture()
             }
         }
 
+        let nextWindowCaptureHotKeyManager = HotKeyManager(
+            keyCode: windowConfiguration.keyCode,
+            modifiers: windowConfiguration.modifiers,
+            identifier: 2
+        ) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.hotKeyConfiguration.allowsCurrentFrontmostApplication() else {
+                    return
+                }
+                self.captureFrontmostWindow()
+            }
+        }
+
+        var readyMessages: [String] = []
+        var warningMessages: [String] = []
+
         do {
-            try hotKeyManager?.register()
-            statusMessage = "Ready. Press Command Shift 0 to capture."
+            try nextCaptureHotKeyManager.register()
+            captureHotKeyManager = nextCaptureHotKeyManager
+            readyMessages.append("\(captureConfiguration.displayString) to capture")
         } catch {
-            statusMessage = "Could not register Command Shift 0: \(error.localizedDescription)"
+            warningMessages.append("Could not register \(captureConfiguration.displayString): \(error.localizedDescription)")
+        }
+
+        do {
+            try nextWindowCaptureHotKeyManager.register()
+            windowCaptureHotKeyManager = nextWindowCaptureHotKeyManager
+            readyMessages.append("\(windowConfiguration.displayString) for window")
+        } catch {
+            warningMessages.append("Could not register \(windowConfiguration.displayString): \(error.localizedDescription)")
+        }
+
+        if readyMessages.isEmpty {
+            statusMessage = warningMessages.joined(separator: " ")
+        } else if warningMessages.isEmpty {
+            statusMessage = "Ready. Press \(readyMessages.joined(separator: ", "))."
+        } else {
+            statusMessage = "Ready. Press \(readyMessages.joined(separator: ", ")). \(warningMessages.joined(separator: " "))"
         }
     }
 
@@ -64,6 +137,59 @@ final class MarrController: ObservableObject {
         } else {
             startCustomOverlayCapture()
         }
+    }
+
+    func captureFrontmostWindow() {
+        guard overlayController == nil, windowCaptureOverlayController == nil else {
+            statusMessage = "Capture already active."
+            return
+        }
+
+        let candidates = WindowCapture.captureCandidates()
+        guard !candidates.isEmpty else {
+            statusMessage = "No capturable window found."
+            return
+        }
+
+        let overlay = WindowCaptureOverlayController(candidates: candidates)
+        overlay.onCancel = { [weak self] in
+            Task { @MainActor in
+                self?.windowCaptureOverlayController = nil
+                self?.statusMessage = "Window capture cancelled."
+            }
+        }
+        overlay.onCapture = { [weak self] candidate in
+            Task { @MainActor in
+                guard let self else {
+                    return
+                }
+
+                self.windowCaptureOverlayController = nil
+
+                do {
+                    let capturedWindow = try WindowCapture.capture(candidate)
+                    let question = "Send a screenshot of \(capturedWindow.title)"
+
+                    if let answerPanelController = self.answerPanelController {
+                        answerPanelController.appendScreenshot(capturedWindow.image)
+                    } else {
+                        self.showAnswerPanel(
+                            for: capturedWindow.image,
+                            near: capturedWindow.anchorRect,
+                            question: question
+                        )
+                    }
+
+                    self.statusMessage = "Window captured."
+                } catch {
+                    self.statusMessage = self.userFacingMessage(for: error)
+                }
+            }
+        }
+
+        windowCaptureOverlayController = overlay
+        overlay.show()
+        statusMessage = "Choose a window to capture."
     }
 
     func startCustomOverlayCapture() {
@@ -175,14 +301,61 @@ final class MarrController: ObservableObject {
         answerPanelController = nil
         overlayController?.close()
         overlayController = nil
+        windowCaptureOverlayController?.close()
+        windowCaptureOverlayController = nil
         nativeScreenshotController?.cancel()
         nativeScreenshotController = nil
-        statusMessage = "Ready. Press Command Shift 0 to capture."
+        statusMessage = "Ready. Press \(hotKeyConfiguration.displayString) to capture."
     }
 
     func minimizeAnswerPanel() {
         answerPanelController?.minimize()
-        statusMessage = "Answer panel minimized. Press Command Shift 0 to restore it."
+        statusMessage = "Answer panel minimized. Press \(hotKeyConfiguration.displayString) to restore it."
+    }
+
+    func setAnswerPanelHistoryExpanded(_ isExpanded: Bool) {
+        answerPanelController?.setHistoryExpanded(isExpanded)
+    }
+
+    func openHistoryConversation(_ conversation: ConversationHistoryRecord) {
+        let imageSources = conversation.images.map { image in
+            HistoryImageAssetSource(
+                reference: image,
+                urls: historyStore.imageFileURLs(conversationID: conversation.id, imageID: image.id)
+            )
+        }
+        statusMessage = "Opening history conversation..."
+
+        Task {
+            let imageAssets = await Task.detached(priority: .userInitiated) {
+                imageSources.compactMap { source -> ConversationImageAsset? in
+                    guard let url = source.urls.first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+                          let data = try? Data(contentsOf: url)
+                    else {
+                        return nil
+                    }
+                    return ConversationImageAsset(
+                        id: source.reference.id,
+                        data: data,
+                        mimeType: source.reference.mimeType,
+                        fileName: source.reference.fileName
+                    )
+                }
+            }.value
+
+            await MainActor.run {
+                let session = ConversationSession(
+                    historyRecord: conversation,
+                    imageAssets: imageAssets
+                )
+                showAnswerPanel(
+                    for: session,
+                    near: defaultAnswerPanelAnchorRect(),
+                    persistImmediately: false
+                )
+                statusMessage = "History conversation opened."
+            }
+        }
     }
 
     func userFacingMessage(for error: Error) -> String {
@@ -202,16 +375,32 @@ final class MarrController: ObservableObject {
     }
 
     private func showAnswerPanel(for image: PickedImage, near rect: CGRect, question: String) {
+        let session = ConversationSession(initialImage: image, initialQuestion: question)
+        showAnswerPanel(for: session, near: rect, persistImmediately: true)
+    }
+
+    private func showAnswerPanel(
+        for session: ConversationSession,
+        near rect: CGRect,
+        persistImmediately: Bool
+    ) {
         answerPanelController?.close()
         let panel = AnswerPanelController(
             controller: self,
             historyStore: historyStore,
-            image: image,
+            session: session,
             anchorRect: rect,
-            initialQuestion: question
+            persistImmediately: persistImmediately
         )
         answerPanelController = panel
         panel.show()
+    }
+
+    private func defaultAnswerPanelAnchorRect() -> CGRect {
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            return screen.visibleFrame
+        }
+        return CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
     private func connection(openAIKey: String, gatewayBaseURL: String, gatewayKey: String) -> InferenceConnection {
@@ -249,6 +438,11 @@ final class MarrController: ObservableObject {
 
         return headers
     }
+}
+
+private struct HistoryImageAssetSource: Sendable {
+    let reference: ConversationImageReference
+    let urls: [URL]
 }
 
 struct UserFacingError: LocalizedError {

@@ -4,8 +4,11 @@ import SwiftUI
 struct HistoryView: View {
     @ObservedObject var controller: MarrController
     @ObservedObject private var store: ConversationHistoryStore
-    @State private var selection: UUID?
+    @State private var searchText = ""
+    @State private var selectedConversationID: UUID?
+    @State private var hoveredConversationID: UUID?
     @State private var conversationPendingDeletion: ConversationHistoryRecord?
+    @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
 
     init(controller: MarrController) {
         self.controller = controller
@@ -13,50 +16,46 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            Group {
-                if store.conversations.isEmpty {
-                    ContentUnavailableView(
-                        "No History",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Captured conversations will appear here.")
-                    )
-                } else {
-                    List(store.conversations, selection: $selection) { conversation in
-                        historyRow(conversation)
-                            .tag(conversation.id)
-                            .contextMenu {
-                                Button("Delete", role: .destructive) {
-                                    conversationPendingDeletion = conversation
-                                }
-                            }
-                    }
-                    .listStyle(.sidebar)
-                }
-            }
-            .navigationTitle("History")
-        } detail: {
-            if let conversation = selectedConversation {
-                ConversationHistoryDetail(
-                    controller: controller,
-                    store: store,
-                    conversation: conversation
+        VStack(alignment: .leading, spacing: 22) {
+            header
+            searchField
+
+            if store.conversations.isEmpty {
+                emptyState(
+                    title: "No History",
+                    systemImage: "clock.arrow.circlepath",
+                    description: "Captured conversations will appear here."
+                )
+            } else if filteredConversations.isEmpty {
+                emptyState(
+                    title: "No Matches",
+                    systemImage: "magnifyingglass",
+                    description: "Try a different search."
                 )
             } else {
-                ContentUnavailableView(
-                    "Select a Conversation",
-                    systemImage: "text.bubble"
-                )
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredConversations) { conversation in
+                            historyListRow(conversation)
+                            if conversation.id != filteredConversations.last?.id {
+                                Divider()
+                                    .padding(.leading, 24)
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.automatic)
             }
         }
-        .frame(minWidth: 760, idealWidth: 840, minHeight: 500, idealHeight: 560)
-        .toolbar(removing: .sidebarToggle)
+        .padding(.horizontal, 34)
+        .padding(.top, 34)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .tint(selectedAccentColor)
+        .accentColor(selectedAccentColor)
         .onAppear {
             store.reload()
-            selectMostRecentIfNeeded()
-        }
-        .onChange(of: store.conversations) { _, _ in
-            selectMostRecentIfNeeded()
         }
         .alert(
             "Delete this conversation?",
@@ -78,79 +77,163 @@ struct HistoryView: View {
         }
     }
 
-    private var selectedConversation: ConversationHistoryRecord? {
-        store.conversations.first { $0.id == selection }
-    }
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("History")
+                .font(MarrTypography.display(size: 30, weight: .semibold))
+                .foregroundStyle(.primary)
 
-    private func historyRow(_ conversation: ConversationHistoryRecord) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            thumbnail(for: conversation)
+            Spacer()
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(displayTitle(for: conversation))
-                    .font(MarrTypography.body(size: 13, weight: .semibold))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 6) {
-                    Text(conversation.updatedAt, format: .dateTime.month().day().hour().minute())
-                    Text("\(conversation.turns.count) turn\(conversation.turns.count == 1 ? "" : "s")")
-                    if !conversation.images.isEmpty {
-                        Label("\(conversation.images.count)", systemImage: "photo")
-                            .labelStyle(.titleAndIcon)
-                    }
-                }
-                .font(MarrTypography.caption2())
+            Text("\(store.conversations.count) saved")
+                .font(MarrTypography.body(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 6)
     }
 
-    @ViewBuilder
-    private func thumbnail(for conversation: ConversationHistoryRecord) -> some View {
-        let imageIDs = imageIDs(for: conversation)
-        if !imageIDs.isEmpty {
-            ZStack(alignment: .topLeading) {
-                ForEach(Array(imageIDs.prefix(3).enumerated()).reversed(), id: \.element) { index, imageID in
-                    if let image = store.nsImage(conversationID: conversation.id, imageID: imageID) {
-                        stackedThumbnailImage(image, index: index)
-                    }
+    private var searchField: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            TextField("Search history...", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(MarrTypography.body(size: 17))
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 24, height: 24)
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Clear search")
             }
-            .frame(width: 50, height: 42, alignment: .topLeading)
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(.quaternary)
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 16, weight: .medium))
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.separator.opacity(0.78), lineWidth: 1)
+        )
+    }
+
+    private func historyListRow(_ conversation: ConversationHistoryRecord) -> some View {
+        let isActive = selectedConversationID == conversation.id || hoveredConversationID == conversation.id
+
+        return Button {
+            selectedConversationID = conversation.id
+            controller.openHistoryConversation(conversation)
+        } label: {
+            HStack(spacing: 18) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayTitle(for: conversation))
+                        .font(MarrTypography.body(size: 16, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Text(metadata(for: conversation))
+                        .font(MarrTypography.caption())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer(minLength: 16)
+
+                Text(dateLabel(for: conversation.updatedAt))
+                    .font(MarrTypography.body(size: 14))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
             }
-            .frame(width: 46, height: 38)
+            .padding(.horizontal, 24)
+            .frame(height: 64)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isActive ? selectedAccentColor.opacity(0.11) : .clear)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering in
+            hoveredConversationID = isHovering ? conversation.id : nil
+        }
+        .contextMenu {
+            Button("Delete", role: .destructive) {
+                conversationPendingDeletion = conversation
+            }
         }
     }
 
-    private func stackedThumbnailImage(_ image: NSImage, index: Int) -> some View {
-        Image(nsImage: image)
-            .resizable()
-            .scaledToFill()
-            .frame(width: 46, height: 38)
-            .background(.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(.white.opacity(0.34), lineWidth: 0.8)
-            )
-            .shadow(color: .black.opacity(index == 0 ? 0.10 : 0.06), radius: 2, x: 0, y: 1)
-            .offset(x: CGFloat(index) * 3, y: CGFloat(index) * 2)
+    private func emptyState(title: String, systemImage: String, description: String) -> some View {
+        ContentUnavailableView(
+            title,
+            systemImage: systemImage,
+            description: Text(description)
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
-    private func imageIDs(for conversation: ConversationHistoryRecord) -> [UUID] {
-        let turnImageIDs = conversation.turns.flatMap(\.imageIDs)
-        let allImageIDs = turnImageIDs + conversation.pendingImageIDs + conversation.images.map(\.id)
-        return Array(NSOrderedSet(array: allImageIDs).compactMap { $0 as? UUID })
+    private var filteredConversations: [ConversationHistoryRecord] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return store.conversations
+        }
+
+        return store.conversations.filter {
+            searchCorpus(for: $0).localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private func searchCorpus(for conversation: ConversationHistoryRecord) -> String {
+        var parts = [conversation.title]
+        for turn in conversation.turns {
+            parts.append(turn.question)
+            parts.append(turn.answer)
+            if let errorMessage = turn.errorMessage {
+                parts.append(errorMessage)
+            }
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func metadata(for conversation: ConversationHistoryRecord) -> String {
+        var parts: [String] = []
+        let turnCount = conversation.turns.count
+        let imageCount = conversation.images.count
+
+        if turnCount > 0 {
+            parts.append("\(turnCount) turn\(turnCount == 1 ? "" : "s")")
+        }
+        if imageCount > 0 {
+            parts.append("\(imageCount) capture\(imageCount == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? "Untitled" : parts.joined(separator: " · ")
+    }
+
+    private func dateLabel(for date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        if let hours = calendar.dateComponents([.hour], from: date, to: now).hour, hours < 48 {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            return formatter.localizedString(for: date, relativeTo: now)
+        }
+
+        let formatter = DateFormatter()
+        if calendar.isDate(date, equalTo: now, toGranularity: .year) {
+            formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("MMM d, y")
+        }
+        return formatter.string(from: date)
     }
 
     private func displayTitle(for conversation: ConversationHistoryRecord) -> String {
@@ -158,320 +241,11 @@ struct HistoryView: View {
         return title.isEmpty ? "Untitled conversation" : title
     }
 
-    private func selectMostRecentIfNeeded() {
-        guard selection == nil || !store.conversations.contains(where: { $0.id == selection }) else {
-            return
-        }
-        selection = store.conversations.first?.id
-    }
-}
-
-private struct ConversationHistoryDetail: View {
-    @ObservedObject var controller: MarrController
-    @ObservedObject var store: ConversationHistoryStore
-    let conversation: ConversationHistoryRecord
-
-    @State private var question = ""
-    @State private var submittingTurnID: UUID?
-    @State private var hoveredQuestionTurnID: UUID?
-    @State private var previewImage: HistoryImagePreview?
-    @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
-    @FocusState private var questionFocused: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    header
-                    ForEach(conversation.turns) { turn in
-                        turnView(turn)
-                    }
-
-                    if !conversation.pendingImageIDs.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Unsent attachments", systemImage: "paperclip")
-                                .font(MarrTypography.display(size: 17, weight: .semibold))
-                            imageGrid(ids: conversation.pendingImageIDs)
-                        }
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: 720, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-
-            composer
-                .padding(.horizontal, 24)
-                .padding(.vertical, 14)
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity)
-        }
-        .onAppear {
-            questionFocused = true
-        }
-        .onChange(of: conversation.id) { _, _ in
-            question = ""
-            submittingTurnID = nil
-            hoveredQuestionTurnID = nil
-            previewImage = nil
-            questionFocused = true
-        }
-        .sheet(item: $previewImage) { preview in
-            HistoryImagePreviewView(preview: preview)
-        }
+    private var selectedAccentColor: Color {
+        selectedAccent.color
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(conversation.title)
-                .font(MarrTypography.display(size: 22, weight: .semibold))
-                .textSelection(.enabled)
-            Text(conversation.createdAt, format: .dateTime.year().month().day().hour().minute())
-                .font(MarrTypography.caption())
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func turnView(_ turn: ConversationTurn) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !turn.imageIDs.isEmpty {
-                imageGrid(ids: turn.imageIDs)
-            }
-
-            HStack(alignment: .bottom) {
-                Spacer(minLength: 60)
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(turn.question)
-                        .font(MarrTypography.body(size: 13, weight: .medium))
-                        .textSelection(.enabled)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .foregroundStyle(.white)
-                        .background(bubbleTint, in: RoundedRectangle(cornerRadius: 14))
-
-                    if hoveredQuestionTurnID == turn.id {
-                        questionActions(for: turn)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                }
-                .onHover { isHovering in
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        hoveredQuestionTurnID = isHovering ? turn.id : nil
-                    }
-                }
-            }
-
-            switch turn.status {
-            case .completed:
-                if !turn.answer.isEmpty {
-                    Text(markdown: turn.answer)
-                        .textSelection(.enabled)
-                        .font(MarrTypography.body(size: 13))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
-                }
-            case .failed:
-                statusMessage(
-                    turn.errorMessage ?? "Request failed",
-                    systemImage: "exclamationmark.triangle",
-                    color: .red
-                )
-            case .loading:
-                statusMessage(
-                    "This request did not finish before the session ended.",
-                    systemImage: "clock",
-                    color: .secondary
-                )
-            }
-        }
-    }
-
-    private func questionActions(for turn: ConversationTurn) -> some View {
-        HStack(spacing: 10) {
-            Text(conversation.updatedAt, format: .dateTime.hour().minute())
-
-            Button {
-                question = turn.question
-                questionFocused = true
-            } label: {
-                Label("Edit", systemImage: "pencil")
-                    .labelStyle(.titleAndIcon)
-            }
-            .buttonStyle(.plain)
-            .help("Edit this question")
-        }
-        .font(MarrTypography.caption())
-        .foregroundStyle(.secondary)
-        .padding(.trailing, 4)
-    }
-
-    private func statusMessage(_ message: String, systemImage: String, color: Color) -> some View {
-        Label(message, systemImage: systemImage)
-            .font(MarrTypography.body(size: 13, weight: .medium))
-            .foregroundStyle(color)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 8)
-    }
-
-    private func imageGrid(ids: [UUID]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
-            ForEach(ids, id: \.self) { imageID in
-                if let image = store.nsImage(conversationID: conversation.id, imageID: imageID) {
-                    Button {
-                        previewImage = HistoryImagePreview(id: imageID, image: image)
-                    } label: {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 240)
-                            .frame(maxWidth: .infinity)
-                            .background(.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .help("Open image")
-                } else {
-                    ContentUnavailableView("Image unavailable", systemImage: "photo.badge.exclamationmark")
-                        .frame(height: 120)
-                }
-            }
-        }
-    }
-
-    private var composer: some View {
-        HStack(spacing: 10) {
-            TextField("Ask a follow-up", text: $question, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 15))
-                .lineLimit(1...3)
-                .focused($questionFocused)
-                .onSubmit {
-                    sendCurrentQuestion()
-                }
-
-            Button {
-                sendCurrentQuestion()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(width: 34, height: 34)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .background(canSend ? bubbleTint : Color.secondary.opacity(0.46), in: Circle())
-            .shadow(color: .black.opacity(canSend ? 0.16 : 0.04), radius: 7, x: 0, y: 3)
-            .keyboardShortcut(.return, modifiers: [.command])
-            .disabled(!canSend)
-            .help("Send")
-        }
-        .padding(.leading, 14)
-        .padding(.trailing, 7)
-        .padding(.vertical, 6)
-        .frame(minHeight: 46)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
-                .stroke(.white.opacity(0.22), lineWidth: 1)
-        )
-    }
-
-    private var canSend: Bool {
-        submittingTurnID == nil && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var bubbleTint: Color {
-        MarrBubbleColor.resolve(bubbleColor).color
-    }
-
-    private func sendCurrentQuestion() {
-        let rawQuestion = question
-        let trimmedQuestion = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuestion.isEmpty, submittingTurnID == nil else {
-            return
-        }
-
-        guard let turnID = store.beginTurn(conversationID: conversation.id, question: trimmedQuestion) else {
-            return
-        }
-
-        question = ""
-        submittingTurnID = turnID
-
-        guard let request = store.request(conversationID: conversation.id, through: turnID) else {
-            store.failTurn(conversationID: conversation.id, turnID: turnID, message: "Could not build the conversation context.")
-            submittingTurnID = nil
-            return
-        }
-
-        Task {
-            do {
-                let response = try await controller.submit(request: request)
-                await MainActor.run {
-                    store.completeTurn(conversationID: conversation.id, turnID: turnID, answer: response)
-                    submittingTurnID = nil
-                    questionFocused = true
-                }
-            } catch {
-                await MainActor.run {
-                    store.failTurn(
-                        conversationID: conversation.id,
-                        turnID: turnID,
-                        message: controller.userFacingMessage(for: error)
-                    )
-                    submittingTurnID = nil
-                    questionFocused = true
-                }
-            }
-        }
-    }
-}
-
-private struct HistoryImagePreview: Identifiable {
-    let id: UUID
-    let image: NSImage
-}
-
-private struct HistoryImagePreviewView: View {
-    let preview: HistoryImagePreview
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .help("Close")
-            }
-            .padding(12)
-
-            Image(nsImage: preview.image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 18)
-                .padding(.bottom, 18)
-        }
-        .frame(minWidth: 640, minHeight: 440)
-        .background(.regularMaterial)
-    }
-}
-
-private extension Text {
-    init(markdown source: String) {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .full,
-            failurePolicy: .returnPartiallyParsedIfPossible
-        )
-        self.init((try? AttributedString(markdown: source, options: options)) ?? AttributedString(source))
+    private var selectedAccent: MarrAccentColor {
+        MarrAccentColor.resolve(accentColor)
     }
 }

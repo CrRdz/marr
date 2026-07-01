@@ -30,7 +30,7 @@ enum ConversationTurnStatus: String, Codable, Equatable, Sendable {
 
 struct ConversationTurn: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
-    let question: String
+    var question: String
     let imageIDs: [UUID]
     var answer: String
     var errorMessage: String?
@@ -219,13 +219,52 @@ final class ConversationSession: ObservableObject {
         self.contextBuilder = contextBuilder
     }
 
+    init(
+        historyRecord: ConversationHistoryRecord,
+        imageAssets: [ConversationImageAsset],
+        contextBuilder: ConversationContextBuilder = ConversationContextBuilder()
+    ) {
+        id = historyRecord.id
+        createdAt = historyRecord.createdAt
+        updatedAt = historyRecord.updatedAt
+        turns = historyRecord.turns.map { turn in
+            guard turn.status == .loading else {
+                return turn
+            }
+            return ConversationTurn(
+                id: turn.id,
+                question: turn.question,
+                imageIDs: turn.imageIDs,
+                answer: "",
+                errorMessage: turn.errorMessage ?? "This request did not finish before the session ended.",
+                status: .failed,
+                showsAssistant: true
+            )
+        }
+        images = Dictionary(uniqueKeysWithValues: imageAssets.map { ($0.id, $0) })
+        pendingImageIDs = historyRecord.pendingImageIDs
+        self.contextBuilder = contextBuilder
+    }
+
     var hasLoadingTurn: Bool {
         turns.contains(where: \.isLoading)
     }
 
-    func setArchiveHandler(_ handler: @escaping (ConversationArchive) -> Void) {
+    var latestEditableTurnID: UUID? {
+        guard let turn = turns.last, !turn.isLoading else {
+            return nil
+        }
+        return turn.id
+    }
+
+    func setArchiveHandler(
+        persistImmediately: Bool = true,
+        _ handler: @escaping (ConversationArchive) -> Void
+    ) {
         archiveHandler = handler
-        handler(makeArchive())
+        if persistImmediately {
+            handler(makeArchive())
+        }
     }
 
     @discardableResult
@@ -267,6 +306,26 @@ final class ConversationSession: ObservableObject {
 
     func revealAssistant(for turnID: UUID) {
         update(turnID) { $0.showsAssistant = true }
+    }
+
+    func reviseLatestTurn(_ turnID: UUID, question rawQuestion: String) -> Bool {
+        let question = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !question.isEmpty,
+            !hasLoadingTurn,
+            turns.last?.id == turnID,
+            let index = turns.indices.last
+        else {
+            return false
+        }
+
+        turns[index].question = question
+        turns[index].answer = ""
+        turns[index].errorMessage = nil
+        turns[index].status = .loading
+        turns[index].showsAssistant = true
+        archiveChanges()
+        return true
     }
 
     func complete(_ turnID: UUID, answer: String) {

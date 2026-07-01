@@ -229,6 +229,22 @@ final class ConversationHistoryStore: ObservableObject {
         return try? Data(contentsOf: legacyURL)
     }
 
+    func imageFileURLs(conversationID: UUID, imageID: UUID) -> [URL] {
+        guard
+            let conversation = conversations.first(where: { $0.id == conversationID }),
+            let image = conversation.images.first(where: { $0.id == imageID })
+        else {
+            return []
+        }
+
+        return [
+            attachmentsURL.appendingPathComponent(image.storedFileName),
+            legacyDirectoryURL(for: conversationID)
+                .appendingPathComponent("images", isDirectory: true)
+                .appendingPathComponent(image.storedFileName)
+        ]
+    }
+
     func nsImage(conversationID: UUID, imageID: UUID) -> NSImage? {
         imageData(conversationID: conversationID, imageID: imageID).flatMap(NSImage.init(data:))
     }
