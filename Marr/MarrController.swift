@@ -317,6 +317,47 @@ final class MarrController: ObservableObject {
         answerPanelController?.setHistoryExpanded(isExpanded)
     }
 
+    func openHistoryConversation(_ conversation: ConversationHistoryRecord) {
+        let imageSources = conversation.images.map { image in
+            HistoryImageAssetSource(
+                reference: image,
+                urls: historyStore.imageFileURLs(conversationID: conversation.id, imageID: image.id)
+            )
+        }
+        statusMessage = "Opening history conversation..."
+
+        Task {
+            let imageAssets = await Task.detached(priority: .userInitiated) {
+                imageSources.compactMap { source -> ConversationImageAsset? in
+                    guard let url = source.urls.first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+                          let data = try? Data(contentsOf: url)
+                    else {
+                        return nil
+                    }
+                    return ConversationImageAsset(
+                        id: source.reference.id,
+                        data: data,
+                        mimeType: source.reference.mimeType,
+                        fileName: source.reference.fileName
+                    )
+                }
+            }.value
+
+            await MainActor.run {
+                let session = ConversationSession(
+                    historyRecord: conversation,
+                    imageAssets: imageAssets
+                )
+                showAnswerPanel(
+                    for: session,
+                    near: defaultAnswerPanelAnchorRect(),
+                    persistImmediately: false
+                )
+                statusMessage = "History conversation opened."
+            }
+        }
+    }
+
     func userFacingMessage(for error: Error) -> String {
         if let userFacingError = error as? UserFacingError {
             return userFacingError.message
@@ -334,16 +375,32 @@ final class MarrController: ObservableObject {
     }
 
     private func showAnswerPanel(for image: PickedImage, near rect: CGRect, question: String) {
+        let session = ConversationSession(initialImage: image, initialQuestion: question)
+        showAnswerPanel(for: session, near: rect, persistImmediately: true)
+    }
+
+    private func showAnswerPanel(
+        for session: ConversationSession,
+        near rect: CGRect,
+        persistImmediately: Bool
+    ) {
         answerPanelController?.close()
         let panel = AnswerPanelController(
             controller: self,
             historyStore: historyStore,
-            image: image,
+            session: session,
             anchorRect: rect,
-            initialQuestion: question
+            persistImmediately: persistImmediately
         )
         answerPanelController = panel
         panel.show()
+    }
+
+    private func defaultAnswerPanelAnchorRect() -> CGRect {
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            return screen.visibleFrame
+        }
+        return CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
     private func connection(openAIKey: String, gatewayBaseURL: String, gatewayKey: String) -> InferenceConnection {
@@ -381,6 +438,11 @@ final class MarrController: ObservableObject {
 
         return headers
     }
+}
+
+private struct HistoryImageAssetSource: Sendable {
+    let reference: ConversationImageReference
+    let urls: [URL]
 }
 
 struct UserFacingError: LocalizedError {

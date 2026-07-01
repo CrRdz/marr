@@ -24,13 +24,6 @@ struct MarrApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Marr History", id: "history") {
-            HistoryView(controller: controller)
-                .preferredColorScheme(preferredColorScheme)
-        }
-        .defaultSize(width: 840, height: 560)
-        .windowResizability(.contentMinSize)
-
         Window("Marr Settings", id: "settings") {
             SettingsView(controller: controller)
                 .preferredColorScheme(preferredColorScheme)

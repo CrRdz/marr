@@ -26,16 +26,26 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .frame(minWidth: 190)
         } detail: {
-            Form {
-                selectedPanel
-            }
-            .formStyle(.grouped)
-            .padding(.top, 8)
+            selectedDetail
             .navigationTitle(selection.title)
         }
         .frame(minWidth: 760, idealWidth: 820, minHeight: 520, idealHeight: 580)
         .tint(selectedAccentColor)
         .accentColor(selectedAccentColor)
+    }
+
+    @ViewBuilder
+    private var selectedDetail: some View {
+        switch selection {
+        case .history:
+            HistoryView(controller: controller)
+        default:
+            Form {
+                selectedPanel
+            }
+            .formStyle(.grouped)
+            .padding(.top, 8)
+        }
     }
 
     @ViewBuilder
@@ -45,6 +55,8 @@ struct SettingsView: View {
             GeneralSettingsPanel(controller: controller)
         case .capture:
             CaptureSettingsPanel(controller: controller)
+        case .history:
+            EmptyView()
         case .provider:
             ProviderSettingsPanel(controller: controller)
         case .appearance:
@@ -68,6 +80,7 @@ struct SettingsView: View {
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
     case capture
+    case history
     case provider
     case appearance
     case data
@@ -79,6 +92,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .capture: "Capture"
+        case .history: "History"
         case .provider: "AI Provider"
         case .appearance: "Appearance"
         case .data: "Data"
@@ -90,9 +104,10 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .capture: "viewfinder"
+        case .history: "clock.arrow.circlepath"
         case .provider: "sparkles"
         case .appearance: "sun.max"
-        case .data: "clock.arrow.circlepath"
+        case .data: "externaldrive"
         case .advanced: "wrench.and.screwdriver"
         }
     }
@@ -138,19 +153,10 @@ private struct SettingsSidebarRow: View {
 
 private struct GeneralSettingsPanel: View {
     @ObservedObject var controller: MarrController
-    @AppStorage("menu.showRecentConversations") private var showRecentConversations = true
-    @AppStorage("menu.recentItemCount") private var recentItemCount = 3
     @AppStorage("menu.showStatus") private var showStatus = true
 
     var body: some View {
         Section("Menu Bar") {
-            Toggle("Show recent conversations", isOn: $showRecentConversations)
-
-            Stepper(value: $recentItemCount, in: 1...5) {
-                SettingsValueRow(title: "Recent items", value: "\(recentItemCount)")
-            }
-            .disabled(!showRecentConversations)
-
             Toggle("Show status", isOn: $showStatus)
             SettingsValueRow(title: "Status", value: statusLabel)
         }

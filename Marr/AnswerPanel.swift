@@ -14,7 +14,7 @@ final class AnswerPanelController {
     private let collapsedPanelSize = NSSize(width: 544, height: 398)
     private let expandedHistoryPanelHeight: CGFloat = 734
 
-    init(
+    convenience init(
         controller: MarrController,
         historyStore: ConversationHistoryStore,
         image: PickedImage,
@@ -22,11 +22,26 @@ final class AnswerPanelController {
         initialQuestion: String
     ) {
         let createdSession = ConversationSession(initialImage: image, initialQuestion: initialQuestion)
-        createdSession.setArchiveHandler { [weak historyStore] archive in
+        self.init(
+            controller: controller,
+            historyStore: historyStore,
+            session: createdSession,
+            anchorRect: anchorRect,
+            persistImmediately: true
+        )
+    }
+
+    init(
+        controller: MarrController,
+        historyStore: ConversationHistoryStore,
+        session createdSession: ConversationSession,
+        anchorRect: CGRect,
+        persistImmediately: Bool
+    ) {
+        createdSession.setArchiveHandler(persistImmediately: persistImmediately) { [weak historyStore] archive in
             historyStore?.save(archive)
         }
         session = createdSession
-
         let panelSize = NSSize(width: collapsedPanelSize.width, height: expandedHistoryPanelHeight)
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
@@ -61,6 +76,14 @@ final class AnswerPanelController {
         createdWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         createdWindow.acceptsMouseMovedEvents = true
         createdWindow.ignoresMouseEvents = false
+        createdWindow.controlClickHandler = { [weak controller] control in
+            switch control {
+            case .close:
+                controller?.dismissCaptureSession()
+            case .minimize:
+                controller?.minimizeAnswerPanel()
+            }
+        }
 
         let createdHostingView = AnswerPanelHostingView(
             rootView: AnswerPanelView(
@@ -203,13 +226,49 @@ private enum BackgroundBrightnessSampler {
     }
 }
 
+private enum AnswerPanelWindowControl {
+    case close
+    case minimize
+}
+
 private final class AnswerPanelWindow: NSWindow {
+    var controlClickHandler: ((AnswerPanelWindowControl) -> Void)?
+
     override var canBecomeKey: Bool {
         true
     }
 
     override var canBecomeMain: Bool {
         true
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown,
+           let control = control(at: event.locationInWindow) {
+            controlClickHandler?(control)
+            return
+        }
+
+        super.sendEvent(event)
+    }
+
+    private func control(at point: NSPoint) -> AnswerPanelWindowControl? {
+        let contentHeight = contentView?.bounds.height ?? frame.height
+        let topInset: CGFloat = 402
+        let leading: CGFloat = 64
+        let size: CGFloat = 18
+        let spacing: CGFloat = 8
+        let y = contentHeight - topInset - size
+
+        if NSRect(x: leading, y: y, width: size, height: size).contains(point) {
+            return .close
+        }
+
+        if NSRect(x: leading + size + spacing, y: y, width: size, height: size).contains(point) {
+            return .minimize
+        }
+
+        return nil
     }
 }
 
@@ -416,6 +475,15 @@ private struct AnswerPanelView: View {
                     .frame(width: composerWidth, alignment: .topLeading)
                     .frame(minHeight: conversationSurfaceHeight, alignment: .bottom)
                     .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .onAppear {
+                    guard let lastID = session.turns.last?.id else {
+                        return
+                    }
+                    lastAutoScrolledTurnCount = session.turns.count
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(lastID, anchor: .bottom)
+                    }
                 }
                 .onChange(of: session.turns.count) { _, nextCount in
                     guard nextCount > lastAutoScrolledTurnCount, let lastID = session.turns.last?.id else {
@@ -789,12 +857,16 @@ private struct AnswerPanelView: View {
     }
 
     private func submitInitialQuestion() {
-        guard !hasSubmittedInitialQuestion, let turnID = session.turns.first?.id else {
+        guard
+            !hasSubmittedInitialQuestion,
+            let turn = session.turns.first,
+            turn.isLoading
+        else {
             return
         }
 
         hasSubmittedInitialQuestion = true
-        submit(turnID)
+        submit(turn.id)
     }
 
     private func retry(_ turnID: UUID) {

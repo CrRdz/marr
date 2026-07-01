@@ -219,6 +219,33 @@ final class ConversationSession: ObservableObject {
         self.contextBuilder = contextBuilder
     }
 
+    init(
+        historyRecord: ConversationHistoryRecord,
+        imageAssets: [ConversationImageAsset],
+        contextBuilder: ConversationContextBuilder = ConversationContextBuilder()
+    ) {
+        id = historyRecord.id
+        createdAt = historyRecord.createdAt
+        updatedAt = historyRecord.updatedAt
+        turns = historyRecord.turns.map { turn in
+            guard turn.status == .loading else {
+                return turn
+            }
+            return ConversationTurn(
+                id: turn.id,
+                question: turn.question,
+                imageIDs: turn.imageIDs,
+                answer: "",
+                errorMessage: turn.errorMessage ?? "This request did not finish before the session ended.",
+                status: .failed,
+                showsAssistant: true
+            )
+        }
+        images = Dictionary(uniqueKeysWithValues: imageAssets.map { ($0.id, $0) })
+        pendingImageIDs = historyRecord.pendingImageIDs
+        self.contextBuilder = contextBuilder
+    }
+
     var hasLoadingTurn: Bool {
         turns.contains(where: \.isLoading)
     }
@@ -230,9 +257,14 @@ final class ConversationSession: ObservableObject {
         return turn.id
     }
 
-    func setArchiveHandler(_ handler: @escaping (ConversationArchive) -> Void) {
+    func setArchiveHandler(
+        persistImmediately: Bool = true,
+        _ handler: @escaping (ConversationArchive) -> Void
+    ) {
         archiveHandler = handler
-        handler(makeArchive())
+        if persistImmediately {
+            handler(makeArchive())
+        }
     }
 
     @discardableResult
