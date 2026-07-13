@@ -5,11 +5,13 @@ import SwiftUI
 @MainActor
 final class ScreenshotOverlayController {
     var onCapture: ((PickedImage, CGRect, String) -> Void)?
+    var onTranslate: ((PickedImage, CGRect) -> Void)?
     var onCancel: (() -> Void)?
 
     private var windows: [NSWindow] = []
     private var keyMonitor: Any?
     private let mode: ScreenshotOverlayMode
+    private let captureAfterOverlayDismissDelay: TimeInterval = 0.10
 
     init(mode: ScreenshotOverlayMode = .ask) {
         self.mode = mode
@@ -43,6 +45,9 @@ final class ScreenshotOverlayController {
                 },
                 onCapture: { [weak self] rect, question in
                     self?.capture(rect: rect, question: question, on: screen)
+                },
+                onTranslate: { [weak self] rect in
+                    self?.translate(rect: rect, on: screen)
                 }
             )
             window.contentView = NSHostingView(rootView: view)
@@ -94,12 +99,35 @@ final class ScreenshotOverlayController {
     private func capture(rect: CGRect, question: String, on screen: NSScreen) {
         close()
 
-        guard let image = ScreenCapture.capture(rect: rect, screen: screen) else {
-            onCancel?()
-            return
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + captureAfterOverlayDismissDelay) { [weak self] in
+            guard let self else {
+                return
+            }
 
-        onCapture?(image, rect, question)
+            guard let image = ScreenCapture.capture(rect: rect, screen: screen) else {
+                self.onCancel?()
+                return
+            }
+
+            self.onCapture?(image, rect, question)
+        }
+    }
+
+    private func translate(rect: CGRect, on screen: NSScreen) {
+        close()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + captureAfterOverlayDismissDelay) { [weak self] in
+            guard let self else {
+                return
+            }
+
+            guard let image = ScreenCapture.capture(rect: rect, screen: screen) else {
+                self.onCancel?()
+                return
+            }
+
+            self.onTranslate?(image, rect)
+        }
     }
 
 }
@@ -281,6 +309,7 @@ struct ScreenshotSelectionView: View {
     let mode: ScreenshotOverlayMode
     let onCancel: () -> Void
     let onCapture: (CGRect, String) -> Void
+    let onTranslate: (CGRect) -> Void
 
     @State private var question = ""
     @State private var selection: CGRect = .zero
@@ -436,6 +465,22 @@ struct ScreenshotSelectionView: View {
                 }
 
             Button {
+                translateSelection()
+            } label: {
+                Image(systemName: "translate")
+                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 30, height: 34)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(canTranslate ? bubbleTint : .secondary.opacity(0.72))
+            .background(
+                Circle()
+                    .fill(canTranslate ? bubbleTint.opacity(0.14) : Color.secondary.opacity(0.10))
+            )
+            .disabled(!canTranslate)
+            .help("Translate")
+
+            Button {
                 sendQuestion()
             } label: {
                 Image(systemName: "arrow.up")
@@ -469,6 +514,10 @@ struct ScreenshotSelectionView: View {
 
     private var canSend: Bool {
         !isSending && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canTranslate: Bool {
+        !isSending && selection != .zero
     }
 
     private var bubbleTint: Color {
@@ -514,6 +563,21 @@ struct ScreenshotSelectionView: View {
         }
         pendingCapture = capture
         DispatchQueue.main.asyncAfter(deadline: .now() + capsuleTransitionDuration + 0.08, execute: capture)
+    }
+
+    private func translateSelection() {
+        guard canTranslate else {
+            return
+        }
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            questionFocused = false
+            isSending = true
+        }
+
+        onTranslate(globalSelectionRect())
     }
 
     private func defaultSelection(in size: CGSize) -> CGRect {
