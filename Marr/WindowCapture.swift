@@ -297,5 +297,3 @@ struct WindowCaptureCandidate: Identifiable, Hashable {
     let isStageManagerIconSurface: Bool
     let windowListIndex: Int
 }
-
-

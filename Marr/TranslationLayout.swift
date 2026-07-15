@@ -521,4 +521,3 @@ enum ImageTranslationElasticSpacing {
         return gaps
     }
 }
-
