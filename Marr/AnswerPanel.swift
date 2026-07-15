@@ -1,15 +1,15 @@
 import AppKit
 import Carbon
+import MarrCore
 import SwiftUI
 
 @MainActor
 final class AnswerPanelController {
     private let window: AnswerPanelWindow
-    private let hostingView: AnswerPanelHostingView<AnswerPanelView>
     private let session: ConversationSession
+    private let requestCoordinator: ConversationRequestCoordinator
     private var escapeMonitor: Any?
     private var onClose: (() -> Void)?
-    private var allowsWindowDragging = false
     private(set) var isMinimized = false
     private let collapsedPanelSize = NSSize(width: 544, height: 398)
     private let expandedHistoryPanelHeight: CGFloat = 734
@@ -42,7 +42,12 @@ final class AnswerPanelController {
             historyStore?.save(archive)
         }
         session = createdSession
-        let panelSize = NSSize(width: collapsedPanelSize.width, height: expandedHistoryPanelHeight)
+        let createdRequestCoordinator = ConversationRequestCoordinator(
+            controller: controller,
+            session: createdSession
+        )
+        requestCoordinator = createdRequestCoordinator
+        let panelSize = collapsedPanelSize
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
         let margin: CGFloat = 22
@@ -69,34 +74,33 @@ final class AnswerPanelController {
         createdWindow.isOpaque = false
         createdWindow.backgroundColor = .clear
         createdWindow.hasShadow = false
-        createdWindow.isMovableByWindowBackground = allowsWindowDragging
+        createdWindow.isMovableByWindowBackground = false
         createdWindow.animationBehavior = .none
         createdWindow.isReleasedWhenClosed = false
         createdWindow.level = .screenSaver
         createdWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         createdWindow.acceptsMouseMovedEvents = true
         createdWindow.ignoresMouseEvents = false
-        createdWindow.controlClickHandler = { [weak controller] control in
-            switch control {
-            case .close:
-                controller?.dismissCaptureSession()
-            case .minimize:
-                controller?.minimizeAnswerPanel()
-            }
-        }
-
-        let createdHostingView = AnswerPanelHostingView(
+        let createdHostingView = NSHostingView(
             rootView: AnswerPanelView(
-                controller: controller,
                 session: createdSession,
-                usesRegularComposerGlass: usesRegularComposerGlass
+                historyStore: historyStore,
+                requestCoordinator: createdRequestCoordinator,
+                usesRegularComposerGlass: usesRegularComposerGlass,
+                actions: AnswerPanelActions(
+                    close: { [weak controller] in controller?.dismissCaptureSession() },
+                    minimize: { [weak controller] in controller?.minimizeAnswerPanel() },
+                    setHistoryExpanded: { [weak controller] isExpanded in
+                        controller?.setAnswerPanelHistoryExpanded(isExpanded)
+                    }
+                )
             )
+            .marrPreferredColorScheme()
         )
-        createdHostingView.activeBottomHitTestHeight = collapsedPanelSize.height
+        createdHostingView.sizingOptions = []
         createdWindow.contentView = createdHostingView
 
         window = createdWindow
-        hostingView = createdHostingView
         createdHostingView.layoutSubtreeIfNeeded()
         createdHostingView.displayIfNeeded()
         onClose = { [weak controller] in
@@ -126,17 +130,21 @@ final class AnswerPanelController {
     }
 
     func close() {
+        requestCoordinator.cancel()
         removeEscapeMonitor()
         window.close()
     }
 
-    func setWindowDraggingEnabled(_ isEnabled: Bool) {
-        allowsWindowDragging = isEnabled
-        window.isMovableByWindowBackground = isEnabled
-    }
-
     func setHistoryExpanded(_ isExpanded: Bool) {
-        hostingView.activeBottomHitTestHeight = isExpanded ? nil : collapsedPanelSize.height
+        let targetHeight = isExpanded ? expandedHistoryPanelHeight : collapsedPanelSize.height
+        guard abs(window.frame.height - targetHeight) > 0.5 else {
+            return
+        }
+
+        var targetFrame = window.frame
+        targetFrame.size.height = targetHeight
+        targetFrame.origin.y = window.frame.minY
+        window.setFrame(targetFrame, display: true, animate: true)
     }
 
     func appendScreenshot(_ image: PickedImage) {
@@ -146,6 +154,12 @@ final class AnswerPanelController {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+#if DEBUG
+    var windowForTesting: NSWindow {
+        window
+    }
+#endif
 
     private func installEscapeMonitor() {
         removeEscapeMonitor()
@@ -226,14 +240,7 @@ private enum BackgroundBrightnessSampler {
     }
 }
 
-private enum AnswerPanelWindowControl {
-    case close
-    case minimize
-}
-
 private final class AnswerPanelWindow: NSWindow {
-    var controlClickHandler: ((AnswerPanelWindowControl) -> Void)?
-
     override var canBecomeKey: Bool {
         true
     }
@@ -241,89 +248,29 @@ private final class AnswerPanelWindow: NSWindow {
     override var canBecomeMain: Bool {
         true
     }
-
-    override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown,
-           let control = control(at: event.locationInWindow) {
-            controlClickHandler?(control)
-            return
-        }
-
-        super.sendEvent(event)
-    }
-
-    private func control(at point: NSPoint) -> AnswerPanelWindowControl? {
-        let contentHeight = contentView?.bounds.height ?? frame.height
-        let topInset: CGFloat = 402
-        let leading: CGFloat = 64
-        let size: CGFloat = 18
-        let spacing: CGFloat = 8
-        let y = contentHeight - topInset - size
-
-        if NSRect(x: leading, y: y, width: size, height: size).contains(point) {
-            return .close
-        }
-
-        if NSRect(x: leading + size + spacing, y: y, width: size, height: size).contains(point) {
-            return .minimize
-        }
-
-        return nil
-    }
 }
 
-private final class AnswerPanelHostingView<Content: View>: NSHostingView<Content> {
-    var activeBottomHitTestHeight: CGFloat?
+private struct AnswerPanelActions {
+    let close: () -> Void
+    let minimize: () -> Void
+    let setHistoryExpanded: (Bool) -> Void
+}
 
-    override var acceptsFirstResponder: Bool {
-        true
-    }
+enum AnswerPanelConversationLayout {
+    static let surfaceCornerRadius: CGFloat = 24
+    static let bottomInset: CGFloat = 16
+}
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        if let activeBottomHitTestHeight, activeBottomHitTestHeight < bounds.height {
-            let isInActiveBottomArea: Bool
-            if isFlipped {
-                isInActiveBottomArea = point.y >= bounds.height - activeBottomHitTestHeight
-            } else {
-                isInActiveBottomArea = point.y <= activeBottomHitTestHeight
-            }
-
-            guard isInActiveBottomArea else {
-                return nil
-            }
-        }
-
-        return super.hitTest(point) ?? (bounds.contains(point) ? self : nil)
-    }
-
-    override func scrollWheel(with event: NSEvent) {
-        if let scrollView = firstScrollView(in: self) {
-            scrollView.scrollWheel(with: event)
-        }
-        // Keep wheel events inside the transparent answer panel instead of
-        // allowing them to pass through to whatever is behind the window.
-    }
-
-    private func firstScrollView(in view: NSView) -> NSScrollView? {
-        if let scrollView = view as? NSScrollView {
-            return scrollView
-        }
-
-        for subview in view.subviews {
-            if let scrollView = firstScrollView(in: subview) {
-                return scrollView
-            }
-        }
-
-        return nil
-    }
+private enum ConversationScrollAnchor: Hashable {
+    case bottom
 }
 
 private struct AnswerPanelView: View {
-    @ObservedObject var controller: MarrController
     @ObservedObject var session: ConversationSession
     @ObservedObject private var historyStore: ConversationHistoryStore
+    let requestCoordinator: ConversationRequestCoordinator
     let usesRegularComposerGlass: Bool
+    let actions: AnswerPanelActions
 
     @State private var question = ""
     @State private var lastAutoScrolledTurnCount = 0
@@ -332,28 +279,30 @@ private struct AnswerPanelView: View {
     @State private var editingTurnID: UUID?
     @State private var showsHistoryPanel = false
     @State private var historySearchText = ""
+    @State private var panelControlsHovered = false
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
     @FocusState private var questionFocused: Bool
     @FocusState private var historySearchFocused: Bool
-    @Namespace private var historyControlNamespace
 
     private let composerWidth: CGFloat = 420
     private let assistantRevealDelay = 0.30
     private let historyControlClearance: CGFloat = 42
     private let collapsedContentHeight: CGFloat = 374
-    private let expandedContentHeight: CGFloat = 710
     private let floatingHistoryHeight: CGFloat = 326
 
     init(
-        controller: MarrController,
         session: ConversationSession,
-        usesRegularComposerGlass: Bool
+        historyStore: ConversationHistoryStore,
+        requestCoordinator: ConversationRequestCoordinator,
+        usesRegularComposerGlass: Bool,
+        actions: AnswerPanelActions
     ) {
-        self.controller = controller
         self.session = session
+        self.requestCoordinator = requestCoordinator
         self.usesRegularComposerGlass = usesRegularComposerGlass
-        _historyStore = ObservedObject(wrappedValue: controller.historyStore)
+        self.actions = actions
+        _historyStore = ObservedObject(wrappedValue: historyStore)
     }
 
     var body: some View {
@@ -371,7 +320,8 @@ private struct AnswerPanelView: View {
                     ))
             }
         }
-        .frame(width: 520, height: expandedContentHeight, alignment: .bottom)
+        .frame(width: 520)
+        .frame(maxHeight: .infinity, alignment: .bottom)
         .padding(12)
         .onAppear {
             DispatchQueue.main.async {
@@ -412,13 +362,11 @@ private struct AnswerPanelView: View {
 
             if showsHistoryPanel {
                 historySearchField
-                    .matchedGeometryEffect(id: "history-control", in: historyControlNamespace)
                     .padding(.trailing, 12)
                     .zIndex(2)
                     .transition(.scale(scale: 0.96, anchor: .trailing).combined(with: .opacity))
             } else {
                 historyToggle
-                    .matchedGeometryEffect(id: "history-control", in: historyControlNamespace)
                     .padding(.trailing, 12)
                     .zIndex(2)
                     .transition(.scale(scale: 0.96, anchor: .trailing).combined(with: .opacity))
@@ -448,15 +396,30 @@ private struct AnswerPanelView: View {
 
     private var panelControls: some View {
         HStack(spacing: 8) {
-            PanelControlButton(color: Color(red: 1.0, green: 0.36, blue: 0.34), borderColor: Color(red: 0.82, green: 0.20, blue: 0.19)) {
-                controller.dismissCaptureSession()
+            PanelControlButton(
+                symbol: "xmark",
+                showsSymbol: panelControlsHovered,
+                color: Color(red: 1.0, green: 0.36, blue: 0.34),
+                borderColor: Color(red: 0.82, green: 0.20, blue: 0.19)
+            ) {
+                actions.close()
             }
             .help("Close")
 
-            PanelControlButton(color: Color(red: 1.0, green: 0.78, blue: 0.13), borderColor: Color(red: 0.82, green: 0.58, blue: 0.02)) {
-                controller.minimizeAnswerPanel()
+            PanelControlButton(
+                symbol: "minus",
+                showsSymbol: panelControlsHovered,
+                color: Color(red: 1.0, green: 0.78, blue: 0.13),
+                borderColor: Color(red: 0.82, green: 0.58, blue: 0.02)
+            ) {
+                actions.minimize()
             }
             .help("Minimize")
+        }
+        .onHover { isHovering in
+            withAnimation(.easeOut(duration: 0.10)) {
+                panelControlsHovered = isHovering
+            }
         }
     }
 
@@ -464,43 +427,51 @@ private struct AnswerPanelView: View {
         ZStack(alignment: .top) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(session.turns) { turn in
-                            turnView(turn, isCompact: false, showsUserMessage: true)
-                                .id(turn.id)
+                    VStack(spacing: 0) {
+                        LazyVStack(alignment: .leading, spacing: 14) {
+                            ForEach(session.turns) { turn in
+                                turnView(turn, isCompact: false, showsUserMessage: true)
+                                    .id(turn.id)
+                            }
                         }
+
+                        Color.clear
+                            .frame(height: AnswerPanelConversationLayout.bottomInset)
+                            .id(ConversationScrollAnchor.bottom)
                     }
                     .padding(.top, 44)
-                    .padding(.bottom, 2)
                     .frame(width: composerWidth, alignment: .topLeading)
                     .frame(minHeight: conversationSurfaceHeight, alignment: .bottom)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .onAppear {
-                    guard let lastID = session.turns.last?.id else {
+                    guard !session.turns.isEmpty else {
                         return
                     }
                     lastAutoScrolledTurnCount = session.turns.count
                     DispatchQueue.main.async {
-                        proxy.scrollTo(lastID, anchor: .bottom)
+                        proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
                     }
                 }
                 .onChange(of: session.turns.count) { _, nextCount in
-                    guard nextCount > lastAutoScrolledTurnCount, let lastID = session.turns.last?.id else {
+                    guard nextCount > lastAutoScrolledTurnCount else {
                         return
                     }
 
                     lastAutoScrolledTurnCount = nextCount
                     DispatchQueue.main.async {
-                        proxy.scrollTo(lastID, anchor: .bottom)
+                        proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
                     }
                 }
             }
         }
         .frame(width: composerWidth + 24, height: conversationSurfaceHeight)
-        .liquidGlassSurface(cornerRadius: 24, isClear: true)
+        .marrGlassSurface(cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius, isClear: true)
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(
+                cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
+                style: .continuous
+            )
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
                 .allowsHitTesting(false)
         )
@@ -529,7 +500,7 @@ private struct AnswerPanelView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .liquidGlassSurface(cornerRadius: 16, isClear: true)
+        .marrGlassSurface(cornerRadius: 16, isClear: true)
         .overlay(
             Capsule()
                 .stroke(.white.opacity(0.20), lineWidth: 0.8)
@@ -579,7 +550,7 @@ private struct AnswerPanelView: View {
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .frame(width: 292, height: 32)
-        .liquidGlassSurface(cornerRadius: 16, isClear: true)
+        .marrGlassSurface(cornerRadius: 16, isClear: true)
         .overlay(
             Capsule()
                 .stroke(selectedAccent.color.opacity(0.28), lineWidth: 0.8)
@@ -663,14 +634,14 @@ private struct AnswerPanelView: View {
             TypingIndicatorView()
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .liquidGlassSurface(cornerRadius: 15, isClear: true)
+            .marrGlassSurface(cornerRadius: 15, isClear: true)
             .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
         } else {
             MarkdownResponseView(source: turn.answer.isEmpty ? " " : turn.answer)
                 .textSelection(.enabled)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .liquidGlassSurface(cornerRadius: 15, isClear: true)
+                .marrGlassSurface(cornerRadius: 15, isClear: true)
                 .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
         }
     }
@@ -744,7 +715,7 @@ private struct AnswerPanelView: View {
         .padding(.vertical, 6)
         .frame(width: composerWidth)
         .frame(minHeight: 46)
-        .liquidGlassSurface(cornerRadius: 23, isClear: !usesRegularComposerGlass)
+        .marrGlassSurface(cornerRadius: 23, isClear: !usesRegularComposerGlass)
         .overlay(
             RoundedRectangle(cornerRadius: 23, style: .continuous)
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
@@ -775,7 +746,7 @@ private struct AnswerPanelView: View {
     private func showHistorySearch() {
         historyStore.reload()
         questionFocused = false
-        controller.setAnswerPanelHistoryExpanded(true)
+        actions.setHistoryExpanded(true)
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             showsHistoryPanel = true
         }
@@ -785,13 +756,14 @@ private struct AnswerPanelView: View {
     }
 
     private func hideHistorySearch() {
-        controller.setAnswerPanelHistoryExpanded(false)
+        historySearchFocused = false
         withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
             showsHistoryPanel = false
             historySearchText = ""
         }
-        historySearchFocused = false
         DispatchQueue.main.async {
+            guard !showsHistoryPanel else { return }
+            actions.setHistoryExpanded(false)
             questionFocused = true
         }
     }
@@ -875,27 +847,7 @@ private struct AnswerPanelView: View {
     }
 
     private func submit(_ turnID: UUID) {
-        guard let request = session.request(for: turnID) else {
-            session.fail(turnID, message: "Could not build the conversation context.")
-            return
-        }
-
-        Task {
-            do {
-                let response = try await controller.submit(request: request)
-                await MainActor.run {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        session.complete(turnID, answer: response)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        session.fail(turnID, message: controller.userFacingMessage(for: error))
-                    }
-                }
-            }
-        }
+        requestCoordinator.submit(turnID)
     }
 }
 
@@ -1175,6 +1127,8 @@ private struct AnswerPanelHistoryItem: Identifiable {
 }
 
 private struct PanelControlButton: View {
+    let symbol: String
+    let showsSymbol: Bool
     let color: Color
     let borderColor: Color
     let action: () -> Void
@@ -1189,6 +1143,12 @@ private struct PanelControlButton: View {
                     Circle()
                         .stroke(borderColor.opacity(0.72), lineWidth: 0.7)
                 )
+                .overlay {
+                    Image(systemName: symbol)
+                        .font(.system(size: 7, weight: .black))
+                        .foregroundStyle(.black.opacity(0.68))
+                        .opacity(showsSymbol ? 1 : 0)
+                }
                 .shadow(color: .black.opacity(isHovering ? 0.16 : 0.08), radius: isHovering ? 3 : 2, x: 0, y: 1)
                 .frame(width: 13, height: 13)
                 .scaleEffect(isHovering ? 1.05 : 1)
@@ -1197,6 +1157,7 @@ private struct PanelControlButton: View {
         .frame(width: 18, height: 18)
         .contentShape(Circle())
         .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.10), value: showsSymbol)
     }
 }
 
@@ -1470,40 +1431,6 @@ private struct TypingIndicatorView: View {
 }
 
 private extension View {
-    @ViewBuilder
-    func liquidGlassSurface(cornerRadius: CGFloat, isClear: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
-            self.glassEffect(
-                isClear ? .clear.interactive() : .regular.interactive(),
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-        } else {
-            self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.white.opacity(isClear ? 0.05 : 0.10))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(.white.opacity(isClear ? 0.22 : 0.34), lineWidth: 1)
-                )
-        }
-    }
-
-    @ViewBuilder
-    func liquidGlassIconButton() -> some View {
-        if #available(macOS 26.0, *) {
-            self
-                .buttonStyle(.glass)
-                .foregroundStyle(.secondary)
-        } else {
-            self
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     @ViewBuilder
     func sendCircleButton(isEnabled: Bool, color: Color, foregroundColor: Color) -> some View {
         self

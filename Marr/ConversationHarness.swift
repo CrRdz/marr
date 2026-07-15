@@ -1,66 +1,6 @@
 import Foundation
 import Combine
-
-struct ConversationImageAsset: Identifiable, Equatable, Sendable {
-    let id: UUID
-    let data: Data
-    let mimeType: String
-    let fileName: String
-
-    init(id: UUID, data: Data, mimeType: String, fileName: String) {
-        self.id = id
-        self.data = data
-        self.mimeType = mimeType
-        self.fileName = fileName
-    }
-
-    init(id: UUID = UUID(), image: PickedImage) {
-        self.id = id
-        data = image.data
-        mimeType = image.mimeType
-        fileName = image.fileName
-    }
-}
-
-enum ConversationTurnStatus: String, Codable, Equatable, Sendable {
-    case loading
-    case completed
-    case failed
-}
-
-struct ConversationTurn: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var question: String
-    let imageIDs: [UUID]
-    var answer: String
-    var errorMessage: String?
-    var status: ConversationTurnStatus
-    var showsAssistant: Bool
-
-    var isLoading: Bool {
-        status == .loading
-    }
-}
-
-enum VisionMessageRole: String, Equatable, Sendable {
-    case user
-    case assistant
-}
-
-enum VisionContent: Equatable, Sendable {
-    case text(String)
-    case image(ConversationImageAsset)
-}
-
-struct VisionMessage: Equatable, Sendable {
-    let role: VisionMessageRole
-    let content: [VisionContent]
-}
-
-struct VisionRequest: Equatable, Sendable {
-    let systemPrompt: String
-    let messages: [VisionMessage]
-}
+import MarrCore
 
 struct ImageTranslationBlock: Equatable, Sendable {
     let text: String

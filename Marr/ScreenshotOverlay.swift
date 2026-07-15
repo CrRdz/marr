@@ -50,7 +50,7 @@ final class ScreenshotOverlayController {
                     self?.translate(rect: rect, on: screen)
                 }
             )
-            window.contentView = NSHostingView(rootView: view)
+            window.contentView = NSHostingView(rootView: view.marrPreferredColorScheme())
             window.makeKeyAndOrderFront(nil)
             return window
         }
@@ -179,7 +179,7 @@ final class WindowCaptureOverlayController {
                     self?.capture(candidate)
                 }
             )
-            window.contentView = NSHostingView(rootView: view)
+            window.contentView = NSHostingView(rootView: view.marrPreferredColorScheme())
             window.makeKeyAndOrderFront(nil)
             return window
         }
@@ -498,7 +498,7 @@ struct ScreenshotSelectionView: View {
         .padding(.vertical, 6)
         .frame(width: questionBarWidth)
         .frame(minHeight: 46)
-        .liquidGlassSurface(cornerRadius: 23, isClear: true)
+        .marrGlassSurface(cornerRadius: 23, isClear: true)
         .overlay(
             RoundedRectangle(cornerRadius: 23, style: .continuous)
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
@@ -781,7 +781,7 @@ private struct WindowCaptureSelectionView: View {
                     shape.fill(selectedAccent.color)
                 }
             }
-            .liquidGlassSurface(cornerRadius: 6, isClear: true)
+            .marrGlassSurface(cornerRadius: 6, isClear: true)
             .overlay(
                 shape.stroke(isHovered ? selectedAccent.color.opacity(0.90) : .white.opacity(0.18), lineWidth: 0.8)
                     .allowsHitTesting(false)
@@ -908,64 +908,6 @@ private struct WindowCaptureSelectionView: View {
 }
 
 private extension View {
-    @ViewBuilder
-    func liquidGlassSurface(cornerRadius: CGFloat, isClear: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
-            self.glassEffect(
-                isClear ? .clear.interactive() : .regular.interactive(),
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
-        } else {
-            self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.white.opacity(isClear ? 0.05 : 0.10))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(.white.opacity(isClear ? 0.22 : 0.34), lineWidth: 1)
-                )
-        }
-    }
-
-    @ViewBuilder
-    func liquidGlassProminentButton() -> some View {
-        let selectedAccent = MarrAccentColor.resolve(
-            UserDefaults.standard.string(forKey: MarrAccentColor.storageKey) ?? MarrAccentColor.system.rawValue
-        )
-
-        if #available(macOS 26.0, *) {
-            self.buttonStyle(.glassProminent)
-        } else {
-            self
-                .buttonStyle(.plain)
-                .foregroundStyle(selectedAccent.foregroundColor)
-                .background(selectedAccent.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
-                )
-        }
-    }
-
-    @ViewBuilder
-    func liquidGlassIconButton(isActive: Bool = false) -> some View {
-        let accent = MarrAccentColor.resolve(
-            UserDefaults.standard.string(forKey: MarrAccentColor.storageKey) ?? MarrAccentColor.system.rawValue
-        ).color
-
-        if #available(macOS 26.0, *) {
-            self
-                .buttonStyle(.glass)
-                .foregroundStyle(isActive ? accent : .secondary)
-        } else {
-            self
-                .buttonStyle(.plain)
-                .foregroundStyle(isActive ? accent : .secondary)
-        }
-    }
-
     @ViewBuilder
     func sendCircleButton(isEnabled: Bool, color: Color, foregroundColor: Color) -> some View {
         self

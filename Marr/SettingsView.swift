@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import MarrCore
 import SwiftUI
 
 struct SettingsView: View {
@@ -411,6 +412,20 @@ private struct ProviderSettingsPanel: View {
             .pickerStyle(.segmented)
 
             TextField("Model", text: $controller.model)
+
+            Stepper(
+                value: $controller.maximumOutputTokens,
+                in: 256...32_768,
+                step: 256
+            ) {
+                HStack {
+                    Text("Maximum Output Tokens")
+                    Spacer()
+                    Text(controller.maximumOutputTokens.formatted())
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
         }
 
         if controller.provider == .openAI {
@@ -489,13 +504,10 @@ private enum GatewayPreset: String, CaseIterable, Identifiable {
 }
 
 private struct AppearanceSettingsPanel: View {
-    @AppStorage("appearance.colorScheme") private var colorScheme = "System"
-    @AppStorage("appearance.glassSurfaces") private var glassSurfaces = true
+    @AppStorage(MarrAppearanceKeys.colorScheme) private var colorScheme = "System"
+    @AppStorage(MarrAppearanceKeys.glassSurfaces) private var glassSurfaces = true
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
-    @AppStorage("appearance.displayFont") private var displayFont = "LXGW WenKai"
-    @AppStorage("appearance.textFont") private var textFont = "Noto Sans CJK SC"
-    @AppStorage("appearance.monoFont") private var monoFont = "IBM Plex Mono"
 
     var body: some View {
         Section("Theme") {
@@ -508,8 +520,43 @@ private struct AppearanceSettingsPanel: View {
         }
 
         Section("Surfaces") {
-            Toggle("Use glass surfaces", isOn: $glassSurfaces)
-            SettingsValueRow(title: "Fallback", value: "Ultra thin material")
+            Toggle("Use active glass surfaces", isOn: $glassSurfaces)
+            SettingsValueRow(
+                title: "Current style",
+                value: glassSurfaces ? "Active Liquid Glass" : "Unfocused Liquid Glass"
+            )
+
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        selectedAccent.color.opacity(0.72),
+                        Color.purple.opacity(0.52),
+                        Color.orange.opacity(0.46)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .allowsHitTesting(false)
+
+                HStack(spacing: 10) {
+                    Image(systemName: glassSurfaces ? "circle.hexagongrid.fill" : "drop.fill")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Surface preview")
+                            .font(MarrTypography.body(size: 13, weight: .semibold))
+                        Text(glassSurfaces ? "Adaptive refraction and highlights" : "Matches unfocused answer surfaces")
+                            .font(MarrTypography.caption2())
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 62)
+                .marrGlassSurface(cornerRadius: 14, isClear: true)
+            }
+            .frame(height: 62)
         }
 
         Section("Messages") {
@@ -518,23 +565,15 @@ private struct AppearanceSettingsPanel: View {
         }
 
         Section("Typography") {
-            Picker("Display", selection: $displayFont) {
-                Text("LXGW WenKai").tag("LXGW WenKai")
-                Text("Smiley Sans").tag("Smiley Sans")
-            }
-
-            Picker("Text", selection: $textFont) {
-                Text("Noto Sans CJK SC").tag("Noto Sans CJK SC")
-                Text("IBM Plex Sans").tag("IBM Plex Sans")
-            }
-
-            Picker("Mono", selection: $monoFont) {
-                Text("IBM Plex Mono").tag("IBM Plex Mono")
-            }
-
-            SettingsValueRow(title: "Status", value: "Reserved")
+            SettingsValueRow(title: "Font selection", value: "Not configurable yet")
+            Text("Marr currently chooses the best available bundled font automatically.")
+                .font(MarrTypography.caption2())
+                .foregroundStyle(.secondary)
         }
-        .disabled(true)
+    }
+
+    private var selectedAccent: MarrAccentColor {
+        MarrAccentColor.resolve(accentColor)
     }
 }
 
@@ -771,16 +810,21 @@ private struct DataSettingsPanel: View {
 
 private struct AdvancedSettingsPanel: View {
     @ObservedObject var controller: MarrController
+    @AppStorage(MarrHotKeyConfiguration.scopeKey) private var hotKeyScope = MarrHotKeyScope.global.rawValue
 
     var body: some View {
         Section("Diagnostics") {
             SettingsValueRow(title: "Last history error", value: controller.historyStore.lastErrorMessage ?? "None")
         }
 
-        Section("Fixed Behaviors") {
-            SettingsValueRow(title: "Hotkey scope", value: "Global")
+        Section("Runtime") {
+            SettingsValueRow(title: "Hotkey scope", value: resolvedHotKeyScope.title)
             SettingsValueRow(title: "History storage", value: "Application Support")
         }
+    }
+
+    private var resolvedHotKeyScope: MarrHotKeyScope {
+        MarrHotKeyScope(rawValue: hotKeyScope) ?? .global
     }
 }
 
