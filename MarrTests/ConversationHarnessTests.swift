@@ -1,4 +1,8 @@
 import AppKit
+import MarrCore
+import MarrNetworking
+import MarrSettings
+import SwiftUI
 import XCTest
 @testable import Marr
 
@@ -81,7 +85,173 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertNotNil(session.request(for: turnID))
     }
 
-    func testHistoryStorePersistsTurnsAndImageDataAcrossReload() throws {
+    func testAnswerPanelDeliversWheelEventsToConversationScrollView() throws {
+        try assertAnswerPanelDeliversWheelEvents(usesGlassSurfaces: true)
+    }
+
+    func testAnswerPanelDeliversWheelEventsWhenGlassSurfacesAreDisabled() throws {
+        try assertAnswerPanelDeliversWheelEvents(usesGlassSurfaces: false)
+    }
+
+    func testDisabledGlassSelectsUnfocusedRegularMode() {
+        XCTAssertEqual(
+            MarrSurfaceMode.resolve(usesActiveGlass: false, prefersClearGlass: true),
+            .unfocused
+        )
+        XCTAssertEqual(
+            MarrSurfaceMode.resolve(usesActiveGlass: false, prefersClearGlass: false),
+            .unfocused
+        )
+        XCTAssertEqual(
+            MarrSurfaceMode.resolve(usesActiveGlass: true, prefersClearGlass: true),
+            .activeClear
+        )
+        XCTAssertEqual(
+            MarrSurfaceMode.resolve(usesActiveGlass: true, prefersClearGlass: false),
+            .activeRegular
+        )
+    }
+
+    func testAnswerBubbleBottomInsetStaysProportionalToSurfaceRadius() {
+        XCTAssertEqual(AnswerPanelConversationLayout.bottomInset, 16)
+        XCTAssertEqual(
+            AnswerPanelConversationLayout.bottomInset
+                / AnswerPanelConversationLayout.surfaceCornerRadius,
+            2.0 / 3.0,
+            accuracy: 0.001
+        )
+    }
+
+    func testAnswerPanelHistoryOpenAndCloseKeepsWindowWithinManagedBounds() throws {
+        let historyURL = makeTemporaryHistoryURL()
+        defer { try? FileManager.default.removeItem(at: historyURL) }
+
+        let historyStore = ConversationHistoryStore(rootURL: historyURL)
+        let controller = MarrController(
+            client: AnswerPanelTestClient(),
+            historyStore: historyStore
+        )
+        let session = ConversationSession(
+            initialImage: makeImage(name: "history-window-test.png", byte: 1),
+            initialQuestion: "Explain this in detail"
+        )
+        let turnID = try XCTUnwrap(session.turns.first?.id)
+        session.complete(
+            turnID,
+            answer: (1...80).map { "Paragraph \($0): enough content to stress hosting-view sizing." }
+                .joined(separator: "\n\n")
+        )
+
+        let panel = AnswerPanelController(
+            controller: controller,
+            historyStore: historyStore,
+            session: session,
+            anchorRect: .zero,
+            persistImmediately: false
+        )
+        let window = panel.windowForTesting
+        window.makeKeyAndOrderFront(nil)
+        defer { panel.close() }
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        let originalMinY = window.frame.minY
+
+        XCTAssertEqual(window.frame.width, 544, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 398, accuracy: 1)
+
+        panel.setHistoryExpanded(true)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+        XCTAssertEqual(window.frame.height, 734, accuracy: 1)
+        XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
+
+        panel.setHistoryExpanded(false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+        XCTAssertEqual(window.frame.height, 398, accuracy: 1)
+        XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
+    }
+
+    private func assertAnswerPanelDeliversWheelEvents(usesGlassSurfaces: Bool) throws {
+        let defaults = UserDefaults.standard
+        let previousPreference = defaults.object(forKey: MarrAppearanceKeys.glassSurfaces)
+        defaults.set(usesGlassSurfaces, forKey: MarrAppearanceKeys.glassSurfaces)
+        defer {
+            if let previousPreference {
+                defaults.set(previousPreference, forKey: MarrAppearanceKeys.glassSurfaces)
+            } else {
+                defaults.removeObject(forKey: MarrAppearanceKeys.glassSurfaces)
+            }
+        }
+
+        let historyURL = makeTemporaryHistoryURL()
+        defer { try? FileManager.default.removeItem(at: historyURL) }
+
+        let historyStore = ConversationHistoryStore(rootURL: historyURL)
+        let controller = MarrController(
+            client: AnswerPanelTestClient(),
+            historyStore: historyStore
+        )
+        let session = ConversationSession(
+            initialImage: makeImage(name: "scroll-test.png", byte: 1),
+            initialQuestion: "Explain this in detail"
+        )
+        let turnID = try XCTUnwrap(session.turns.first?.id)
+        session.complete(
+            turnID,
+            answer: (1...80).map { "Paragraph \($0): enough content to require scrolling." }.joined(separator: "\n\n")
+        )
+
+        let panel = AnswerPanelController(
+            controller: controller,
+            historyStore: historyStore,
+            session: session,
+            anchorRect: .zero,
+            persistImmediately: false
+        )
+        let window = panel.windowForTesting
+        window.makeKeyAndOrderFront(nil)
+        defer { panel.close() }
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        let scrollView = try XCTUnwrap(largestScrollableView(in: window.contentView))
+        let clipView = scrollView.contentView
+        XCTAssertGreaterThan(
+            scrollView.documentView?.bounds.height ?? 0,
+            clipView.bounds.height + 100,
+            "The fixture must overflow the answer region before wheel routing can be tested."
+        )
+
+        clipView.scroll(to: .zero)
+        scrollView.reflectScrolledClipView(clipView)
+        let initialOrigin = clipView.bounds.origin
+        let locationInWindow = scrollView.convert(
+            NSPoint(x: scrollView.bounds.midX, y: scrollView.bounds.midY),
+            to: nil
+        )
+
+        let hitView = try XCTUnwrap(window.contentView?.hitTest(locationInWindow))
+        XCTAssertTrue(
+            hitView === scrollView || hitView.isDescendant(of: scrollView),
+            "The visible center of the answer surface must hit inside its scroll view."
+        )
+
+        sendWheelEvent(deltaY: -80, at: locationInWindow, through: hitView)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+
+        if clipView.bounds.origin == initialOrigin {
+            sendWheelEvent(deltaY: 80, at: locationInWindow, through: hitView)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+
+        XCTAssertNotEqual(
+            clipView.bounds.origin,
+            initialOrigin,
+            "A wheel event inside the answer surface must move its native scroll view."
+        )
+    }
+
+    func testHistoryStorePersistsTurnsAndImageDataAcrossReload() async throws {
         let rootURL = makeTemporaryHistoryURL()
         defer { try? FileManager.default.removeItem(at: rootURL) }
         let store = ConversationHistoryStore(rootURL: rootURL)
@@ -93,8 +263,10 @@ final class ConversationHarnessTests: XCTestCase {
         let turnID = try XCTUnwrap(session.turns.first?.id)
         let imageID = try XCTUnwrap(session.turns.first?.imageIDs.first)
         session.complete(turnID, answer: "Stored safely")
+        await store.waitForPendingOperations()
 
         let reloaded = ConversationHistoryStore(rootURL: rootURL)
+        await reloaded.waitForPendingOperations()
         let record = try XCTUnwrap(reloaded.conversations.first)
 
         XCTAssertEqual(record.title, "Remember this screenshot")
@@ -103,7 +275,7 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(reloaded.imageData(conversationID: record.id, imageID: imageID), Data([42]))
     }
 
-    func testHistoryStorePersistsPendingScreenshotAndDeletesConversation() throws {
+    func testHistoryStorePersistsPendingScreenshotAndDeletesConversation() async throws {
         let rootURL = makeTemporaryHistoryURL()
         defer { try? FileManager.default.removeItem(at: rootURL) }
         let store = ConversationHistoryStore(rootURL: rootURL)
@@ -113,17 +285,19 @@ final class ConversationHarnessTests: XCTestCase {
         )
         session.setArchiveHandler { store.save($0) }
         let pendingID = session.appendScreenshot(makeImage(name: "pending.png", byte: 2))
+        await store.waitForPendingOperations()
 
         let record = try XCTUnwrap(store.conversations.first)
         XCTAssertEqual(record.pendingImageIDs, [pendingID])
         XCTAssertEqual(record.images.count, 2)
 
         store.delete(record.id)
-        XCTAssertTrue(store.conversations.isEmpty)
+        await store.waitForPendingOperations()
+        XCTAssertTrue(store.conversations.isEmpty, store.lastErrorMessage ?? "Unexpected persisted record")
         XCTAssertFalse(FileManager.default.fileExists(atPath: rootURL.appendingPathComponent(record.id.uuidString).path))
     }
 
-    func testHistoryStoreMigratesLegacyJSONHistoryIntoSQLite() throws {
+    func testHistoryStoreMigratesLegacyJSONHistoryIntoSQLite() async throws {
         let rootURL = makeTemporaryHistoryURL()
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -170,6 +344,7 @@ final class ConversationHarnessTests: XCTestCase {
         try encoder.encode(record).write(to: legacyConversationURL.appendingPathComponent("conversation.json"))
 
         let store = ConversationHistoryStore(rootURL: rootURL)
+        await store.waitForPendingOperations()
         let migrated = try XCTUnwrap(store.conversations.first)
 
         XCTAssertEqual(migrated.id, conversationID)
@@ -1872,6 +2047,47 @@ final class ConversationHarnessTests: XCTestCase {
         )
     }
 
+    private func largestScrollableView(in rootView: NSView?) -> NSScrollView? {
+        guard let rootView else { return nil }
+
+        let candidates = ([rootView] + rootView.descendants)
+            .compactMap { $0 as? NSScrollView }
+            .filter { scrollView in
+                guard let documentView = scrollView.documentView else { return false }
+                return documentView.bounds.height > scrollView.contentView.bounds.height + 1
+            }
+
+        return candidates.max { lhs, rhs in
+            let lhsOverflow = (lhs.documentView?.bounds.height ?? 0) - lhs.contentView.bounds.height
+            let rhsOverflow = (rhs.documentView?.bounds.height ?? 0) - rhs.contentView.bounds.height
+            return lhsOverflow < rhsOverflow
+        }
+    }
+
+    private func sendWheelEvent(deltaY: CGFloat, at location: NSPoint, through hitView: NSView) {
+        guard let cgEvent = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .pixel,
+            wheelCount: 1,
+            wheel1: Int32(deltaY),
+            wheel2: 0,
+            wheel3: 0
+        ) else {
+            XCTFail("Could not create a wheel event.")
+            return
+        }
+
+        cgEvent.location = hitView.window?.convertPoint(toScreen: location) ?? location
+        guard let event = NSEvent(cgEvent: cgEvent) else {
+            XCTFail("Could not bridge the wheel event to AppKit.")
+            return
+        }
+
+        XCTAssertEqual(event.type, .scrollWheel)
+        XCTAssertNotEqual(event.scrollingDeltaY, 0)
+        hitView.scrollWheel(with: event)
+    }
+
     private func firstPixel(
         in bitmap: NSBitmapImageRep,
         matching predicate: (NSColor) -> Bool
@@ -1924,5 +2140,21 @@ final class ConversationHarnessTests: XCTestCase {
             if case .text(let value) = content { return value }
             return nil
         }.last
+    }
+}
+
+private extension NSView {
+    var descendants: [NSView] {
+        subviews + subviews.flatMap(\.descendants)
+    }
+}
+
+private struct AnswerPanelTestClient: VisionAIClient {
+    func ask(
+        request: VisionRequest,
+        model: String,
+        connection: InferenceConnection
+    ) async throws -> String {
+        "Unused in the completed-session fixture."
     }
 }
