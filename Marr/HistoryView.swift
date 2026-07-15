@@ -1,4 +1,5 @@
 import AppKit
+import MarrCore
 import SwiftUI
 
 struct HistoryView: View {

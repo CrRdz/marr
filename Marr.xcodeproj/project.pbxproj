@@ -9,14 +9,13 @@
 /* Begin PBXBuildFile section */
 		1A0000012C00000000000001 /* MarrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000102C00000000000001 /* MarrApp.swift */; };
 		1A0000022C00000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000112C00000000000001 /* ContentView.swift */; };
-		1A0000032C00000000000001 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000122C00000000000001 /* OpenAIClient.swift */; };
-		1A0000042C00000000000001 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* ImagePicker.swift */; };
+		1A0000042C00000000000001 /* PickedImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* PickedImage.swift */; };
 		1A0000052C00000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000142C00000000000001 /* Assets.xcassets */; };
 		1A0000092C00000000000001 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000212C00000000000001 /* Fonts */; };
 		1A0000062C00000000000001 /* MarrController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000162C00000000000001 /* MarrController.swift */; };
 		1A0000072C00000000000001 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000172C00000000000001 /* HotKeyManager.swift */; };
 		1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000182C00000000000001 /* ScreenshotOverlay.swift */; };
-		1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* NativeScreenshotController.swift */; };
+		1A00000A2C00000000000001 /* WindowCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* WindowCapture.swift */; };
 		1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001B2C00000000000001 /* AnswerPanel.swift */; };
 		1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001C2C00000000000001 /* ConversationHarness.swift */; };
 		1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001D2C00000000000001 /* ConversationHistoryStore.swift */; };
@@ -25,7 +24,20 @@
 		1A0000222C00000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000242C00000000000001 /* SettingsView.swift */; };
 		1A0000232C00000000000001 /* MarrSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000252C00000000000001 /* MarrSurface.swift */; };
 		1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000272C00000000000001 /* MarrBubbleColor.swift */; };
+		1D0000012C00000000000001 /* ConversationRequestCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */; };
+		1D0000022C00000000000001 /* TranslationOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000112C00000000000001 /* TranslationOverlay.swift */; };
+		1D0000032C00000000000001 /* TranslationRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000122C00000000000001 /* TranslationRecognition.swift */; };
+		1D0000042C00000000000001 /* TranslationLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000132C00000000000001 /* TranslationLayout.swift */; };
+		1D0000052C00000000000001 /* TranslationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000142C00000000000001 /* TranslationRenderer.swift */; };
+		1D0000062C00000000000001 /* BackgroundOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000152C00000000000001 /* BackgroundOperation.swift */; };
 		1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000102C00000000000001 /* ConversationHarnessTests.swift */; };
+		1C0000012C00000000000001 /* MarrCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000102C00000000000001 /* MarrCore */; };
+		1C0000022C00000000000001 /* MarrNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000112C00000000000001 /* MarrNetworking */; };
+		1C0000032C00000000000001 /* MarrSettings in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000122C00000000000001 /* MarrSettings */; };
+		1C0000042C00000000000001 /* MarrCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000132C00000000000001 /* MarrCore */; };
+		1C0000052C00000000000001 /* MarrNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000142C00000000000001 /* MarrNetworking */; };
+		1C0000062C00000000000001 /* MarrSettings in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000152C00000000000001 /* MarrSettings */; };
+		1C0000072C00000000000001 /* MarrPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000162C00000000000001 /* MarrPersistence */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -41,14 +53,13 @@
 /* Begin PBXFileReference section */
 		1A0000102C00000000000001 /* MarrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrApp.swift; sourceTree = "<group>"; };
 		1A0000112C00000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		1A0000122C00000000000001 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
-		1A0000132C00000000000001 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
+		1A0000132C00000000000001 /* PickedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickedImage.swift; sourceTree = "<group>"; };
 		1A0000142C00000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A0000152C00000000000001 /* Marr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Marr.entitlements; sourceTree = "<group>"; };
 		1A0000162C00000000000001 /* MarrController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrController.swift; sourceTree = "<group>"; };
 		1A0000172C00000000000001 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		1A0000182C00000000000001 /* ScreenshotOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotOverlay.swift; sourceTree = "<group>"; };
-		1A00001A2C00000000000001 /* NativeScreenshotController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenshotController.swift; sourceTree = "<group>"; };
+		1A00001A2C00000000000001 /* WindowCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCapture.swift; sourceTree = "<group>"; };
 		1A00001B2C00000000000001 /* AnswerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanel.swift; sourceTree = "<group>"; };
 		1A00001C2C00000000000001 /* ConversationHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarness.swift; sourceTree = "<group>"; };
 		1A00001D2C00000000000001 /* ConversationHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHistoryStore.swift; sourceTree = "<group>"; };
@@ -59,6 +70,12 @@
 		1A0000242C00000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A0000252C00000000000001 /* MarrSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrSurface.swift; sourceTree = "<group>"; };
 		1A0000272C00000000000001 /* MarrBubbleColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrBubbleColor.swift; sourceTree = "<group>"; };
+		1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationRequestCoordinator.swift; sourceTree = "<group>"; };
+		1D0000112C00000000000001 /* TranslationOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationOverlay.swift; sourceTree = "<group>"; };
+		1D0000122C00000000000001 /* TranslationRecognition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRecognition.swift; sourceTree = "<group>"; };
+		1D0000132C00000000000001 /* TranslationLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationLayout.swift; sourceTree = "<group>"; };
+		1D0000142C00000000000001 /* TranslationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRenderer.swift; sourceTree = "<group>"; };
+		1D0000152C00000000000001 /* BackgroundOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundOperation.swift; sourceTree = "<group>"; };
 		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
 		1B0000202C00000000000001 /* MarrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MarrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -68,6 +85,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C0000012C00000000000001 /* MarrCore in Frameworks */,
+				1C0000022C00000000000001 /* MarrNetworking in Frameworks */,
+				1C0000072C00000000000001 /* MarrPersistence in Frameworks */,
+				1C0000032C00000000000001 /* MarrSettings in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +96,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C0000042C00000000000001 /* MarrCore in Frameworks */,
+				1C0000052C00000000000001 /* MarrNetworking in Frameworks */,
+				1C0000062C00000000000001 /* MarrSettings in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,10 +120,16 @@
 				1A0000102C00000000000001 /* MarrApp.swift */,
 				1A0000112C00000000000001 /* ContentView.swift */,
 				1A0000162C00000000000001 /* MarrController.swift */,
+				1D0000112C00000000000001 /* TranslationOverlay.swift */,
+				1D0000122C00000000000001 /* TranslationRecognition.swift */,
+				1D0000132C00000000000001 /* TranslationLayout.swift */,
+				1D0000142C00000000000001 /* TranslationRenderer.swift */,
 				1A0000172C00000000000001 /* HotKeyManager.swift */,
-				1A00001A2C00000000000001 /* NativeScreenshotController.swift */,
+				1A00001A2C00000000000001 /* WindowCapture.swift */,
 				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
 				1A00001B2C00000000000001 /* AnswerPanel.swift */,
+				1D0000152C00000000000001 /* BackgroundOperation.swift */,
+				1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */,
 				1A00001C2C00000000000001 /* ConversationHarness.swift */,
 				1A00001D2C00000000000001 /* ConversationHistoryStore.swift */,
 				1A00001E2C00000000000001 /* HistoryView.swift */,
@@ -107,8 +137,7 @@
 				1A0000252C00000000000001 /* MarrSurface.swift */,
 				1A0000272C00000000000001 /* MarrBubbleColor.swift */,
 				1A0000242C00000000000001 /* SettingsView.swift */,
-				1A0000122C00000000000001 /* OpenAIClient.swift */,
-				1A0000132C00000000000001 /* ImagePicker.swift */,
+				1A0000132C00000000000001 /* PickedImage.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
 				1A0000212C00000000000001 /* Fonts */,
 				1A0000152C00000000000001 /* Marr.entitlements */,
@@ -149,6 +178,12 @@
 			dependencies = (
 			);
 			name = Marr;
+			packageProductDependencies = (
+				1C0000102C00000000000001 /* MarrCore */,
+				1C0000112C00000000000001 /* MarrNetworking */,
+				1C0000162C00000000000001 /* MarrPersistence */,
+				1C0000122C00000000000001 /* MarrSettings */,
+			);
 			productName = Marr;
 			productReference = 1A0000202C00000000000001 /* Marr.app */;
 			productType = "com.apple.product-type.application";
@@ -166,6 +201,11 @@
 				1B0000812C00000000000001 /* PBXTargetDependency */,
 			);
 			name = MarrTests;
+			packageProductDependencies = (
+				1C0000132C00000000000001 /* MarrCore */,
+				1C0000142C00000000000001 /* MarrNetworking */,
+				1C0000152C00000000000001 /* MarrSettings */,
+			);
 			productName = MarrTests;
 			productReference = 1B0000202C00000000000001 /* MarrTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -198,6 +238,9 @@
 			);
 			mainGroup = 1A0000402C00000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1A0000422C00000000000001 /* Products */;
 			projectDirPath = "";
@@ -229,10 +272,16 @@
 				1A0000012C00000000000001 /* MarrApp.swift in Sources */,
 				1A0000022C00000000000001 /* ContentView.swift in Sources */,
 				1A0000062C00000000000001 /* MarrController.swift in Sources */,
+				1D0000022C00000000000001 /* TranslationOverlay.swift in Sources */,
+				1D0000032C00000000000001 /* TranslationRecognition.swift in Sources */,
+				1D0000042C00000000000001 /* TranslationLayout.swift in Sources */,
+				1D0000052C00000000000001 /* TranslationRenderer.swift in Sources */,
 				1A0000072C00000000000001 /* HotKeyManager.swift in Sources */,
-				1A00000A2C00000000000001 /* NativeScreenshotController.swift in Sources */,
+				1A00000A2C00000000000001 /* WindowCapture.swift in Sources */,
 				1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */,
 				1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */,
+				1D0000062C00000000000001 /* BackgroundOperation.swift in Sources */,
+				1D0000012C00000000000001 /* ConversationRequestCoordinator.swift in Sources */,
 				1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */,
 				1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */,
 				1A00000E2C00000000000001 /* HistoryView.swift in Sources */,
@@ -240,8 +289,7 @@
 				1A0000232C00000000000001 /* MarrSurface.swift in Sources */,
 				1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */,
 				1A0000222C00000000000001 /* SettingsView.swift in Sources */,
-				1A0000032C00000000000001 /* OpenAIClient.swift in Sources */,
-				1A0000042C00000000000001 /* ImagePicker.swift in Sources */,
+				1A0000042C00000000000001 /* PickedImage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -496,6 +544,23 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/MarrModules;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1C0000102C00000000000001 /* MarrCore */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrCore; };
+		1C0000112C00000000000001 /* MarrNetworking */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrNetworking; };
+		1C0000122C00000000000001 /* MarrSettings */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrSettings; };
+		1C0000132C00000000000001 /* MarrCore */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrCore; };
+		1C0000142C00000000000001 /* MarrNetworking */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrNetworking; };
+		1C0000152C00000000000001 /* MarrSettings */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrSettings; };
+		1C0000162C00000000000001 /* MarrPersistence */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrPersistence; };
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1A0000802C00000000000001 /* Project object */;
 }

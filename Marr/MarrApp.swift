@@ -1,10 +1,10 @@
+import MarrNetworking
 import SwiftUI
 
 @main
 @MainActor
 struct MarrApp: App {
     @StateObject private var controller: MarrController
-    @AppStorage("appearance.colorScheme") private var colorScheme = "System"
 
     init() {
         MarrTypography.registerBundledFonts()
@@ -17,7 +17,7 @@ struct MarrApp: App {
     var body: some Scene {
         MenuBarExtra {
             ContentView(controller: controller)
-                .preferredColorScheme(preferredColorScheme)
+                .marrPreferredColorScheme()
         } label: {
             Image(systemName: "viewfinder")
                 .accessibilityLabel("Marr")
@@ -26,17 +26,9 @@ struct MarrApp: App {
 
         Window("Marr Settings", id: "settings") {
             SettingsView(controller: controller)
-                .preferredColorScheme(preferredColorScheme)
+                .marrPreferredColorScheme()
         }
         .defaultSize(width: 820, height: 580)
         .windowResizability(.contentMinSize)
-    }
-
-    private var preferredColorScheme: ColorScheme? {
-        switch colorScheme {
-        case "Light": .light
-        case "Dark": .dark
-        default: nil
-        }
     }
 }
