@@ -480,7 +480,6 @@ private struct AnswerPanelView: View {
                 .padding(.leading, 14)
                 .padding(.top, 12)
         }
-        .shadow(color: .black.opacity(0.14), radius: 16, x: 0, y: 7)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
