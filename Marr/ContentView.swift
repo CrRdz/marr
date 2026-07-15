@@ -18,7 +18,7 @@ struct ContentView: View {
         .padding(.trailing, 12)
         .padding(.vertical, 10)
         .frame(width: 220)
-        .marrLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .marrGlassSurface(cornerRadius: 18, isClear: true)
     }
 
     private var header: some View {
@@ -156,7 +156,7 @@ private struct MenuActionRow: View {
         if isHovered {
             shape.fill(selectedAccent.color)
         } else if usesGlass {
-            Color.clear.marrLiquidGlass(in: shape)
+            Color.clear.marrGlassSurface(cornerRadius: 8, isClear: true)
         } else {
             shape.fill(.clear)
         }
@@ -168,10 +168,6 @@ private struct MenuActionRow: View {
 }
 
 private extension View {
-    func marrLiquidGlass<S: Shape>(in shape: S) -> some View {
-        modifier(MarrMenuGlassModifier(shape: shape))
-    }
-
     @ViewBuilder
     func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
         if condition {
@@ -179,32 +175,5 @@ private extension View {
         } else {
             self
         }
-    }
-}
-
-private struct MarrMenuGlassModifier<S: Shape>: ViewModifier {
-    let shape: S
-    @AppStorage("appearance.glassSurfaces") private var usesGlassSurfaces = true
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                if usesGlassSurfaces, #available(macOS 26.0, *) {
-                    shape
-                        .fill(.clear)
-                        .glassEffect(.clear, in: shape)
-                        .allowsHitTesting(false)
-                } else {
-                    shape
-                        .fill(.ultraThinMaterial)
-                        .overlay(shape.fill(.white.opacity(0.035)))
-                        .allowsHitTesting(false)
-                }
-            }
-            .overlay {
-                shape
-                    .stroke(.white.opacity(0.18), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
     }
 }
