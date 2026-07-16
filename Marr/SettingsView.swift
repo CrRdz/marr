@@ -196,7 +196,7 @@ private struct CaptureSettingsPanel: View {
             }
 
             HStack {
-                Text("Capture window")
+                Text("Capture current window")
                 Spacer()
                 HotKeyRecorder(
                     keyCode: $windowKeyCode,
@@ -226,7 +226,7 @@ private struct CaptureSettingsPanel: View {
 
         Section("Answer Panel") {
             SettingsValueRow(title: "New capture", value: "Open answer panel")
-            SettingsValueRow(title: "When minimized", value: "Shortcut restores panel")
+            SettingsValueRow(title: "Shortcut", value: "Always starts capture")
         }
 
         Section("Planned Controls") {
