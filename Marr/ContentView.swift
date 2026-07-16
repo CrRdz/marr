@@ -1,9 +1,9 @@
-import AppKit
 import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var controller: MarrController
-    @Environment(\.openWindow) private var openWindow
+    let openSettings: () -> Void
+    let quit: () -> Void
     @AppStorage("menu.showStatus") private var showStatus = true
 
     var body: some View {
@@ -51,18 +51,13 @@ struct ContentView: View {
     private var secondaryActions: some View {
         VStack(alignment: .leading, spacing: 0) {
             menuRow("Settings") {
-                openAppWindow(id: "settings")
+                openSettings()
             }
             menuDivider
             menuRow("Quit Marr") {
-                NSApp.terminate(nil)
+                quit()
             }
         }
-    }
-
-    private func openAppWindow(id: String) {
-        openWindow(id: id)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func menuRow(
