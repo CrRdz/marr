@@ -8,6 +8,102 @@ import XCTest
 
 @MainActor
 final class ConversationHarnessTests: XCTestCase {
+    func testScreenshotPreviewLayoutAvoidsSelectionAndPrompt() throws {
+        let bounds = CGRect(x: 0, y: 0, width: 1_200, height: 800)
+        let selection = CGRect(x: 300, y: 200, width: 600, height: 400)
+        let prompt = CGRect(x: 350, y: 620, width: 500, height: 54)
+
+        let layout = try XCTUnwrap(ScreenshotPreviewLayout.resolve(
+            bounds: bounds,
+            selection: selection,
+            prompt: prompt,
+            imageAspectRatio: 16.0 / 9.0
+        ))
+
+        XCTAssertTrue(bounds.contains(layout.frame))
+        XCTAssertFalse(layout.frame.intersects(selection))
+        XCTAssertFalse(layout.frame.intersects(prompt))
+    }
+
+    func testAnswerPanelEscapeClosesNestedStateBeforePanel() {
+        XCTAssertEqual(
+            AnswerPanelEscapeAction.resolve(showsHistory: true, isEditing: true),
+            .closeHistory
+        )
+        XCTAssertEqual(
+            AnswerPanelEscapeAction.resolve(showsHistory: false, isEditing: true),
+            .cancelEditing
+        )
+        XCTAssertEqual(
+            AnswerPanelEscapeAction.resolve(showsHistory: false, isEditing: false),
+            .closePanel
+        )
+    }
+
+    func testConversationTitlePromptCleansModelOutput() {
+        XCTAssertEqual(
+            ConversationTitlePrompt.clean("标题：Homebrew 包发布准备。\n额外解释"),
+            "Homebrew 包发布准备"
+        )
+        XCTAssertEqual(
+            ConversationTitlePrompt.clean("**Settings comparison result**"),
+            "Settings comparison result"
+        )
+    }
+
+    func testConversationTitlePromptSummarizesQuestionAndAnswerWithoutImages() throws {
+        let request = ConversationTitlePrompt.request(
+            question: "What changed in these settings?",
+            answer: "The proxy mode was changed from automatic to manual."
+        )
+
+        XCTAssertTrue(request.systemPrompt.contains("summarizes the screenshot conversation"))
+        XCTAssertEqual(request.messages.count, 1)
+        XCTAssertEqual(imageCount(in: request.messages[0]), 0)
+        XCTAssertTrue(try XCTUnwrap(text(in: request.messages[0])).contains("proxy mode"))
+    }
+
+    func testWindowCaptureQuestionRequestsAnalysisInsteadOfAnotherScreenshot() {
+        let question = WindowCapture.analysisQuestion(
+            appName: "Microsoft Edge",
+            title: "Project status"
+        )
+
+        XCTAssertFalse(question.localizedCaseInsensitiveContains("send a screenshot"))
+        XCTAssertTrue(question.localizedCaseInsensitiveContains("analyze this screenshot"))
+        XCTAssertTrue(question.contains("Microsoft Edge — Project status"))
+    }
+
+    func testScreenCapturePreviewTracksLatestSelectionSize() throws {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = try XCTUnwrap(CGContext(
+            data: nil,
+            width: 200,
+            height: 100,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        let image = try XCTUnwrap(context.makeImage())
+        let snapshot = ScreenCaptureSnapshot(
+            image: image,
+            screenFrame: CGRect(x: 0, y: 0, width: 100, height: 50)
+        )
+
+        let initialPreview = try XCTUnwrap(ScreenCapture.preview(
+            rect: CGRect(x: 10, y: 10, width: 30, height: 15),
+            snapshot: snapshot
+        ))
+        XCTAssertEqual(initialPreview.size, NSSize(width: 60, height: 30))
+
+        let movedAndResizedPreview = try XCTUnwrap(ScreenCapture.preview(
+            rect: CGRect(x: 50, y: 20, width: 40, height: 20),
+            snapshot: snapshot
+        ))
+        XCTAssertEqual(movedAndResizedPreview.size, NSSize(width: 80, height: 40))
+    }
+
     func testBuildsStructuredRoleSequenceForFollowUp() throws {
         let session = ConversationSession(
             initialImage: makeImage(name: "first.png", byte: 1),
@@ -122,7 +218,13 @@ final class ConversationHarnessTests: XCTestCase {
         )
     }
 
-    func testAnswerPanelHistoryOpenAndCloseKeepsWindowWithinManagedBounds() throws {
+    func testConversationTitleFadesWithoutFullyDisappearingWhileScrolling() {
+        XCTAssertEqual(AnswerPanelTitleFade.opacity(forScrollDistance: 0), 1)
+        XCTAssertLessThan(AnswerPanelTitleFade.opacity(forScrollDistance: 36), 1)
+        XCTAssertEqual(AnswerPanelTitleFade.opacity(forScrollDistance: 1_000), 0.18, accuracy: 0.001)
+    }
+
+    func testAnswerPanelHistoryOpenAndCloseKeepsWindowAtAnswerSize() throws {
         let historyURL = makeTemporaryHistoryURL()
         defer { try? FileManager.default.removeItem(at: historyURL) }
 
@@ -157,16 +259,16 @@ final class ConversationHarnessTests: XCTestCase {
         let originalMinY = window.frame.minY
 
         XCTAssertEqual(window.frame.width, 544, accuracy: 1)
-        XCTAssertEqual(window.frame.height, 398, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 468, accuracy: 1)
 
         panel.setHistoryExpanded(true)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
-        XCTAssertEqual(window.frame.height, 734, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 468, accuracy: 1)
         XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
 
         panel.setHistoryExpanded(false)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
-        XCTAssertEqual(window.frame.height, 398, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 468, accuracy: 1)
         XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
     }
 
@@ -263,13 +365,15 @@ final class ConversationHarnessTests: XCTestCase {
         let turnID = try XCTUnwrap(session.turns.first?.id)
         let imageID = try XCTUnwrap(session.turns.first?.imageIDs.first)
         session.complete(turnID, answer: "Stored safely")
+        session.setGeneratedTitle("Screenshot persistence")
         await store.waitForPendingOperations()
 
         let reloaded = ConversationHistoryStore(rootURL: rootURL)
         await reloaded.waitForPendingOperations()
         let record = try XCTUnwrap(reloaded.conversations.first)
 
-        XCTAssertEqual(record.title, "Remember this screenshot")
+        XCTAssertEqual(record.title, "Screenshot persistence")
+        XCTAssertEqual(record.generatedTitle, "Screenshot persistence")
         XCTAssertEqual(record.turns.first?.answer, "Stored safely")
         XCTAssertEqual(record.completedTurnCount, 1)
         XCTAssertEqual(reloaded.imageData(conversationID: record.id, imageID: imageID), Data([42]))
