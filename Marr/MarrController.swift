@@ -581,10 +581,6 @@ final class MarrController: ObservableObject {
         statusMessage = "Answer panel minimized. Press \(hotKeyConfiguration.displayString) to restore it."
     }
 
-    func setAnswerPanelHistoryExpanded(_ isExpanded: Bool) {
-        answerPanelController?.setHistoryExpanded(isExpanded)
-    }
-
     func openHistoryConversation(_ conversation: ConversationHistoryRecord) {
         let imageSources = conversation.images.map { image in
             HistoryImageAssetSource(

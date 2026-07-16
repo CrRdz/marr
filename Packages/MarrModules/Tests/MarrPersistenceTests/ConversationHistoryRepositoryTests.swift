@@ -18,6 +18,7 @@ struct ConversationHistoryRepositoryTests {
             id: conversationID,
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 200),
+            generatedTitle: "Saved screenshot answer",
             turns: [
                 ConversationTurn(
                     id: UUID(),
@@ -43,6 +44,7 @@ struct ConversationHistoryRepositoryTests {
         let repository = ConversationHistoryRepository(rootURL: rootURL)
         let saved = try #require(try repository.save(archive).first)
         #expect(saved.id == conversationID)
+        #expect(saved.title == "Saved screenshot answer")
         #expect(saved.turns.first?.answer == "answer")
 
         let attachmentURL = rootURL

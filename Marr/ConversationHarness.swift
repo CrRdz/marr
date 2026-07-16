@@ -1385,6 +1385,7 @@ struct ConversationContextBuilder: Sendable {
 final class ConversationSession: ObservableObject {
     let id: UUID
     let createdAt: Date
+    @Published private(set) var generatedTitle: String?
     @Published private(set) var turns: [ConversationTurn]
     @Published private(set) var images: [UUID: ConversationImageAsset]
     @Published private(set) var pendingImageIDs: [UUID]
@@ -1402,6 +1403,7 @@ final class ConversationSession: ObservableObject {
         id = UUID()
         createdAt = Date()
         updatedAt = createdAt
+        generatedTitle = nil
         let asset = ConversationImageAsset(image: initialImage)
         let turn = ConversationTurn(
             id: UUID(),
@@ -1426,6 +1428,7 @@ final class ConversationSession: ObservableObject {
         id = historyRecord.id
         createdAt = historyRecord.createdAt
         updatedAt = historyRecord.updatedAt
+        generatedTitle = historyRecord.generatedTitle
         turns = historyRecord.turns.map { turn in
             guard turn.status == .loading else {
                 return turn
@@ -1447,6 +1450,11 @@ final class ConversationSession: ObservableObject {
 
     var hasLoadingTurn: Bool {
         turns.contains(where: \.isLoading)
+    }
+
+    var displayTitle: String {
+        let title = generatedTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return title.isEmpty ? "New conversation" : title
     }
 
     var latestEditableTurnID: UUID? {
@@ -1538,6 +1546,13 @@ final class ConversationSession: ObservableObject {
         archiveChanges()
     }
 
+    func setGeneratedTitle(_ rawTitle: String) {
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != generatedTitle else { return }
+        generatedTitle = title
+        archiveChanges()
+    }
+
     func fail(_ turnID: UUID, message: String) {
         update(turnID) {
             $0.answer = ""
@@ -1576,6 +1591,7 @@ final class ConversationSession: ObservableObject {
             id: id,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            generatedTitle: generatedTitle,
             turns: turns,
             images: Array(images.values),
             pendingImageIDs: pendingImageIDs

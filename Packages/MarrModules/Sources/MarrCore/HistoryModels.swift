@@ -18,6 +18,7 @@ public struct ConversationHistoryRecord: Identifiable, Codable, Equatable, Senda
     public let id: UUID
     public let createdAt: Date
     public var updatedAt: Date
+    public var generatedTitle: String?
     public var turns: [ConversationTurn]
     public var images: [ConversationImageReference]
     public var pendingImageIDs: [UUID]
@@ -26,6 +27,7 @@ public struct ConversationHistoryRecord: Identifiable, Codable, Equatable, Senda
         id: UUID,
         createdAt: Date,
         updatedAt: Date,
+        generatedTitle: String? = nil,
         turns: [ConversationTurn],
         images: [ConversationImageReference],
         pendingImageIDs: [UUID]
@@ -33,12 +35,16 @@ public struct ConversationHistoryRecord: Identifiable, Codable, Equatable, Senda
         self.id = id
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.generatedTitle = generatedTitle
         self.turns = turns
         self.images = images
         self.pendingImageIDs = pendingImageIDs
     }
 
-    public var title: String { turns.first?.question ?? "Untitled conversation" }
+    public var title: String {
+        let generated = generatedTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return generated.isEmpty ? turns.first?.question ?? "Untitled conversation" : generated
+    }
     public var completedTurnCount: Int { turns.filter { $0.status == .completed }.count }
 }
 
@@ -46,6 +52,7 @@ public struct ConversationArchive: Sendable {
     public let id: UUID
     public let createdAt: Date
     public let updatedAt: Date
+    public let generatedTitle: String?
     public let turns: [ConversationTurn]
     public let images: [ConversationImageAsset]
     public let pendingImageIDs: [UUID]
@@ -54,6 +61,7 @@ public struct ConversationArchive: Sendable {
         id: UUID,
         createdAt: Date,
         updatedAt: Date,
+        generatedTitle: String? = nil,
         turns: [ConversationTurn],
         images: [ConversationImageAsset],
         pendingImageIDs: [UUID]
@@ -61,6 +69,7 @@ public struct ConversationArchive: Sendable {
         self.id = id
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.generatedTitle = generatedTitle
         self.turns = turns
         self.images = images
         self.pendingImageIDs = pendingImageIDs
