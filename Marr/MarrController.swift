@@ -124,7 +124,7 @@ final class MarrController: ObservableObject {
         do {
             try nextCaptureHotKeyManager.register()
             captureHotKeyManager = nextCaptureHotKeyManager
-            readyMessages.append("\(captureConfiguration.displayString) to capture")
+            readyMessages.append("\(captureConfiguration.displayString) for area")
         } catch {
             warningMessages.append("Could not register \(captureConfiguration.displayString): \(error.localizedDescription)")
         }
@@ -132,7 +132,7 @@ final class MarrController: ObservableObject {
         do {
             try nextWindowCaptureHotKeyManager.register()
             windowCaptureHotKeyManager = nextWindowCaptureHotKeyManager
-            readyMessages.append("\(windowConfiguration.displayString) for window")
+            readyMessages.append("\(windowConfiguration.displayString) for current window")
         } catch {
             warningMessages.append("Could not register \(windowConfiguration.displayString): \(error.localizedDescription)")
         }
@@ -147,20 +147,16 @@ final class MarrController: ObservableObject {
     }
 
     func startScreenCapture() {
-        guard overlayController == nil else {
+        guard overlayController == nil, windowCaptureOverlayController == nil else {
             statusMessage = "Capture already active."
             return
         }
 
-        if let answerPanelController {
-            if answerPanelController.isMinimized {
-                answerPanelController.restore()
-                statusMessage = "Answer panel restored."
-                return
-            }
-            startAppendScreenshotCapture()
+        let windowCandidates = currentWindowCaptureCandidates()
+        if answerPanelController != nil {
+            startAppendScreenshotCapture(windowCandidates: windowCandidates)
         } else {
-            startCustomOverlayCapture()
+            startCustomOverlayCapture(windowCandidates: windowCandidates)
         }
     }
 
@@ -170,9 +166,19 @@ final class MarrController: ObservableObject {
             return
         }
 
-        let candidates = WindowCapture.captureCandidates()
+        guard
+            let frontmostApplication = NSWorkspace.shared.frontmostApplication,
+            frontmostApplication.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else {
+            statusMessage = "No current application window found."
+            return
+        }
+
+        let candidates = WindowCapture.captureCandidates(
+            for: frontmostApplication.processIdentifier
+        )
         guard !candidates.isEmpty else {
-            statusMessage = "No capturable window found."
+            statusMessage = "No open window found for \(frontmostApplication.localizedName ?? "the current application")."
             return
         }
 
@@ -185,54 +191,29 @@ final class MarrController: ObservableObject {
         }
         overlay.onCapture = { [weak self] candidate in
             Task { @MainActor in
-                guard let self else {
-                    return
-                }
+                guard let self else { return }
 
                 self.windowCaptureOverlayController = nil
-                self.windowCaptureTask?.cancel()
-                self.statusMessage = "Capturing window..."
-                self.windowCaptureTask = Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    defer { self.windowCaptureTask = nil }
-
-                    do {
-                        let capturedWindow = try await WindowCapture.capture(candidate)
-                        try Task.checkCancellation()
-                        let question = "Send a screenshot of \(capturedWindow.title)"
-
-                        if let answerPanelController = self.answerPanelController {
-                            answerPanelController.appendScreenshot(capturedWindow.image)
-                        } else {
-                            self.showAnswerPanel(
-                                for: capturedWindow.image,
-                                near: capturedWindow.anchorRect,
-                                question: question
-                            )
-                        }
-
-                        self.statusMessage = "Window captured."
-                    } catch is CancellationError {
-                        return
-                    } catch {
-                        self.statusMessage = self.userFacingMessage(for: error)
-                    }
-                }
+                self.captureSelectedWindow(candidate)
             }
         }
 
         windowCaptureOverlayController = overlay
         overlay.show()
-        statusMessage = "Choose a window to capture."
+        statusMessage = candidates.count == 1
+            ? "Click the current window to capture it."
+            : "Choose an open window in the current application."
     }
 
-    func startCustomOverlayCapture() {
-        guard overlayController == nil else {
+    func startCustomOverlayCapture(
+        windowCandidates: [WindowCaptureCandidate] = []
+    ) {
+        guard overlayController == nil, windowCaptureOverlayController == nil else {
             statusMessage = "Capture already active."
             return
         }
 
-        let overlay = ScreenshotOverlayController()
+        let overlay = ScreenshotOverlayController(windowCandidates: windowCandidates)
         overlay.onCancel = { [weak self] in
             Task { @MainActor in
                 self?.overlayController = nil
@@ -256,18 +237,32 @@ final class MarrController: ObservableObject {
                 self.translateScreenshot(image, near: rect)
             }
         }
+        overlay.onWindowCapture = { [weak self] candidate in
+            Task { @MainActor in
+                guard let self else { return }
+                self.overlayController = nil
+                self.captureSelectedWindow(candidate)
+            }
+        }
         overlayController = overlay
         overlay.show()
-        statusMessage = "Drag or resize the selection, then capture."
+        statusMessage = windowCandidates.isEmpty
+            ? "Drag to take a screenshot."
+            : "Drag to select an area, or click an open window."
     }
 
-    func startAppendScreenshotCapture() {
-        guard overlayController == nil else {
+    func startAppendScreenshotCapture(
+        windowCandidates: [WindowCaptureCandidate] = []
+    ) {
+        guard overlayController == nil, windowCaptureOverlayController == nil else {
             statusMessage = "Capture already active."
             return
         }
 
-        let overlay = ScreenshotOverlayController(mode: .selectionOnly)
+        let overlay = ScreenshotOverlayController(
+            mode: .selectionOnly,
+            windowCandidates: windowCandidates
+        )
         overlay.onCancel = { [weak self] in
             Task { @MainActor in
                 self?.overlayController = nil
@@ -281,9 +276,56 @@ final class MarrController: ObservableObject {
                 self?.statusMessage = "Screenshot added to the current conversation."
             }
         }
+        overlay.onWindowCapture = { [weak self] candidate in
+            Task { @MainActor in
+                guard let self else { return }
+                self.overlayController = nil
+                self.captureSelectedWindow(candidate)
+            }
+        }
         overlayController = overlay
         overlay.show()
-        statusMessage = "Select an area, then press Return to add it to the current conversation."
+        statusMessage = windowCandidates.isEmpty
+            ? "Drag to select an area, then press Return to add it to the current conversation."
+            : "Drag to select an area, or click an open window."
+    }
+
+    private func currentWindowCaptureCandidates() -> [WindowCaptureCandidate] {
+        WindowCapture.captureCandidatesForFrontmostApplication()
+    }
+
+    private func captureSelectedWindow(_ candidate: WindowCaptureCandidate) {
+        windowCaptureTask?.cancel()
+        statusMessage = "Capturing current window..."
+        windowCaptureTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.windowCaptureTask = nil }
+
+            do {
+                let capturedWindow = try await WindowCapture.capture(candidate)
+                try Task.checkCancellation()
+                let question = WindowCapture.analysisQuestion(
+                    appName: capturedWindow.appName,
+                    title: capturedWindow.title
+                )
+
+                if let answerPanelController = self.answerPanelController {
+                    answerPanelController.appendScreenshot(capturedWindow.image)
+                } else {
+                    self.showAnswerPanel(
+                        for: capturedWindow.image,
+                        near: capturedWindow.anchorRect,
+                        question: question
+                    )
+                }
+
+                self.statusMessage = "Current window captured."
+            } catch is CancellationError {
+                return
+            } catch {
+                self.statusMessage = self.userFacingMessage(for: error)
+            }
+        }
     }
 
     func useCCSwitchClaudeDesktopPreset() {
@@ -537,10 +579,6 @@ final class MarrController: ObservableObject {
     func minimizeAnswerPanel() {
         answerPanelController?.minimize()
         statusMessage = "Answer panel minimized. Press \(hotKeyConfiguration.displayString) to restore it."
-    }
-
-    func setAnswerPanelHistoryExpanded(_ isExpanded: Bool) {
-        answerPanelController?.setHistoryExpanded(isExpanded)
     }
 
     func openHistoryConversation(_ conversation: ConversationHistoryRecord) {

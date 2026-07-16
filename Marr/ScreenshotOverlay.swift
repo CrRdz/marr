@@ -6,21 +6,55 @@ import SwiftUI
 final class ScreenshotOverlayController {
     var onCapture: ((PickedImage, CGRect, String) -> Void)?
     var onTranslate: ((PickedImage, CGRect) -> Void)?
+    var onWindowCapture: ((WindowCaptureCandidate) -> Void)?
     var onCancel: (() -> Void)?
 
     private var windows: [NSWindow] = []
+    private var screenSnapshots: [CGDirectDisplayID: ScreenCaptureSnapshot] = [:]
     private var keyMonitor: Any?
+    private var spaceChangeObserver: NSObjectProtocol?
+    private var appActivationObserver: NSObjectProtocol?
+    private var refreshWorkItem: DispatchWorkItem?
     private let mode: ScreenshotOverlayMode
+    private var windowCandidates: [WindowCaptureCandidate]
     private let captureAfterOverlayDismissDelay: TimeInterval = 0.10
 
-    init(mode: ScreenshotOverlayMode = .ask) {
+    init(
+        mode: ScreenshotOverlayMode = .ask,
+        windowCandidates: [WindowCaptureCandidate] = []
+    ) {
         self.mode = mode
+        self.windowCandidates = windowCandidates
     }
 
     func show() {
         close()
         installKeyMonitor()
-        windows = NSScreen.screens.map { screen in
+        installEnvironmentObservers()
+        buildOverlayWindows()
+    }
+
+    func close() {
+        refreshWorkItem?.cancel()
+        refreshWorkItem = nil
+        removeKeyMonitor()
+        removeEnvironmentObservers()
+        closeOverlayWindows()
+    }
+
+    private func buildOverlayWindows() {
+        let screens = NSScreen.screens
+        screenSnapshots = Dictionary(uniqueKeysWithValues: screens.compactMap { screen in
+            guard
+                let displayID = ScreenCapture.displayID(for: screen),
+                let snapshot = ScreenCapture.snapshot(of: screen)
+            else {
+                return nil
+            }
+            return (displayID, snapshot)
+        })
+
+        windows = screens.map { screen in
             let window = OverlayWindow(
                 contentRect: screen.frame,
                 styleMask: [.borderless],
@@ -39,7 +73,9 @@ final class ScreenshotOverlayController {
 
             let view = ScreenshotSelectionView(
                 screen: screen,
+                snapshot: snapshot(for: screen),
                 mode: mode,
+                windowCandidates: windowCandidates.filter { $0.anchorRect.intersects(screen.frame) },
                 onCancel: { [weak self] in
                     self?.cancel()
                 },
@@ -48,6 +84,9 @@ final class ScreenshotOverlayController {
                 },
                 onTranslate: { [weak self] rect in
                     self?.translate(rect: rect, on: screen)
+                },
+                onWindowCapture: { [weak self] candidate in
+                    self?.captureWindow(candidate)
                 }
             )
             window.contentView = NSHostingView(rootView: view.marrPreferredColorScheme())
@@ -58,14 +97,78 @@ final class ScreenshotOverlayController {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func close() {
-        removeKeyMonitor()
+    private func closeOverlayWindows() {
         windows.forEach { window in
             window.orderOut(nil)
             window.contentView = nil
             window.close()
         }
         windows.removeAll()
+        screenSnapshots.removeAll()
+    }
+
+    private func installEnvironmentObservers() {
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+        spaceChangeObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.scheduleEnvironmentRefresh()
+            }
+        }
+
+        appActivationObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard
+                let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                application.activationPolicy == .regular
+            else {
+                return
+            }
+            let processID = application.processIdentifier
+            Task { @MainActor in
+                self?.scheduleEnvironmentRefresh(preferredProcessID: processID)
+            }
+        }
+    }
+
+    private func removeEnvironmentObservers() {
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+        if let spaceChangeObserver {
+            notificationCenter.removeObserver(spaceChangeObserver)
+            self.spaceChangeObserver = nil
+        }
+        if let appActivationObserver {
+            notificationCenter.removeObserver(appActivationObserver)
+            self.appActivationObserver = nil
+        }
+    }
+
+    private func scheduleEnvironmentRefresh(preferredProcessID: pid_t? = nil) {
+        let currentProcessID = ProcessInfo.processInfo.processIdentifier
+        if let preferredProcessID, preferredProcessID == currentProcessID {
+            return
+        }
+
+        refreshWorkItem?.cancel()
+        closeOverlayWindows()
+
+        let refresh = DispatchWorkItem { [weak self] in
+            guard let self, self.keyMonitor != nil else { return }
+            if let preferredProcessID {
+                self.windowCandidates = WindowCapture.captureCandidates(for: preferredProcessID)
+            } else {
+                self.windowCandidates = WindowCapture.captureCandidatesForFrontmostApplication()
+            }
+            self.buildOverlayWindows()
+        }
+        refreshWorkItem = refresh
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: refresh)
     }
 
     private func cancel() {
@@ -97,6 +200,7 @@ final class ScreenshotOverlayController {
     }
 
     private func capture(rect: CGRect, question: String, on screen: NSScreen) {
+        let screenSnapshot = snapshot(for: screen)
         close()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + captureAfterOverlayDismissDelay) { [weak self] in
@@ -104,7 +208,11 @@ final class ScreenshotOverlayController {
                 return
             }
 
-            guard let image = ScreenCapture.capture(rect: rect, screen: screen) else {
+            guard let image = ScreenCapture.capture(
+                rect: rect,
+                screen: screen,
+                snapshot: screenSnapshot
+            ) else {
                 self.onCancel?()
                 return
             }
@@ -114,6 +222,7 @@ final class ScreenshotOverlayController {
     }
 
     private func translate(rect: CGRect, on screen: NSScreen) {
+        let screenSnapshot = snapshot(for: screen)
         close()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + captureAfterOverlayDismissDelay) { [weak self] in
@@ -121,13 +230,29 @@ final class ScreenshotOverlayController {
                 return
             }
 
-            guard let image = ScreenCapture.capture(rect: rect, screen: screen) else {
+            guard let image = ScreenCapture.capture(
+                rect: rect,
+                screen: screen,
+                snapshot: screenSnapshot
+            ) else {
                 self.onCancel?()
                 return
             }
 
             self.onTranslate?(image, rect)
         }
+    }
+
+    private func captureWindow(_ candidate: WindowCaptureCandidate) {
+        close()
+        onWindowCapture?(candidate)
+    }
+
+    private func snapshot(for screen: NSScreen) -> ScreenCaptureSnapshot? {
+        guard let displayID = ScreenCapture.displayID(for: screen) else {
+            return nil
+        }
+        return screenSnapshots[displayID]
     }
 
 }
@@ -172,12 +297,14 @@ final class WindowCaptureOverlayController {
             let view = WindowCaptureSelectionView(
                 screen: screen,
                 candidates: screenCandidates,
+                cancelsOnBackgroundTap: true,
                 onCancel: { [weak self] in
                     self?.cancel()
                 },
                 onCapture: { [weak self] candidate in
                     self?.capture(candidate)
-                }
+                },
+                onHoverCandidate: { _ in }
             )
             window.contentView = NSHostingView(rootView: view.marrPreferredColorScheme())
             window.makeKeyAndOrderFront(nil)
@@ -304,46 +431,199 @@ private enum ResizeHandle: CaseIterable, Hashable {
     }
 }
 
+struct ScreenshotPreviewLayout: Equatable {
+    let frame: CGRect
+
+    private enum Side {
+        case top
+        case bottom
+        case left
+        case right
+    }
+
+    private struct Candidate {
+        let frame: CGRect
+        let area: CGFloat
+    }
+
+    static func resolve(
+        bounds: CGRect,
+        selection: CGRect,
+        prompt: CGRect,
+        imageAspectRatio: CGFloat,
+        contentInset: CGFloat = 12,
+        gap: CGFloat = 14,
+        maximumSize: CGSize = CGSize(width: 420, height: 320)
+    ) -> ScreenshotPreviewLayout? {
+        guard imageAspectRatio.isFinite, imageAspectRatio > 0 else {
+            return nil
+        }
+
+        let safeBounds = bounds.insetBy(dx: contentInset, dy: contentInset)
+        guard safeBounds.width > 0, safeBounds.height > 0 else {
+            return nil
+        }
+
+        let avoidanceRect = selection.union(prompt).insetBy(dx: -gap, dy: -gap)
+        let regions: [(Side, CGRect)] = [
+            (
+                .top,
+                CGRect(
+                    x: safeBounds.minX,
+                    y: safeBounds.minY,
+                    width: safeBounds.width,
+                    height: max(0, min(safeBounds.maxY, avoidanceRect.minY) - safeBounds.minY)
+                )
+            ),
+            (
+                .bottom,
+                CGRect(
+                    x: safeBounds.minX,
+                    y: max(safeBounds.minY, avoidanceRect.maxY),
+                    width: safeBounds.width,
+                    height: max(0, safeBounds.maxY - max(safeBounds.minY, avoidanceRect.maxY))
+                )
+            ),
+            (
+                .left,
+                CGRect(
+                    x: safeBounds.minX,
+                    y: safeBounds.minY,
+                    width: max(0, min(safeBounds.maxX, avoidanceRect.minX) - safeBounds.minX),
+                    height: safeBounds.height
+                )
+            ),
+            (
+                .right,
+                CGRect(
+                    x: max(safeBounds.minX, avoidanceRect.maxX),
+                    y: safeBounds.minY,
+                    width: max(0, safeBounds.maxX - max(safeBounds.minX, avoidanceRect.maxX)),
+                    height: safeBounds.height
+                )
+            )
+        ]
+
+        let candidates = regions.compactMap { side, region -> Candidate? in
+            let availableWidth = min(maximumSize.width, region.width)
+            let availableHeight = min(maximumSize.height, region.height)
+            guard availableWidth > 0, availableHeight > 0 else { return nil }
+
+            var width = availableWidth
+            var height = width / imageAspectRatio
+            if height > availableHeight {
+                height = availableHeight
+                width = height * imageAspectRatio
+            }
+            guard width >= 48, height >= 48 else { return nil }
+
+            let preferredX = prompt.midX - width / 2
+            let preferredY = prompt.midY - height / 2
+            let origin: CGPoint
+            switch side {
+            case .top:
+                origin = CGPoint(
+                    x: min(max(preferredX, region.minX), region.maxX - width),
+                    y: region.maxY - height
+                )
+            case .bottom:
+                origin = CGPoint(
+                    x: min(max(preferredX, region.minX), region.maxX - width),
+                    y: region.minY
+                )
+            case .left:
+                origin = CGPoint(
+                    x: region.maxX - width,
+                    y: min(max(preferredY, region.minY), region.maxY - height)
+                )
+            case .right:
+                origin = CGPoint(
+                    x: region.minX,
+                    y: min(max(preferredY, region.minY), region.maxY - height)
+                )
+            }
+
+            let frame = CGRect(origin: origin, size: CGSize(width: width, height: height))
+            return Candidate(frame: frame, area: frame.width * frame.height)
+        }
+
+        guard let best = candidates.max(by: { $0.area < $1.area }) else {
+            return nil
+        }
+        return ScreenshotPreviewLayout(frame: best.frame)
+    }
+}
+
 struct ScreenshotSelectionView: View {
     let screen: NSScreen
+    let snapshot: ScreenCaptureSnapshot?
     let mode: ScreenshotOverlayMode
+    let windowCandidates: [WindowCaptureCandidate]
     let onCancel: () -> Void
     let onCapture: (CGRect, String) -> Void
     let onTranslate: (CGRect) -> Void
+    let onWindowCapture: (WindowCaptureCandidate) -> Void
 
     @State private var question = ""
     @State private var selection: CGRect = .zero
+    @State private var selectionOrigin: CGPoint?
+    @State private var isDrawingSelection = false
     @State private var dragStart: CGRect = .zero
     @State private var isMovingSelection = false
     @State private var activeResizeHandle: ResizeHandle?
     @State private var isSending = false
     @State private var pendingCapture: DispatchWorkItem?
+    @State private var cursorLocation: CGPoint?
+    @State private var hoveredWindowCandidate: WindowCaptureCandidate?
+    @State private var showsImagePreview = false
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
-    private let questionBarWidth: CGFloat = 420
+    private let questionBarWidth: CGFloat = 500
     private let chatCapsuleScale: CGFloat = 1
     private let capsuleTransitionDuration = 0.42
+    private let minimumSelectionDimension: CGFloat = 12
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                if selection != .zero {
-                    dimmedBackdrop(in: geometry.size)
+                captureCanvas(in: geometry.size)
+
+                if !hasSelection, !isDrawingSelection, !windowCandidates.isEmpty {
+                    WindowCaptureSelectionView(
+                        screen: screen,
+                        candidates: windowCandidates,
+                        cancelsOnBackgroundTap: false,
+                        onCancel: {},
+                        onCapture: onWindowCapture,
+                        onHoverCandidate: { candidate in
+                            hoveredWindowCandidate = candidate
+                        }
+                    )
+                }
+
+                if selection.width > 0, selection.height > 0 {
+                    subtleDimmedBackdrop(in: geometry.size)
                     selectionLayer(in: geometry.size)
-                    if mode == .ask {
-                        promptBar(in: geometry.size)
-                    }
-                } else {
-                    Color.black.opacity(0.32)
-                        .ignoresSafeArea()
+                }
+
+                if mode == .ask, showsPromptBar {
+                    promptBar(in: geometry.size)
+                }
+
+                if showsImagePreview, hasSelection {
+                    imagePreviewPanel(in: geometry.size)
+                }
+
+                if !hasConfirmedSelection, !isDrawingSelection, cursorLocation != nil {
+                    dragHint(in: geometry.size)
+                } else if mode == .selectionOnly, hasConfirmedSelection {
+                    selectionOnlyConfirmationHint(in: geometry.size)
                 }
             }
             .onAppear {
-                selection = defaultSelection(in: geometry.size)
-                DispatchQueue.main.async {
-                    questionFocused = mode == .ask
-                }
+                updateInitialCursorLocation()
+                questionFocused = false
             }
             .onReceive(NotificationCenter.default.publisher(for: .captureSelectionOnlyScreenshot)) { _ in
                 captureSelectionOnlyQuestion()
@@ -355,28 +635,46 @@ struct ScreenshotSelectionView: View {
         }
     }
 
-    private func dimmedBackdrop(in bounds: CGSize) -> some View {
+    private func captureCanvas(in bounds: CGSize) -> some View {
+        Rectangle()
+            .fill(selection.width > 0 && selection.height > 0 ? Color.clear : Color.black.opacity(0.10))
+            .frame(width: bounds.width, height: bounds.height)
+            .contentShape(Rectangle())
+            .gesture(createSelectionGesture(in: bounds))
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let location):
+                    cursorLocation = location
+                case .ended:
+                    cursorLocation = nil
+                }
+            }
+            .ignoresSafeArea()
+    }
+
+    private func subtleDimmedBackdrop(in bounds: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             Rectangle()
-                .fill(.black.opacity(0.36))
+                .fill(.black.opacity(0.16))
                 .frame(width: bounds.width, height: selection.minY)
 
             Rectangle()
-                .fill(.black.opacity(0.36))
+                .fill(.black.opacity(0.16))
                 .frame(width: bounds.width, height: max(0, bounds.height - selection.maxY))
                 .position(x: bounds.width / 2, y: selection.maxY + max(0, bounds.height - selection.maxY) / 2)
 
             Rectangle()
-                .fill(.black.opacity(0.36))
+                .fill(.black.opacity(0.16))
                 .frame(width: selection.minX, height: selection.height)
                 .position(x: selection.minX / 2, y: selection.midY)
 
             Rectangle()
-                .fill(.black.opacity(0.36))
+                .fill(.black.opacity(0.16))
                 .frame(width: max(0, bounds.width - selection.maxX), height: selection.height)
                 .position(x: selection.maxX + max(0, bounds.width - selection.maxX) / 2, y: selection.midY)
         }
         .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     private func selectionLayer(in bounds: CGSize) -> some View {
@@ -400,10 +698,57 @@ struct ScreenshotSelectionView: View {
                 .position(x: selection.midX, y: selection.midY)
                 .gesture(moveGesture)
 
-            ForEach(ResizeHandle.allCases, id: \.self) { handle in
-                resizeHandle(handle)
+            if !isDrawingSelection {
+                ForEach(ResizeHandle.allCases, id: \.self) { handle in
+                    resizeHandle(handle)
+                }
             }
         }
+    }
+
+    private func createSelectionGesture(in bounds: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .local)
+            .onChanged { value in
+                guard !isSending else { return }
+
+                if !isDrawingSelection {
+                    selectionOrigin = clampedPoint(value.startLocation, in: bounds)
+                    isDrawingSelection = true
+                    hoveredWindowCandidate = nil
+                    questionFocused = false
+                }
+
+                guard let selectionOrigin else { return }
+                selection = rectangle(
+                    from: selectionOrigin,
+                    to: clampedPoint(value.location, in: bounds)
+                )
+            }
+            .onEnded { value in
+                guard !isSending else { return }
+
+                if let selectionOrigin {
+                    selection = rectangle(
+                        from: selectionOrigin,
+                        to: clampedPoint(value.location, in: bounds)
+                    )
+                }
+
+                selectionOrigin = nil
+                isDrawingSelection = false
+
+                guard hasSelection else {
+                    selection = .zero
+                    return
+                }
+
+                selection = selection.integral
+                if mode == .ask {
+                    DispatchQueue.main.async {
+                        questionFocused = true
+                    }
+                }
+            }
     }
 
     private var moveGesture: some Gesture {
@@ -454,7 +799,53 @@ struct ScreenshotSelectionView: View {
 
     private var questionControls: some View {
         HStack(spacing: 10) {
-            TextField("Ask about this area", text: $question, axis: .vertical)
+            if hasConfirmedSelection {
+                Button {
+                    showsImagePreview.toggle()
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Image")
+                            .font(MarrTypography.body(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(.primary.opacity(0.90))
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(
+                        showsImagePreview
+                            ? bubbleTint.opacity(0.18)
+                            : Color.secondary.opacity(0.13),
+                        in: Capsule()
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                showsImagePreview ? bubbleTint.opacity(0.42) : Color.clear,
+                                lineWidth: 0.8
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(snapshot == nil)
+                .help(showsImagePreview ? "Hide screenshot preview" : "Preview screenshot")
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            } else if hoveredWindowCandidate != nil {
+                HStack(spacing: 7) {
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Window")
+                        .font(MarrTypography.body(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(.primary.opacity(0.90))
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .background(Color.secondary.opacity(0.13), in: Capsule())
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+
+            TextField(questionPlaceholder, text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(MarrTypography.body(size: 15))
                 .lineLimit(1...2)
@@ -505,19 +896,95 @@ struct ScreenshotSelectionView: View {
         )
         .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
         .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
+        .animation(.easeOut(duration: 0.18), value: hasConfirmedSelection)
     }
 
     private func promptBar(in size: CGSize) -> some View {
         questionControls
-        .position(isSending ? chatCapsulePosition(in: size) : CGPoint(x: toolbarX(in: size), y: toolbarY(in: size)))
+            .allowsHitTesting(hasConfirmedSelection)
+            .position(promptBarPosition(in: size))
+    }
+
+    private func dragHint(in size: CGSize) -> some View {
+        Text("Drag to take a screenshot")
+            .font(.system(size: 12, weight: .regular))
+            .foregroundStyle(.black.opacity(0.92))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .captureLabelSurface()
+            .position(dragHintPosition(in: size))
+            .allowsHitTesting(false)
+    }
+
+    private func selectionOnlyConfirmationHint(in size: CGSize) -> some View {
+        Text("Press Return to add screenshot")
+            .font(MarrTypography.body(size: 12, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.96))
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(.black.opacity(0.72), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.20), lineWidth: 0.8))
+            .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 4)
+            .position(x: toolbarX(in: size), y: toolbarY(in: size))
+            .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func imagePreviewPanel(in size: CGSize) -> some View {
+        if
+            let previewImage,
+            let layout = ScreenshotPreviewLayout.resolve(
+                bounds: CGRect(origin: .zero, size: size),
+                selection: selection,
+                prompt: promptBarRect(in: size),
+                imageAspectRatio: previewImage.size.width / max(1, previewImage.size.height)
+            )
+        {
+
+            Image(nsImage: previewImage)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: layout.frame.width, height: layout.frame.height)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: .black.opacity(0.26), radius: 18, x: 0, y: 10)
+                .position(x: layout.frame.midX, y: layout.frame.midY)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func promptBarRect(in bounds: CGSize) -> CGRect {
+        let position = promptBarPosition(in: bounds)
+        return CGRect(
+            x: position.x - questionBarWidth / 2,
+            y: position.y - 27,
+            width: questionBarWidth,
+            height: 54
+        )
     }
 
     private var canSend: Bool {
-        !isSending && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        hasConfirmedSelection
+            && !isSending
+            && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var questionPlaceholder: String {
+        hoveredWindowCandidate == nil
+            ? "What can I help you with today?"
+            : "Click a window to capture"
     }
 
     private var canTranslate: Bool {
-        !isSending && selection != .zero
+        hasConfirmedSelection && !isSending
+    }
+
+    private var previewImage: NSImage? {
+        guard let snapshot else { return nil }
+        return ScreenCapture.preview(
+            rect: globalSelectionRect(),
+            snapshot: snapshot
+        )
     }
 
     private var bubbleTint: Color {
@@ -533,7 +1000,7 @@ struct ScreenshotSelectionView: View {
     }
 
     private func captureSelectionOnlyQuestion() {
-        guard mode == .selectionOnly, !isSending, NSApp.keyWindow?.screen == screen else {
+        guard mode == .selectionOnly, hasConfirmedSelection, !isSending, NSApp.keyWindow?.screen == screen else {
             return
         }
 
@@ -580,17 +1047,6 @@ struct ScreenshotSelectionView: View {
         onTranslate(globalSelectionRect())
     }
 
-    private func defaultSelection(in size: CGSize) -> CGRect {
-        let width = min(760, size.width * 0.62)
-        let height = min(430, size.height * 0.52)
-        return CGRect(
-            x: (size.width - width) / 2,
-            y: (size.height - height) / 2,
-            width: width,
-            height: height
-        )
-    }
-
     private func position(for handle: ResizeHandle) -> CGPoint {
         switch handle {
         case .topLeft:
@@ -613,7 +1069,8 @@ struct ScreenshotSelectionView: View {
     }
 
     private func toolbarX(in bounds: CGSize) -> CGFloat {
-        min(max(selection.midX, 260), bounds.width - 260)
+        let halfWidth = questionBarWidth / 2
+        return min(max(selection.midX, halfWidth + 12), bounds.width - halfWidth - 12)
     }
 
     private func toolbarY(in bounds: CGSize) -> CGFloat {
@@ -645,6 +1102,95 @@ struct ScreenshotSelectionView: View {
             x: min(max(localX, halfWidth + 12), bounds.width - halfWidth - 12),
             y: min(max(localY, halfHeight + 12), bounds.height - halfHeight - 12)
         )
+    }
+
+    private func promptBarPosition(in bounds: CGSize) -> CGPoint {
+        if isSending {
+            return chatCapsulePosition(in: bounds)
+        }
+        if hasConfirmedSelection {
+            return CGPoint(x: toolbarX(in: bounds), y: toolbarY(in: bounds))
+        }
+        return initialPromptBarPosition(in: bounds)
+    }
+
+    private func initialPromptBarPosition(in bounds: CGSize) -> CGPoint {
+        let visibleFrame = screen.visibleFrame
+        let globalY = visibleFrame.minY + 22 + 23
+        let localY = screen.frame.maxY - globalY
+        return CGPoint(
+            x: bounds.width / 2,
+            y: min(max(localY, 35), bounds.height - 35)
+        )
+    }
+
+    private func dragHintPosition(in bounds: CGSize) -> CGPoint {
+        guard let cursorLocation else {
+            return CGPoint(x: bounds.width / 2, y: bounds.height / 2)
+        }
+
+        let hintHalfWidth: CGFloat = 96
+        let hintHalfHeight: CGFloat = 16
+        let horizontalGap: CGFloat = 14
+        let verticalGap: CGFloat = 10
+        let preferredX = cursorLocation.x + horizontalGap + hintHalfWidth
+        let fallbackX = cursorLocation.x - horizontalGap - hintHalfWidth
+        let preferredY = cursorLocation.y + verticalGap + hintHalfHeight
+        let fallbackY = cursorLocation.y - verticalGap - hintHalfHeight
+
+        return CGPoint(
+            x: preferredX + hintHalfWidth <= bounds.width
+                ? preferredX
+                : max(hintHalfWidth + 8, fallbackX),
+            y: preferredY + hintHalfHeight <= bounds.height
+                ? preferredY
+                : max(hintHalfHeight + 8, fallbackY)
+        )
+    }
+
+    private func updateInitialCursorLocation() {
+        let globalLocation = NSEvent.mouseLocation
+        guard screen.frame.contains(globalLocation) else {
+            cursorLocation = nil
+            return
+        }
+
+        cursorLocation = CGPoint(
+            x: globalLocation.x - screen.frame.minX,
+            y: screen.frame.maxY - globalLocation.y
+        )
+    }
+
+    private func rectangle(from start: CGPoint, to end: CGPoint) -> CGRect {
+        CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        )
+    }
+
+    private func clampedPoint(_ point: CGPoint, in bounds: CGSize) -> CGPoint {
+        CGPoint(
+            x: min(max(0, point.x), bounds.width),
+            y: min(max(0, point.y), bounds.height)
+        )
+    }
+
+    private var hasSelection: Bool {
+        selection.width >= minimumSelectionDimension
+            && selection.height >= minimumSelectionDimension
+    }
+
+    private var hasConfirmedSelection: Bool {
+        hasSelection && !isDrawingSelection
+    }
+
+    private var showsPromptBar: Bool {
+        cursorLocation != nil
+            || hoveredWindowCandidate != nil
+            || selection.width > 0
+            || selection.height > 0
     }
 
     private func resize(_ rect: CGRect, handle: ResizeHandle, translation: CGSize, bounds: CGSize) -> CGRect {
@@ -719,8 +1265,10 @@ struct ScreenshotSelectionView: View {
 private struct WindowCaptureSelectionView: View {
     let screen: NSScreen
     let candidates: [WindowCaptureCandidate]
+    let cancelsOnBackgroundTap: Bool
     let onCancel: () -> Void
     let onCapture: (WindowCaptureCandidate) -> Void
+    let onHoverCandidate: (WindowCaptureCandidate?) -> Void
 
     @State private var hoveredWindowID: CGWindowID?
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
@@ -728,10 +1276,12 @@ private struct WindowCaptureSelectionView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture(perform: onCancel)
+                if cancelsOnBackgroundTap {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .ignoresSafeArea()
+                        .onTapGesture(perform: onCancel)
+                }
 
                 ForEach(candidates) { candidate in
                     captureLabel(for: candidate, in: geometry.size)
@@ -754,6 +1304,7 @@ private struct WindowCaptureSelectionView: View {
         .offset(x: labelOrigin.x, y: labelOrigin.y)
         .onHover { isHovering in
             hoveredWindowID = isHovering ? candidate.windowID : nil
+            onHoverCandidate(isHovering ? candidate : nil)
         }
     }
 
@@ -763,7 +1314,6 @@ private struct WindowCaptureSelectionView: View {
         isStageManager: Bool,
         isHovered: Bool
     ) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
         let text = labelText(for: candidate)
         let textWidth = labelTextWidth(for: text, targetSize: size, isStageManager: isStageManager)
 
@@ -776,23 +1326,15 @@ private struct WindowCaptureSelectionView: View {
             .frame(width: textWidth, alignment: .leading)
             .padding(.horizontal, labelHorizontalPadding(for: size))
             .padding(.vertical, labelVerticalPadding(for: size))
-            .background {
-                if isHovered {
-                    shape.fill(selectedAccent.color)
-                }
-            }
-            .marrGlassSurface(cornerRadius: 6, isClear: true)
-            .overlay(
-                shape.stroke(isHovered ? selectedAccent.color.opacity(0.90) : .white.opacity(0.18), lineWidth: 0.8)
-                    .allowsHitTesting(false)
+            .captureLabelSurface(
+                isHighlighted: isHovered,
+                highlightColor: selectedAccent.color
             )
-            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
-            .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
             .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 
     private func labelText(for candidate: WindowCaptureCandidate) -> String {
-        "Send a screenshot of \(candidate.title)"
+        "Capture \(candidate.title)"
     }
 
     private func labelTextWidth(
@@ -908,6 +1450,29 @@ private struct WindowCaptureSelectionView: View {
 }
 
 private extension View {
+    func captureLabelSurface(
+        isHighlighted: Bool = false,
+        highlightColor: Color = .clear
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+        return self
+            .background {
+                if isHighlighted {
+                    shape.fill(highlightColor)
+                }
+            }
+            .marrGlassSurface(cornerRadius: 6, isClear: true)
+            .overlay(
+                shape.stroke(
+                    isHighlighted ? highlightColor.opacity(0.90) : .white.opacity(0.18),
+                    lineWidth: 0.8
+                )
+                .allowsHitTesting(false)
+            )
+            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
+            .shadow(color: .white.opacity(0.12), radius: 1, x: 0, y: -1)
+    }
+
     @ViewBuilder
     func sendCircleButton(isEnabled: Bool, color: Color, foregroundColor: Color) -> some View {
         self
@@ -918,28 +1483,79 @@ private extension View {
     }
 }
 
-enum ScreenCapture {
-    static func capture(rect: CGRect, screen: NSScreen) -> PickedImage? {
-        guard let displayNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
-            return nil
-        }
+struct ScreenCaptureSnapshot {
+    fileprivate let image: CGImage
+    fileprivate let screenFrame: CGRect
+    fileprivate let pixelScaleX: CGFloat
+    fileprivate let pixelScaleY: CGFloat
 
-        let displayID = CGDirectDisplayID(displayNumber.uint32Value)
-        guard let fullImage = CGDisplayCreateImage(displayID) else {
-            return nil
-        }
+    init(image: CGImage, screenFrame: CGRect) {
+        self.image = image
+        self.screenFrame = screenFrame
+        pixelScaleX = CGFloat(image.width) / screenFrame.width
+        pixelScaleY = CGFloat(image.height) / screenFrame.height
+    }
 
-        let scale = screen.backingScaleFactor
-        let localX = (rect.minX - screen.frame.minX) * scale
-        let localYFromTop = (screen.frame.maxY - rect.maxY) * scale
-        let pixelRect = CGRect(
-            x: localX,
-            y: localYFromTop,
-            width: rect.width * scale,
-            height: rect.height * scale
+    fileprivate func croppedImage(in rect: CGRect) -> CGImage? {
+        let requestedPixelRect = CGRect(
+            x: (rect.minX - screenFrame.minX) * pixelScaleX,
+            y: (screenFrame.maxY - rect.maxY) * pixelScaleY,
+            width: rect.width * pixelScaleX,
+            height: rect.height * pixelScaleY
         ).integral
+        let imageBounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let pixelRect = requestedPixelRect.intersection(imageBounds).integral
 
-        guard let cropped = fullImage.cropping(to: pixelRect) else {
+        guard !pixelRect.isNull, pixelRect.width >= 1, pixelRect.height >= 1 else {
+            return nil
+        }
+
+        return image.cropping(to: pixelRect)
+    }
+}
+
+enum ScreenCapture {
+    static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        guard
+            let displayNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            return nil
+        }
+        return CGDirectDisplayID(displayNumber.uint32Value)
+    }
+
+    static func snapshot(of screen: NSScreen) -> ScreenCaptureSnapshot? {
+        guard
+            let displayID = displayID(for: screen),
+            let image = CGDisplayCreateImage(displayID),
+            screen.frame.width > 0,
+            screen.frame.height > 0
+        else {
+            return nil
+        }
+
+        return ScreenCaptureSnapshot(image: image, screenFrame: screen.frame)
+    }
+
+    static func preview(rect: CGRect, snapshot: ScreenCaptureSnapshot) -> NSImage? {
+        guard let cropped = snapshot.croppedImage(in: rect) else {
+            return nil
+        }
+        return NSImage(
+            cgImage: cropped,
+            size: NSSize(width: cropped.width, height: cropped.height)
+        )
+    }
+
+    static func capture(
+        rect: CGRect,
+        screen: NSScreen,
+        snapshot: ScreenCaptureSnapshot? = nil
+    ) -> PickedImage? {
+        guard
+            let source = snapshot ?? self.snapshot(of: screen),
+            let cropped = source.croppedImage(in: rect)
+        else {
             return nil
         }
 

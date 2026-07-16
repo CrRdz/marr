@@ -10,8 +10,6 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             menuDivider
-            primaryActions
-            menuDivider
             secondaryActions
         }
         .padding(.leading, 12)
@@ -46,18 +44,6 @@ struct ContentView: View {
                 }
                 .frame(width: 72, alignment: .center)
                 .help(statusDetail)
-            }
-        }
-    }
-
-    private var primaryActions: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            menuRow("Capture Now") {
-                controller.startScreenCapture()
-            }
-            menuDivider
-            menuRow("Capture Window") {
-                controller.captureFrontmostWindow()
             }
         }
     }

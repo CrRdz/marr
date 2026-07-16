@@ -44,6 +44,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
                 id: archive.id,
                 createdAt: archive.createdAt,
                 updatedAt: archive.updatedAt,
+                generatedTitle: archive.generatedTitle,
                 turns: archive.turns,
                 images: references.sorted { $0.id.uuidString < $1.id.uuidString },
                 pendingImageIDs: archive.pendingImageIDs
@@ -184,9 +185,15 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                generated_title TEXT
             )
             """)
+        let conversationColumns = try query("PRAGMA table_info(conversations)")
+            .map { $0.string("name") }
+        if !conversationColumns.contains("generated_title") {
+            try execute("ALTER TABLE conversations ADD COLUMN generated_title TEXT")
+        }
         try execute("""
             CREATE TABLE IF NOT EXISTS turns (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -232,7 +239,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
             """)
         try execute("CREATE INDEX IF NOT EXISTS turns_conversation_position ON turns(conversation_id, position)")
         try execute("CREATE INDEX IF NOT EXISTS attachments_conversation ON attachments(conversation_id)")
-        try execute("PRAGMA user_version = 1")
+        try execute("PRAGMA user_version = 2")
     }
 
     private func saveAttachments(
@@ -261,13 +268,19 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
         try transaction {
             try execute(
                 """
-                INSERT INTO conversations (id, created_at, updated_at)
-                VALUES (?, ?, ?)
+                INSERT INTO conversations (id, created_at, updated_at, generated_title)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     created_at = excluded.created_at,
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    generated_title = excluded.generated_title
                 """,
-                [record.id.uuidString, dateString(record.createdAt), dateString(record.updatedAt)]
+                [
+                    record.id.uuidString,
+                    dateString(record.createdAt),
+                    dateString(record.updatedAt),
+                    record.generatedTitle as Any
+                ]
             )
             try execute("DELETE FROM pending_images WHERE conversation_id = ?", [record.id.uuidString])
             try execute("DELETE FROM turn_images WHERE turn_id IN (SELECT id FROM turns WHERE conversation_id = ?)", [record.id.uuidString])
@@ -327,7 +340,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
 
     private func loadRecords() throws -> [ConversationHistoryRecord] {
         let rows = try query(
-            "SELECT id, created_at, updated_at FROM conversations ORDER BY updated_at DESC"
+            "SELECT id, created_at, updated_at, generated_title FROM conversations ORDER BY updated_at DESC"
         )
 
         return try rows.compactMap { row in
@@ -343,6 +356,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
                 id: id,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                generatedTitle: row.optionalString("generated_title"),
                 turns: try loadTurns(conversationID: id),
                 images: try loadImages(conversationID: id),
                 pendingImageIDs: try loadPendingImageIDs(conversationID: id)

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import MarrCore
 import SwiftUI
 
@@ -8,11 +7,9 @@ final class AnswerPanelController {
     private let window: AnswerPanelWindow
     private let session: ConversationSession
     private let requestCoordinator: ConversationRequestCoordinator
-    private var escapeMonitor: Any?
-    private var onClose: (() -> Void)?
+    private let titleCoordinator: ConversationTitleCoordinator
     private(set) var isMinimized = false
-    private let collapsedPanelSize = NSSize(width: 544, height: 398)
-    private let expandedHistoryPanelHeight: CGFloat = 734
+    private let collapsedPanelSize = NSSize(width: 544, height: 468)
 
     convenience init(
         controller: MarrController,
@@ -47,6 +44,11 @@ final class AnswerPanelController {
             session: createdSession
         )
         requestCoordinator = createdRequestCoordinator
+        let createdTitleCoordinator = ConversationTitleCoordinator(
+            controller: controller,
+            session: createdSession
+        )
+        titleCoordinator = createdTitleCoordinator
         let panelSize = collapsedPanelSize
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
@@ -86,12 +88,13 @@ final class AnswerPanelController {
                 session: createdSession,
                 historyStore: historyStore,
                 requestCoordinator: createdRequestCoordinator,
+                titleCoordinator: createdTitleCoordinator,
                 usesRegularComposerGlass: usesRegularComposerGlass,
                 actions: AnswerPanelActions(
                     close: { [weak controller] in controller?.dismissCaptureSession() },
                     minimize: { [weak controller] in controller?.minimizeAnswerPanel() },
-                    setHistoryExpanded: { [weak controller] isExpanded in
-                        controller?.setAnswerPanelHistoryExpanded(isExpanded)
+                    openHistoryConversation: { [weak controller] conversation in
+                        controller?.openHistoryConversation(conversation)
                     }
                 )
             )
@@ -103,27 +106,21 @@ final class AnswerPanelController {
         window = createdWindow
         createdHostingView.layoutSubtreeIfNeeded()
         createdHostingView.displayIfNeeded()
-        onClose = { [weak controller] in
-            controller?.dismissCaptureSession()
-        }
     }
 
     func show() {
         isMinimized = false
-        installEscapeMonitor()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func minimize() {
         isMinimized = true
-        removeEscapeMonitor()
         window.orderOut(nil)
     }
 
     func restore() {
         isMinimized = false
-        installEscapeMonitor()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         session.requestFocus()
@@ -131,26 +128,17 @@ final class AnswerPanelController {
 
     func close() {
         requestCoordinator.cancel()
-        removeEscapeMonitor()
+        titleCoordinator.cancel()
         window.close()
     }
 
-    func setHistoryExpanded(_ isExpanded: Bool) {
-        let targetHeight = isExpanded ? expandedHistoryPanelHeight : collapsedPanelSize.height
-        guard abs(window.frame.height - targetHeight) > 0.5 else {
-            return
-        }
-
-        var targetFrame = window.frame
-        targetFrame.size.height = targetHeight
-        targetFrame.origin.y = window.frame.minY
-        window.setFrame(targetFrame, display: true, animate: true)
+    func setHistoryExpanded(_: Bool) {
+        // History replaces the conversation content in-place; the panel remains fixed-size.
     }
 
     func appendScreenshot(_ image: PickedImage) {
         session.appendScreenshot(image)
         isMinimized = false
-        installEscapeMonitor()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -161,24 +149,6 @@ final class AnswerPanelController {
     }
 #endif
 
-    private func installEscapeMonitor() {
-        removeEscapeMonitor()
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == kVK_Escape else {
-                return event
-            }
-
-            self?.onClose?()
-            return nil
-        }
-    }
-
-    private func removeEscapeMonitor() {
-        if let escapeMonitor {
-            NSEvent.removeMonitor(escapeMonitor)
-            self.escapeMonitor = nil
-        }
-    }
 }
 
 private enum BackgroundBrightnessSampler {
@@ -253,7 +223,7 @@ private final class AnswerPanelWindow: NSWindow {
 private struct AnswerPanelActions {
     let close: () -> Void
     let minimize: () -> Void
-    let setHistoryExpanded: (Bool) -> Void
+    let openHistoryConversation: (ConversationHistoryRecord) -> Void
 }
 
 enum AnswerPanelConversationLayout {
@@ -261,14 +231,72 @@ enum AnswerPanelConversationLayout {
     static let bottomInset: CGFloat = 16
 }
 
+enum AnswerPanelTitleFade {
+    static func opacity(forScrollDistance distance: CGFloat) -> Double {
+        Double(max(0.18, 1 - max(0, distance) / 72))
+    }
+}
+
 private enum ConversationScrollAnchor: Hashable {
     case bottom
+}
+
+private struct ConversationScrollMinYPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+enum AnswerPanelEscapeAction: Equatable {
+    case closeHistory
+    case cancelEditing
+    case closePanel
+
+    static func resolve(showsHistory: Bool, isEditing: Bool) -> AnswerPanelEscapeAction {
+        if showsHistory {
+            return .closeHistory
+        }
+        if isEditing {
+            return .cancelEditing
+        }
+        return .closePanel
+    }
+}
+
+enum AnswerPanelConversationTitle {
+    static func make(from question: String) -> String {
+        let normalized = question
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            return "Untitled conversation"
+        }
+
+        let analysisPrefix = "Analyze this screenshot of "
+        let candidate: String
+        if normalized.hasPrefix(analysisPrefix) {
+            let remainder = String(normalized.dropFirst(analysisPrefix.count))
+            candidate = remainder.components(separatedBy: ". Explain").first ?? remainder
+        } else {
+            candidate = normalized
+        }
+
+        let maximumLength = 72
+        guard candidate.count > maximumLength else {
+            return candidate
+        }
+        return String(candidate.prefix(maximumLength - 1)).trimmingCharacters(in: .whitespaces) + "…"
+    }
 }
 
 private struct AnswerPanelView: View {
     @ObservedObject var session: ConversationSession
     @ObservedObject private var historyStore: ConversationHistoryStore
     let requestCoordinator: ConversationRequestCoordinator
+    let titleCoordinator: ConversationTitleCoordinator
     let usesRegularComposerGlass: Bool
     let actions: AnswerPanelActions
 
@@ -280,6 +308,9 @@ private struct AnswerPanelView: View {
     @State private var showsHistoryPanel = false
     @State private var historySearchText = ""
     @State private var panelControlsHovered = false
+    @State private var conversationTitleHovered = false
+    @State private var conversationScrollMinY: CGFloat = 0
+    @State private var hoveredEditTurnID: UUID?
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
     @FocusState private var questionFocused: Bool
@@ -287,39 +318,28 @@ private struct AnswerPanelView: View {
 
     private let composerWidth: CGFloat = 420
     private let assistantRevealDelay = 0.30
-    private let historyControlClearance: CGFloat = 42
-    private let collapsedContentHeight: CGFloat = 374
-    private let floatingHistoryHeight: CGFloat = 326
+    private let collapsedContentHeight: CGFloat = 444
+    private let conversationHeaderHeight: CGFloat = 78
+    private let primarySurfaceHeight: CGFloat = 362
 
     init(
         session: ConversationSession,
         historyStore: ConversationHistoryStore,
         requestCoordinator: ConversationRequestCoordinator,
+        titleCoordinator: ConversationTitleCoordinator,
         usesRegularComposerGlass: Bool,
         actions: AnswerPanelActions
     ) {
         self.session = session
         self.requestCoordinator = requestCoordinator
+        self.titleCoordinator = titleCoordinator
         self.usesRegularComposerGlass = usesRegularComposerGlass
         self.actions = actions
         _historyStore = ObservedObject(wrappedValue: historyStore)
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            fixedAnswerStack
-                .zIndex(1)
-
-            if showsHistoryPanel {
-                floatingHistoryLayer
-                    .padding(.bottom, collapsedContentHeight + 10)
-                    .zIndex(2)
-                    .transition(.asymmetric(
-                        insertion: .offset(y: 16).combined(with: .opacity),
-                        removal: .offset(y: 10).combined(with: .opacity)
-                    ))
-            }
-        }
+        fixedAnswerStack
         .frame(width: 520)
         .frame(maxHeight: .infinity, alignment: .bottom)
         .padding(12)
@@ -327,19 +347,25 @@ private struct AnswerPanelView: View {
             DispatchQueue.main.async {
                 questionFocused = true
                 submitInitialQuestion()
+                titleCoordinator.generateIfNeeded()
             }
+        }
+        .onChange(of: session.turns) { _, _ in
+            titleCoordinator.generateIfNeeded()
         }
         .onChange(of: session.focusRequestID) { _, _ in
             if !showsHistoryPanel {
                 questionFocused = true
             }
         }
+        .onExitCommand(perform: handleEscape)
     }
 
     private var fixedAnswerStack: some View {
         VStack(alignment: .leading, spacing: 10) {
-            answerRegion
-            if !session.pendingImageIDs.isEmpty {
+            primarySurface
+
+            if !showsHistoryPanel, !session.pendingImageIDs.isEmpty {
                 Label(
                     "\(session.pendingImageIDs.count) screenshot\(session.pendingImageIDs.count == 1 ? "" : "s") attached to the next question",
                     systemImage: "photo.on.rectangle"
@@ -349,49 +375,94 @@ private struct AnswerPanelView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            composer
-                .frame(maxWidth: .infinity, alignment: .center)
+
+            Group {
+                if showsHistoryPanel {
+                    historySearchComposer
+                } else {
+                    composer
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(width: 520, height: collapsedContentHeight, alignment: .bottom)
+        .animation(.spring(response: 0.30, dampingFraction: 0.88), value: showsHistoryPanel)
     }
 
-    private var answerRegion: some View {
-        ZStack(alignment: .topTrailing) {
-            conversationBody
-                .padding(.top, historyControlClearance)
+    private var primarySurface: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if showsHistoryPanel {
+                    historyHeader
+                        .transition(.opacity)
+                } else {
+                    conversationHeader
+                        .transition(.opacity)
+                }
+            }
 
-            if showsHistoryPanel {
-                historySearchField
-                    .padding(.trailing, 12)
-                    .zIndex(2)
-                    .transition(.scale(scale: 0.96, anchor: .trailing).combined(with: .opacity))
-            } else {
-                historyToggle
-                    .padding(.trailing, 12)
-                    .zIndex(2)
-                    .transition(.scale(scale: 0.96, anchor: .trailing).combined(with: .opacity))
+            Group {
+                if showsHistoryPanel {
+                    historyContent
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else {
+                    conversationScroll
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
             }
         }
-        .frame(width: composerWidth + 24, height: answerRegionHeight, alignment: .top)
+        .frame(width: composerWidth + 24, height: primarySurfaceHeight, alignment: .top)
+        .marrGlassSurface(cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius, isClear: true)
+        .overlay(
+            RoundedRectangle(
+                cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
+                style: .continuous
+            )
+            .stroke(.white.opacity(0.18), lineWidth: 0.8)
+            .allowsHitTesting(false)
+        )
+        .clipped()
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    private var answerRegionHeight: CGFloat {
-        return session.pendingImageIDs.isEmpty ? 318 : 292
+    private var historyHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            panelControls
+
+            HStack(spacing: 8) {
+                Button {
+                    hideHistorySearch()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary.opacity(0.86))
+                .help("Back to conversation")
+
+                Text("History")
+                    .font(MarrTypography.display(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(height: conversationHeaderHeight, alignment: .topLeading)
     }
 
-    private var conversationSurfaceHeight: CGFloat {
-        answerRegionHeight - historyControlClearance
-    }
-
-    private var floatingHistoryLayer: some View {
+    private var historyContent: some View {
         AnswerPanelHistoryView(
             store: historyStore,
             currentConversationID: session.id,
-            searchText: $historySearchText
+            searchText: $historySearchText,
+            onOpen: actions.openHistoryConversation
         )
-        .frame(width: composerWidth + 24, height: floatingHistoryHeight, alignment: .bottomTrailing)
-        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
     }
 
     private var panelControls: some View {
@@ -423,103 +494,113 @@ private struct AnswerPanelView: View {
         }
     }
 
-    private var conversationBody: some View {
-        ZStack(alignment: .top) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        LazyVStack(alignment: .leading, spacing: 14) {
-                            ForEach(session.turns) { turn in
-                                turnView(turn, isCompact: false, showsUserMessage: true)
-                                    .id(turn.id)
-                            }
+    private var conversationHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            panelControls
+            conversationTitleControl
+                .opacity(AnswerPanelTitleFade.opacity(forScrollDistance: max(0, -conversationScrollMinY)))
+                .offset(y: -min(5, max(0, -conversationScrollMinY) * 0.07))
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(height: conversationHeaderHeight, alignment: .topLeading)
+    }
+
+    private var conversationScroll: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ConversationScrollMinYPreferenceKey.self,
+                            value: geometry.frame(in: .named("AnswerPanelConversationScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        ForEach(session.turns) { turn in
+                            turnView(turn, isCompact: false, showsUserMessage: true)
+                                .id(turn.id)
                         }
-
-                        Color.clear
-                            .frame(height: AnswerPanelConversationLayout.bottomInset)
-                            .id(ConversationScrollAnchor.bottom)
-                    }
-                    .padding(.top, 44)
-                    .frame(width: composerWidth, alignment: .topLeading)
-                    .frame(minHeight: conversationSurfaceHeight, alignment: .bottom)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .onAppear {
-                    guard !session.turns.isEmpty else {
-                        return
-                    }
-                    lastAutoScrolledTurnCount = session.turns.count
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
-                    }
-                }
-                .onChange(of: session.turns.count) { _, nextCount in
-                    guard nextCount > lastAutoScrolledTurnCount else {
-                        return
                     }
 
-                    lastAutoScrolledTurnCount = nextCount
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
-                    }
+                    Color.clear
+                        .frame(height: AnswerPanelConversationLayout.bottomInset)
+                        .id(ConversationScrollAnchor.bottom)
+                }
+                .padding(.top, 14)
+                .frame(width: composerWidth, alignment: .topLeading)
+                .frame(
+                    minHeight: max(0, primarySurfaceHeight - conversationHeaderHeight),
+                    alignment: .bottom
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .coordinateSpace(name: "AnswerPanelConversationScroll")
+            .onPreferenceChange(ConversationScrollMinYPreferenceKey.self) { nextMinY in
+                conversationScrollMinY = nextMinY
+            }
+            .onAppear {
+                guard !session.turns.isEmpty else { return }
+                lastAutoScrolledTurnCount = session.turns.count
+                DispatchQueue.main.async {
+                    proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
+                }
+            }
+            .onChange(of: session.turns.count) { _, nextCount in
+                guard nextCount > lastAutoScrolledTurnCount else { return }
+                lastAutoScrolledTurnCount = nextCount
+                DispatchQueue.main.async {
+                    proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
                 }
             }
         }
-        .frame(width: composerWidth + 24, height: conversationSurfaceHeight)
-        .marrGlassSurface(cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius, isClear: true)
-        .overlay(
-            RoundedRectangle(
-                cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
-                style: .continuous
-            )
-                .stroke(.white.opacity(0.18), lineWidth: 0.8)
-                .allowsHitTesting(false)
-        )
-        .overlay(alignment: .topLeading) {
-            panelControls
-                .padding(.leading, 14)
-                .padding(.top, 12)
-        }
-        .shadow(color: .black.opacity(0.14), radius: 16, x: 0, y: 7)
-        .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    private var historyToggle: some View {
+    private var conversationTitleControl: some View {
         Button {
             showHistorySearch()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("History")
-                    .font(MarrTypography.body(size: 12, weight: .semibold))
+            HStack(spacing: 7) {
+                Rectangle()
+                    .fill(.secondary.opacity(0.28))
+                    .frame(width: 1, height: 20)
+
+                Text(conversationDisplayTitle)
+                    .font(MarrTypography.display(size: 16.5, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(conversationTitleHovered ? 0.78 : 0)
+
+                Spacer(minLength: 0)
             }
             .foregroundStyle(.primary.opacity(0.82))
-            .padding(.horizontal, 11)
-            .frame(height: 32)
-            .contentShape(Capsule())
+            .frame(width: composerWidth - 28, height: 30, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .marrGlassSurface(cornerRadius: 16, isClear: true)
-        .overlay(
-            Capsule()
-                .stroke(.white.opacity(0.20), lineWidth: 0.8)
-                .allowsHitTesting(false)
-        )
-        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 3)
-        .help("Show history")
-        .animation(.spring(response: 0.30, dampingFraction: 0.86), value: showsHistoryPanel)
+        .onHover { isHovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                conversationTitleHovered = isHovering
+            }
+        }
+        .help("Open history")
     }
 
-    private var historySearchField: some View {
-        HStack(spacing: 8) {
+    private var historySearchComposer: some View {
+        HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(selectedAccent.color.opacity(0.88))
 
-            TextField("Search history", text: $historySearchText)
+            TextField("Search history...", text: $historySearchText)
                 .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 12.5, weight: .medium))
+                .font(MarrTypography.body(size: 13.5, weight: .medium))
                 .focused($historySearchFocused)
 
             if !historySearchText.isEmpty {
@@ -528,36 +609,32 @@ private struct AnswerPanelView: View {
                     historySearchFocused = true
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 18, height: 18)
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("Clear search")
             }
 
-            Button {
-                hideHistorySearch()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Close history")
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 6)
-        .frame(width: 292, height: 32)
-        .marrGlassSurface(cornerRadius: 16, isClear: true)
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 6)
+        .frame(width: composerWidth)
+        .frame(minHeight: 46)
+        .marrGlassSurface(cornerRadius: 23, isClear: !usesRegularComposerGlass)
         .overlay(
-            Capsule()
-                .stroke(selectedAccent.color.opacity(0.28), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 23, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.8)
                 .allowsHitTesting(false)
         )
-        .shadow(color: .black.opacity(0.12), radius: 9, x: 0, y: 4)
-        .animation(.spring(response: 0.30, dampingFraction: 0.86), value: historySearchText.isEmpty)
+        .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
+        .animation(.easeOut(duration: 0.16), value: historySearchText.isEmpty)
+    }
+
+    private var conversationDisplayTitle: String {
+        session.displayTitle
     }
 
     private func turnView(_ turn: ConversationTurn, isCompact: Bool, showsUserMessage: Bool) -> some View {
@@ -565,7 +642,9 @@ private struct AnswerPanelView: View {
             if showsUserMessage {
                 HStack(alignment: .bottom) {
                     Spacer(minLength: 72)
-                    VStack(alignment: .trailing, spacing: 5) {
+                    VStack(alignment: .trailing, spacing: 8) {
+                        turnScreenshotAttachments(turn)
+
                         Text(turn.question)
                             .font(MarrTypography.body(size: 13, weight: .medium))
                             .foregroundStyle(.primary)
@@ -576,11 +655,13 @@ private struct AnswerPanelView: View {
                             .foregroundStyle(bubbleForegroundColor)
                             .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 3)
 
-                        if hoveredQuestionTurnID == turn.id, canEdit(turn) {
+                        if canEdit(turn) {
                             questionActions(for: turn)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
+                                .opacity(hoveredQuestionTurnID == turn.id ? 1 : 0)
+                                .allowsHitTesting(hoveredQuestionTurnID == turn.id)
                         }
                     }
+                    .contentShape(Rectangle())
                     .onHover { isHovering in
                         withAnimation(.easeOut(duration: 0.12)) {
                             hoveredQuestionTurnID = isHovering ? turn.id : nil
@@ -612,20 +693,73 @@ private struct AnswerPanelView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func questionActions(for turn: ConversationTurn) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                beginEditing(turn)
-            } label: {
-                Label("Edit", systemImage: "pencil")
-                    .labelStyle(.titleAndIcon)
+    @ViewBuilder
+    private func turnScreenshotAttachments(_ turn: ConversationTurn) -> some View {
+        let attachments = turn.imageIDs.compactMap { session.images[$0] }
+        if !attachments.isEmpty {
+            VStack(alignment: .trailing, spacing: 6) {
+                ForEach(attachments) { asset in
+                    if let image = NSImage(data: asset.data) {
+                        let size = screenshotThumbnailSize(for: image)
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: size.width, height: size.height)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(.white.opacity(0.22), lineWidth: 0.8)
+                                    .allowsHitTesting(false)
+                            )
+                            .shadow(color: .black.opacity(0.13), radius: 8, x: 0, y: 4)
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .help("Edit and regenerate")
         }
-        .font(MarrTypography.caption())
-        .foregroundStyle(.secondary)
-        .padding(.trailing, 4)
+    }
+
+    private func screenshotThumbnailSize(for image: NSImage) -> CGSize {
+        let maximum = CGSize(width: 280, height: 124)
+        guard image.size.width > 0, image.size.height > 0 else { return maximum }
+        let scale = min(maximum.width / image.size.width, maximum.height / image.size.height, 1)
+        return CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    }
+
+    private func questionActions(for turn: ConversationTurn) -> some View {
+        Button {
+            beginEditing(turn)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Edit")
+                    .font(MarrTypography.body(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(.primary.opacity(0.82))
+            .padding(.horizontal, 11)
+            .frame(minWidth: 70, minHeight: 30)
+            .background(
+                hoveredEditTurnID == turn.id
+                    ? selectedAccent.color.opacity(0.16)
+                    : Color.primary.opacity(0.075),
+                in: Capsule()
+            )
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(0.16), lineWidth: 0.7)
+                    .allowsHitTesting(false)
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 70, minHeight: 30)
+        .onHover { isHovering in
+            withAnimation(.easeOut(duration: 0.10)) {
+                hoveredEditTurnID = isHovering ? turn.id : nil
+            }
+        }
+        .help("Edit and regenerate")
     }
 
     @ViewBuilder
@@ -746,11 +880,12 @@ private struct AnswerPanelView: View {
     private func showHistorySearch() {
         historyStore.reload()
         questionFocused = false
-        actions.setHistoryExpanded(true)
+        historySearchFocused = false
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             showsHistoryPanel = true
         }
         DispatchQueue.main.async {
+            guard showsHistoryPanel else { return }
             historySearchFocused = true
         }
     }
@@ -763,8 +898,21 @@ private struct AnswerPanelView: View {
         }
         DispatchQueue.main.async {
             guard !showsHistoryPanel else { return }
-            actions.setHistoryExpanded(false)
             questionFocused = true
+        }
+    }
+
+    private func handleEscape() {
+        switch AnswerPanelEscapeAction.resolve(
+            showsHistory: showsHistoryPanel,
+            isEditing: editingTurnID != nil
+        ) {
+        case .closeHistory:
+            hideHistorySearch()
+        case .cancelEditing:
+            cancelEditing()
+        case .closePanel:
+            actions.close()
         }
     }
 
@@ -855,39 +1003,25 @@ private struct AnswerPanelHistoryView: View {
     @ObservedObject var store: ConversationHistoryStore
     let currentConversationID: UUID
     @Binding var searchText: String
+    let onOpen: (ConversationHistoryRecord) -> Void
 
-    @State private var selectedItemID: UUID?
-    @State private var hoveredItemID: UUID?
+    @State private var hoveredConversationID: UUID?
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
-
-    private let cardHeight: CGFloat = 68
-    private let cardSpacing: CGFloat = 9
-    private let contentInset: CGFloat = 7
-    private let fullCardWidth: CGFloat = 430
 
     var body: some View {
         Group {
-            if filteredItems.isEmpty {
+            if filteredConversations.isEmpty {
                 emptyState
             } else {
-                ZStack(alignment: .leading) {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: cardSpacing) {
-                            ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                                historyCard(item, at: index)
-                                    .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                                        content
-                                            .opacity(phase.isIdentity ? 1.0 : 0.48)
-                                            .blur(radius: phase.isIdentity ? 0.0 : 1.2)
-                                            .offset(x: phase.value * 14)
-                                    }
-                            }
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(filteredConversations) { conversation in
+                            historyRow(conversation)
                         }
-                        .padding(contentInset)
                     }
-                    .scrollIndicators(.hidden)
-                    .mask(edgeFadeMask)
+                    .padding(.vertical, 4)
                 }
+                .scrollIndicators(.hidden)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -909,220 +1043,90 @@ private struct AnswerPanelHistoryView: View {
         .padding(.bottom, 8)
     }
 
-    private func historyCard(_ item: AnswerPanelHistoryItem, at index: Int) -> some View {
-        let isSelected = selectedItemID == item.id
-        let isHovered = hoveredItemID == item.id
-        let width = cardWidth(at: index)
-
+    private func historyRow(_ conversation: ConversationHistoryRecord) -> some View {
+        let isHovered = hoveredConversationID == conversation.id
+        let isCurrent = conversation.id == currentConversationID
         return Button {
-            withAnimation(.easeOut(duration: 0.16)) {
-                selectedItemID = isSelected ? nil : item.id
-            }
+            onOpen(conversation)
         } label: {
-            HStack(alignment: .top, spacing: 9) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(cardAccentColor(isSelected: isSelected, isCurrent: item.isCurrent))
-                    .frame(width: 3, height: 36)
-                    .padding(.top, 1)
+            HStack(spacing: 12) {
+                Text(AnswerPanelConversationTitle.make(from: conversation.title))
+                    .font(MarrTypography.body(size: 14, weight: isCurrent ? .semibold : .medium))
+                    .foregroundStyle(.primary.opacity(isCurrent ? 0.96 : 0.82))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.question)
-                        .font(MarrTypography.body(size: 12.5, weight: .semibold))
-                        .foregroundStyle(primaryCardColor(isSelected: isSelected))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 12)
 
-                    Text(item.previewText)
-                        .font(MarrTypography.caption2())
-                        .foregroundStyle(secondaryCardColor(isSelected: isSelected))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(relativeDateString(for: item.updatedAt))
-                        .font(MarrTypography.caption2())
-                        .foregroundStyle(secondaryCardColor(isSelected: isSelected))
-                        .lineLimit(1)
-
-                    if item.isCurrent {
-                        Text("Current")
-                            .font(MarrTypography.body(size: 8.5, weight: .semibold))
-                            .foregroundStyle(isSelected ? selectedAccent.secondaryForegroundColor : .secondary)
-                            .padding(.horizontal, 5)
-                            .frame(height: 14)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? .white.opacity(0.18) : .primary.opacity(0.07))
-                            )
-                    }
-                }
-                .frame(width: 74, alignment: .trailing)
+                Text(dateLabel(for: conversation.updatedAt))
+                    .font(MarrTypography.body(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(width: width, alignment: .leading)
-            .frame(height: cardHeight, alignment: .center)
-            .background(cardBackground(isSelected: isSelected, isHovered: isHovered, isCurrent: item.isCurrent))
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .shadow(color: .black.opacity(isSelected || isHovered ? 0.14 : 0.075), radius: isSelected || isHovered ? 9 : 5, x: 0, y: isSelected || isHovered ? 5 : 3)
+            .padding(.horizontal, 10)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(
+                        isHovered
+                            ? selectedAccent.color.opacity(0.12)
+                            : isCurrent ? selectedAccent.color.opacity(0.07) : .clear
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity)
         .onHover { isHovering in
             withAnimation(.easeOut(duration: 0.12)) {
-                hoveredItemID = isHovering ? item.id : nil
+                hoveredConversationID = isHovering ? conversation.id : nil
             }
         }
     }
 
-    private func cardWidth(at index: Int) -> CGFloat {
-        let rhythm: [CGFloat] = [1.00, 0.92, 0.97, 0.88, 0.94]
-        return fullCardWidth * rhythm[index % rhythm.count]
-    }
-
-    private var edgeFadeMask: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0.00),
-                .init(color: .black, location: 0.10),
-                .init(color: .black, location: 0.90),
-                .init(color: .clear, location: 1.00)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private func cardBackground(isSelected: Bool, isHovered: Bool, isCurrent: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-
-        return Group {
-            if isSelected {
-                shape.fill(selectedAccent.color.opacity(0.86))
-            } else if isHovered {
-                shape.fill(.white.opacity(0.12))
-            } else if isCurrent {
-                shape.fill(selectedAccent.color.opacity(0.16))
-            } else {
-                shape.fill(.primary.opacity(0.052))
-            }
-        }
-        .overlay(
-            shape.fill(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(isSelected ? 0.28 : 0.36), location: 0.00),
-                        .init(color: .black.opacity(isSelected ? 0.18 : 0.26), location: 0.34),
-                        .init(color: .black.opacity(0.00), location: 0.78)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-        )
-        .overlay(
-            shape
-                .stroke(.white.opacity(isSelected || isHovered ? 0.24 : 0.12), lineWidth: 0.8)
-        )
-    }
-
-    private func cardAccentColor(isSelected: Bool, isCurrent: Bool) -> Color {
-        if isSelected {
-            return selectedAccent.foregroundColor.opacity(0.82)
-        }
-
-        if isCurrent {
-            return selectedAccent.color.opacity(0.72)
-        }
-
-        return .white.opacity(0.26)
-    }
-
-    private func primaryCardColor(isSelected: Bool) -> Color {
-        isSelected ? selectedAccent.foregroundColor : .white.opacity(0.92)
-    }
-
-    private func secondaryCardColor(isSelected: Bool) -> Color {
-        isSelected ? selectedAccent.secondaryForegroundColor : .white.opacity(0.68)
-    }
-
-    private var filteredItems: [AnswerPanelHistoryItem] {
+    private var filteredConversations: [ConversationHistoryRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
-            return allItems
+            return store.conversations
         }
 
-        return allItems.filter {
-            $0.searchCorpus.localizedCaseInsensitiveContains(query)
+        return store.conversations.filter {
+            searchCorpus(for: $0).localizedCaseInsensitiveContains(query)
         }
     }
 
-    private var allItems: [AnswerPanelHistoryItem] {
-        store.conversations.flatMap { conversation in
-            conversation.turns.reversed().map { turn in
-                AnswerPanelHistoryItem(
-                    id: turn.id,
-                    conversationID: conversation.id,
-                    question: compactText(turn.question),
-                    answer: compactText(turn.answer),
-                    errorMessage: turn.errorMessage.map(compactText),
-                    conversationTitle: compactText(conversation.title),
-                    updatedAt: conversation.updatedAt,
-                    isCurrent: conversation.id == currentConversationID
-                )
+    private func searchCorpus(for conversation: ConversationHistoryRecord) -> String {
+        var parts = [conversation.title]
+        for turn in conversation.turns {
+            parts.append(turn.question)
+            parts.append(turn.answer)
+            if let errorMessage = turn.errorMessage {
+                parts.append(errorMessage)
             }
         }
+        return parts.joined(separator: " ")
     }
 
-    private func compactText(_ text: String) -> String {
-        text
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-    }
+    private func dateLabel(for date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        if calendar.isDateInToday(date) {
+            return "Today"
+        }
+        if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+        if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
+            return "\(max(1, days))d"
+        }
 
-    private func relativeDateString(for date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        return formatter.string(from: date)
     }
 
     private var selectedAccent: MarrAccentColor {
         MarrAccentColor.resolve(accentColor)
-    }
-}
-
-private struct AnswerPanelHistoryItem: Identifiable {
-    let id: UUID
-    let conversationID: UUID
-    let question: String
-    let answer: String
-    let errorMessage: String?
-    let conversationTitle: String
-    let updatedAt: Date
-    let isCurrent: Bool
-
-    var previewText: String {
-        if let errorMessage, !errorMessage.isEmpty {
-            return errorMessage
-        }
-
-        if !answer.isEmpty {
-            return answer
-        }
-
-        return conversationTitle.isEmpty ? question : conversationTitle
-    }
-
-    var searchCorpus: String {
-        [
-            question,
-            answer,
-            errorMessage ?? "",
-            conversationTitle
-        ].joined(separator: " ")
     }
 }
 

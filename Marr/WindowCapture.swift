@@ -46,19 +46,74 @@ enum WindowCapture {
         )
     }
 
-    static func captureCandidates() -> [WindowCaptureCandidate] {
-        guard let windows = CGWindowListCopyWindowInfo(
-            [.optionAll, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] else {
+    static func captureCandidates(for processID: pid_t) -> [WindowCaptureCandidate] {
+        guard let windows = onScreenWindowInfo() else {
+            return []
+        }
+        return captureCandidates(from: windows, for: processID)
+    }
+
+    static func captureCandidatesForFrontmostApplication() -> [WindowCaptureCandidate] {
+        guard let windows = onScreenWindowInfo() else {
             return []
         }
 
+        let currentProcessID = Int32(ProcessInfo.processInfo.processIdentifier)
+        let frontmostProcessID = windows.lazy.compactMap { info -> pid_t? in
+            guard
+                let ownerPID = info[kCGWindowOwnerPID as String] as? NSNumber,
+                ownerPID.int32Value != currentProcessID,
+                let ownerName = info[kCGWindowOwnerName as String] as? String,
+                let layer = info[kCGWindowLayer as String] as? NSNumber,
+                let alpha = info[kCGWindowAlpha as String] as? NSNumber,
+                alpha.doubleValue > 0,
+                let bounds = cgRect(from: info)
+            else {
+                return nil
+            }
+
+            let windowName = info[kCGWindowName as String] as? String
+            let isOnscreen = (info[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue ?? false
+            guard isUsefulWindow(
+                ownerName: ownerName,
+                windowName: windowName,
+                layer: layer.intValue,
+                bounds: bounds,
+                isOnscreen: isOnscreen
+            ) else {
+                return nil
+            }
+            return ownerPID.int32Value
+        }.first
+
+        guard let frontmostProcessID else {
+            return []
+        }
+        return captureCandidates(from: windows, for: frontmostProcessID)
+    }
+
+    static func analysisQuestion(appName: String, title: String) -> String {
+        let windowDescription = title == appName ? appName : "\(appName) — \(title)"
+        return "Analyze this screenshot of \(windowDescription). Explain what is shown, summarize the key information, and identify anything that may need my attention."
+    }
+
+    private static func onScreenWindowInfo() -> [[String: Any]]? {
+        CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]]
+    }
+
+    private static func captureCandidates(
+        from windows: [[String: Any]],
+        for processID: pid_t
+    ) -> [WindowCaptureCandidate] {
         let currentProcessID = Int32(ProcessInfo.processInfo.processIdentifier)
         let candidates = windows.enumerated().compactMap { index, info -> WindowCaptureCandidate? in
             guard
                 let ownerPID = info[kCGWindowOwnerPID as String] as? NSNumber,
                 ownerPID.int32Value != currentProcessID,
+                ownerPID.int32Value == processID,
                 let windowNumber = info[kCGWindowNumber as String] as? NSNumber,
                 let appName = info[kCGWindowOwnerName as String] as? String,
                 let layer = info[kCGWindowLayer as String] as? NSNumber,
