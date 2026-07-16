@@ -18,6 +18,7 @@ struct MarrApp: App {
 final class MarrAppDelegate: NSObject, NSApplicationDelegate {
     let controller: MarrController
 
+    private var didBootstrapApplication = false
     private var statusItem: NSStatusItem?
     private var menuPopover: NSPopover?
     private var settingsWindowController: NSWindowController?
@@ -26,9 +27,28 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         MarrTypography.registerBundledFonts()
         controller = MarrController(client: OpenAIClient())
         super.init()
+        let environment = ProcessInfo.processInfo.environment
+        let isRunningTests = environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCInjectBundleInto"] != nil
+        if !isRunningTests {
+            DispatchQueue.main.async { [weak self] in
+                self?.bootstrapApplicationIfNeeded()
+            }
+        }
+    }
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        bootstrapApplicationIfNeeded()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        bootstrapApplicationIfNeeded()
+    }
+
+    private func bootstrapApplicationIfNeeded() {
+        guard !didBootstrapApplication else { return }
+        didBootstrapApplication = true
+
         ProcessInfo.processInfo.disableAutomaticTermination("Marr runs from the menu bar")
         installStatusItem()
         controller.installHotKeyIfNeeded()
@@ -42,10 +62,15 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         guard statusItem == nil else { return }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.autosaveName = "MarrStatusItem"
+        item.behavior = []
+        item.isVisible = true
         if let button = item.button {
             let image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Marr")
+                ?? NSImage(systemSymbolName: "camera", accessibilityDescription: "Marr")
             image?.isTemplate = true
             button.image = image
+            button.title = image == nil ? "M" : ""
             button.toolTip = "Marr"
             button.target = self
             button.action = #selector(toggleMenuPopover(_:))
