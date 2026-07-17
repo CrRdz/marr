@@ -8,9 +8,14 @@ struct MarrApp: App {
     @NSApplicationDelegateAdaptor(MarrAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Settings {
-            EmptyView()
+        Window("Marr Settings", id: "marr-settings") {
+            SettingsView(controller: appDelegate.controller)
+                .marrPreferredColorScheme()
         }
+        .defaultSize(width: 820, height: 580)
+        .windowResizability(.contentMinSize)
+        .windowToolbarStyle(.unified)
+        .keyboardShortcut(",", modifiers: .command)
     }
 }
 
@@ -20,8 +25,6 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
 
     private var didBootstrapApplication = false
     private var statusItem: NSStatusItem?
-    private var menuPopover: NSPopover?
-    private var settingsWindowController: NSWindowController?
 
     override init() {
         MarrTypography.registerBundledFonts()
@@ -62,7 +65,8 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         guard statusItem == nil else { return }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.autosaveName = nil
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.marr.Marr"
+        item.autosaveName = "\(bundleIdentifier).statusItem.v2"
         item.behavior = []
         item.isVisible = true
         if let button = item.button {
@@ -73,67 +77,14 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
             button.title = image == nil ? "M" : ""
             button.toolTip = "Marr"
             button.target = self
-            button.action = #selector(toggleMenuPopover(_:))
+            button.action = #selector(startCapture(_:))
         }
 
         statusItem = item
     }
 
     @objc
-    private func toggleMenuPopover(_ sender: Any?) {
-        guard let button = statusItem?.button else { return }
-
-        let popover = menuPopover ?? makeMenuPopover()
-        if popover.isShown {
-            popover.performClose(sender)
-        } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        }
-    }
-
-    private func makeMenuPopover() -> NSPopover {
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.animates = true
-        popover.contentSize = NSSize(width: 220, height: 136)
-        popover.contentViewController = NSHostingController(
-            rootView: ContentView(
-                controller: controller,
-                openSettings: { [weak self] in self?.showSettings() },
-                quit: { NSApp.terminate(nil) }
-            )
-            .marrPreferredColorScheme()
-        )
-        menuPopover = popover
-        return popover
-    }
-
-    private func showSettings() {
-        menuPopover?.performClose(nil)
-
-        let windowController = settingsWindowController ?? makeSettingsWindowController()
-        guard let window = windowController.window else { return }
-
-        windowController.showWindow(nil)
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func makeSettingsWindowController() -> NSWindowController {
-        let hostingController = NSHostingController(
-            rootView: SettingsView(controller: controller)
-                .marrPreferredColorScheme()
-        )
-        let window = NSWindow(contentViewController: hostingController)
-        window.title = "Marr Settings"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(NSSize(width: 820, height: 580))
-        window.minSize = NSSize(width: 760, height: 520)
-        window.isReleasedWhenClosed = false
-        window.center()
-
-        let windowController = NSWindowController(window: window)
-        settingsWindowController = windowController
-        return windowController
+    private func startCapture(_ sender: Any?) {
+        controller.startScreenCapture()
     }
 }
