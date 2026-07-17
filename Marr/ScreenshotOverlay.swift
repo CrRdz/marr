@@ -918,6 +918,7 @@ struct ScreenshotSelectionView: View {
         )
         .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 7)
         .disabled(!canTranslate)
+        .allowsHitTesting(hasConfirmedSelection)
         .help("Translate")
         .position(translationButtonPosition(in: size))
         .zIndex(2)

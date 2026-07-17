@@ -4,12 +4,42 @@ import SwiftUI
 
 @main
 @MainActor
-struct MarrApp: App {
+private enum MarrApplication {
+    static func main() {
+        if #available(macOS 15.0, *) {
+            MarrModernApp.main()
+        } else {
+            MarrLegacyApp.main()
+        }
+    }
+}
+
+@available(macOS 15.0, *)
+@MainActor
+private struct MarrModernApp: App {
     @NSApplicationDelegateAdaptor(MarrAppDelegate.self) private var appDelegate
 
     var body: some Scene {
+        MarrSettingsScene(controller: appDelegate.controller)
+            .defaultLaunchBehavior(.suppressed)
+    }
+}
+
+@MainActor
+private struct MarrLegacyApp: App {
+    @NSApplicationDelegateAdaptor(MarrAppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        MarrSettingsScene(controller: appDelegate.controller)
+    }
+}
+
+private struct MarrSettingsScene: Scene {
+    let controller: MarrController
+
+    var body: some Scene {
         Window("Marr Settings", id: "marr-settings") {
-            SettingsView(controller: appDelegate.controller)
+            SettingsView(controller: controller)
                 .marrPreferredColorScheme()
         }
         .defaultSize(width: 820, height: 580)
@@ -46,6 +76,26 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         bootstrapApplicationIfNeeded()
+        suppressLegacyInitialSettingsWindow()
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    private func suppressLegacyInitialSettingsWindow() {
+        guard #unavailable(macOS 15.0) else { return }
+
+        orderOutInitialWindows()
+        DispatchQueue.main.async { [weak self] in
+            self?.orderOutInitialWindows()
+        }
+    }
+
+    private func orderOutInitialWindows() {
+        NSApp.windows
+            .filter { $0.level == .normal }
+            .forEach { $0.orderOut(nil) }
     }
 
     private func bootstrapApplicationIfNeeded() {
