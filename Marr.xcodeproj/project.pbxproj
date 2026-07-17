@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		1A0000012C00000000000001 /* MarrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000102C00000000000001 /* MarrApp.swift */; };
-		1A0000022C00000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000112C00000000000001 /* ContentView.swift */; };
 		1A0000042C00000000000001 /* PickedImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* PickedImage.swift */; };
 		1A0000052C00000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000142C00000000000001 /* Assets.xcassets */; };
 		1A0000092C00000000000001 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000212C00000000000001 /* Fonts */; };
@@ -52,7 +51,6 @@
 
 /* Begin PBXFileReference section */
 		1A0000102C00000000000001 /* MarrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrApp.swift; sourceTree = "<group>"; };
-		1A0000112C00000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A0000132C00000000000001 /* PickedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickedImage.swift; sourceTree = "<group>"; };
 		1A0000142C00000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A0000152C00000000000001 /* Marr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Marr.entitlements; sourceTree = "<group>"; };
@@ -118,7 +116,6 @@
 			isa = PBXGroup;
 			children = (
 				1A0000102C00000000000001 /* MarrApp.swift */,
-				1A0000112C00000000000001 /* ContentView.swift */,
 				1A0000162C00000000000001 /* MarrController.swift */,
 				1D0000112C00000000000001 /* TranslationOverlay.swift */,
 				1D0000122C00000000000001 /* TranslationRecognition.swift */,
@@ -270,7 +267,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A0000012C00000000000001 /* MarrApp.swift in Sources */,
-				1A0000022C00000000000001 /* ContentView.swift in Sources */,
 				1A0000062C00000000000001 /* MarrController.swift in Sources */,
 				1D0000022C00000000000001 /* TranslationOverlay.swift in Sources */,
 				1D0000032C00000000000001 /* TranslationRecognition.swift in Sources */,

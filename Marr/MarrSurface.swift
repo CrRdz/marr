@@ -9,10 +9,10 @@ enum MarrAppearanceKeys {
 enum MarrSurfaceMode: Equatable {
     case activeClear
     case activeRegular
-    case unfocused
+    case standardMaterial
 
-    static func resolve(usesActiveGlass: Bool, prefersClearGlass: Bool) -> Self {
-        guard usesActiveGlass else { return .unfocused }
+    static func resolve(usesLiquidGlass: Bool, prefersClearGlass: Bool) -> Self {
+        guard usesLiquidGlass else { return .standardMaterial }
         return prefersClearGlass ? .activeClear : .activeRegular
     }
 }
@@ -34,6 +34,7 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
     @AppStorage(MarrAppearanceKeys.glassSurfaces) private var usesGlassSurfaces = true
     @Environment(\.accessibilityReduceTransparency) private var reducesTransparency
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -44,25 +45,35 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
                     in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 )
                 .overlay(surfaceBorder)
+        } else if surfaceMode == .standardMaterial {
+            content
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .background(
+                    standardMaterialBacking,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .overlay(surfaceBorder)
         } else if #available(macOS 26.0, *) {
             switch surfaceMode {
             case .activeClear:
-                content.glassEffect(
-                    .clear,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-            case .activeRegular:
-                content.glassEffect(
-                    .regular,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-            case .unfocused:
                 content
                     .glassEffect(
-                        .regular.tint(unfocusedGlassTint),
+                        .clear.tint(readabilityTint),
                         in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     )
-                    .environment(\.appearsActive, false)
+                    .overlay(surfaceBorder)
+            case .activeRegular:
+                content
+                    .glassEffect(
+                        .regular.tint(readabilityTint),
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    )
+                    .overlay(surfaceBorder)
+            case .standardMaterial:
+                EmptyView()
             }
         } else {
             content
@@ -80,26 +91,29 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
     }
 
     private var surfaceMode: MarrSurfaceMode {
-        .resolve(usesActiveGlass: usesGlassSurfaces, prefersClearGlass: isClear)
+        .resolve(usesLiquidGlass: usesGlassSurfaces, prefersClearGlass: isClear)
     }
 
-    private var unfocusedGlassTint: Color {
-        colorScheme == .dark
-            ? .black.opacity(0.22)
-            : .white.opacity(0.30)
+    private var readabilityTint: Color {
+        let opacity: Double
+        if colorSchemeContrast == .increased {
+            opacity = isClear ? 0.68 : 0.58
+        } else {
+            opacity = isClear ? 0.52 : 0.44
+        }
+        return contrastBaseColor.opacity(opacity)
+    }
+
+    private var standardMaterialBacking: Color {
+        contrastBaseColor.opacity(colorSchemeContrast == .increased ? 0.52 : 0.34)
+    }
+
+    private var contrastBaseColor: Color {
+        colorScheme == .dark ? .black : .white
     }
 
     private var frostedSurfaceTint: Color {
-        if surfaceMode == .unfocused {
-            return colorScheme == .dark
-                ? .black.opacity(0.22)
-                : .white.opacity(0.30)
-        }
-
-        if colorScheme == .dark {
-            return .black.opacity(isClear ? 0.06 : 0.12)
-        }
-        return .white.opacity(isClear ? 0.06 : 0.12)
+        contrastBaseColor.opacity(colorSchemeContrast == .increased ? 0.62 : isClear ? 0.48 : 0.40)
     }
 
     private var reducedTransparencyColor: Color {
@@ -110,7 +124,7 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
 
     private var surfaceBorder: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(.primary.opacity(isClear ? 0.12 : 0.18), lineWidth: 1)
+            .stroke(.primary.opacity(colorSchemeContrast == .increased ? 0.30 : isClear ? 0.16 : 0.20), lineWidth: 1)
             .allowsHitTesting(false)
     }
 }

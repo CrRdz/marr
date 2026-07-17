@@ -189,21 +189,21 @@ final class ConversationHarnessTests: XCTestCase {
         try assertAnswerPanelDeliversWheelEvents(usesGlassSurfaces: false)
     }
 
-    func testDisabledGlassSelectsUnfocusedRegularMode() {
+    func testDisabledGlassSelectsStandardMaterialMode() {
         XCTAssertEqual(
-            MarrSurfaceMode.resolve(usesActiveGlass: false, prefersClearGlass: true),
-            .unfocused
+            MarrSurfaceMode.resolve(usesLiquidGlass: false, prefersClearGlass: true),
+            .standardMaterial
         )
         XCTAssertEqual(
-            MarrSurfaceMode.resolve(usesActiveGlass: false, prefersClearGlass: false),
-            .unfocused
+            MarrSurfaceMode.resolve(usesLiquidGlass: false, prefersClearGlass: false),
+            .standardMaterial
         )
         XCTAssertEqual(
-            MarrSurfaceMode.resolve(usesActiveGlass: true, prefersClearGlass: true),
+            MarrSurfaceMode.resolve(usesLiquidGlass: true, prefersClearGlass: true),
             .activeClear
         )
         XCTAssertEqual(
-            MarrSurfaceMode.resolve(usesActiveGlass: true, prefersClearGlass: false),
+            MarrSurfaceMode.resolve(usesLiquidGlass: true, prefersClearGlass: false),
             .activeRegular
         )
     }

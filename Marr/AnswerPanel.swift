@@ -293,6 +293,7 @@ enum AnswerPanelConversationTitle {
 }
 
 private struct AnswerPanelView: View {
+    @Environment(\.openWindow) private var openWindow
     @ObservedObject var session: ConversationSession
     @ObservedObject private var historyStore: ConversationHistoryStore
     let requestCoordinator: ConversationRequestCoordinator
@@ -467,31 +468,45 @@ private struct AnswerPanelView: View {
 
     private var panelControls: some View {
         HStack(spacing: 8) {
-            PanelControlButton(
-                symbol: "xmark",
-                showsSymbol: panelControlsHovered,
-                color: Color(red: 1.0, green: 0.36, blue: 0.34),
-                borderColor: Color(red: 0.82, green: 0.20, blue: 0.19)
-            ) {
-                actions.close()
-            }
-            .help("Close")
+            HStack(spacing: 8) {
+                PanelControlButton(
+                    symbol: "xmark",
+                    showsSymbol: panelControlsHovered,
+                    color: Color(red: 1.0, green: 0.36, blue: 0.34),
+                    borderColor: Color(red: 0.82, green: 0.20, blue: 0.19)
+                ) {
+                    actions.close()
+                }
+                .help("Close")
 
-            PanelControlButton(
-                symbol: "minus",
-                showsSymbol: panelControlsHovered,
-                color: Color(red: 1.0, green: 0.78, blue: 0.13),
-                borderColor: Color(red: 0.82, green: 0.58, blue: 0.02)
-            ) {
-                actions.minimize()
+                PanelControlButton(
+                    symbol: "minus",
+                    showsSymbol: panelControlsHovered,
+                    color: Color(red: 1.0, green: 0.78, blue: 0.13),
+                    borderColor: Color(red: 0.82, green: 0.58, blue: 0.02)
+                ) {
+                    actions.minimize()
+                }
+                .help("Minimize")
             }
-            .help("Minimize")
-        }
-        .onHover { isHovering in
-            withAnimation(.easeOut(duration: 0.10)) {
-                panelControlsHovered = isHovering
+            .onHover { isHovering in
+                withAnimation(.easeOut(duration: 0.10)) {
+                    panelControlsHovered = isHovering
+                }
             }
+
+            Spacer(minLength: 0)
+
+            Button {
+                openWindow(id: "marr-settings")
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                PanelUtilityButtonLabel(symbol: "gearshape")
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var conversationHeader: some View {
@@ -1162,6 +1177,31 @@ private struct PanelControlButton: View {
         .contentShape(Circle())
         .onHover { isHovering = $0 }
         .animation(.easeOut(duration: 0.10), value: showsSymbol)
+    }
+}
+
+private struct PanelUtilityButtonLabel: View {
+    let symbol: String
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.primary.opacity(isHovering ? 0.92 : 0.68))
+            .frame(width: 26, height: 26)
+            .background(
+                Color.primary.opacity(isHovering ? 0.13 : 0.07),
+                in: Circle()
+            )
+            .overlay(
+                Circle()
+                    .stroke(.white.opacity(0.14), lineWidth: 0.7)
+                    .allowsHitTesting(false)
+            )
+            .contentShape(Circle())
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.10), value: isHovering)
     }
 }
 
