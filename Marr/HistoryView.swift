@@ -9,6 +9,7 @@ struct HistoryView: View {
     @State private var selectedConversationID: UUID?
     @State private var hoveredConversationID: UUID?
     @State private var conversationPendingDeletion: ConversationHistoryRecord?
+    @State private var isConfirmingClearAll = false
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
 
     init(controller: MarrController) {
@@ -76,6 +77,16 @@ struct HistoryView: View {
         } message: { conversation in
             Text("The conversation and its \(conversation.images.count) stored screenshot\(conversation.images.count == 1 ? "" : "s") will be removed.")
         }
+        .confirmationDialog(
+            "Clear all conversation history?",
+            isPresented: $isConfirmingClearAll
+        ) {
+            Button("Clear History", role: .destructive) {
+                selectedConversationID = nil
+                store.deleteAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private var header: some View {
@@ -89,6 +100,13 @@ struct HistoryView: View {
             Text("\(store.conversations.count) saved")
                 .font(MarrTypography.body(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
+
+            Button(role: .destructive) {
+                isConfirmingClearAll = true
+            } label: {
+                Label("Clear All", systemImage: "trash")
+            }
+            .disabled(store.conversations.isEmpty)
         }
     }
 

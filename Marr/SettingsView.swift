@@ -10,25 +10,16 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(SettingsSection.allCases) { section in
-                    SettingsSidebarRow(
-                        section: section,
-                        isSelected: selection == section,
-                        accentColor: selectedAccent.color,
-                        accentForegroundColor: selectedAccent.foregroundColor
-                    ) {
-                        selection = section
-                    }
-                }
-                Spacer(minLength: 0)
+            List(SettingsSection.allCases, selection: $selection) { section in
+                Label(section.title, systemImage: section.systemImage)
+                    .tag(section)
             }
-            .padding(12)
+            .listStyle(.sidebar)
             .navigationTitle("Settings")
-            .frame(minWidth: 190)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
         } detail: {
             selectedDetail
-            .navigationTitle(selection.title)
+                .navigationTitle(selection.title)
         }
         .frame(minWidth: 760, idealWidth: 820, minHeight: 520, idealHeight: 580)
         .tint(selectedAccentColor)
@@ -45,7 +36,6 @@ struct SettingsView: View {
                 selectedPanel
             }
             .formStyle(.grouped)
-            .padding(.top, 8)
         }
     }
 
@@ -54,18 +44,12 @@ struct SettingsView: View {
         switch selection {
         case .general:
             GeneralSettingsPanel(controller: controller)
-        case .capture:
-            CaptureSettingsPanel(controller: controller)
-        case .history:
-            EmptyView()
         case .provider:
             ProviderSettingsPanel(controller: controller)
         case .appearance:
             AppearanceSettingsPanel()
-        case .data:
-            DataSettingsPanel(controller: controller)
-        case .advanced:
-            AdvancedSettingsPanel(controller: controller)
+        case .history:
+            EmptyView()
         }
     }
 
@@ -80,98 +64,32 @@ struct SettingsView: View {
 
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
-    case capture
-    case history
     case provider
     case appearance
-    case data
-    case advanced
+    case history
 
     var id: Self { self }
 
     var title: String {
         switch self {
         case .general: "General"
-        case .capture: "Capture"
-        case .history: "History"
         case .provider: "AI Provider"
         case .appearance: "Appearance"
-        case .data: "Data"
-        case .advanced: "Advanced"
+        case .history: "History"
         }
     }
 
     var systemImage: String {
         switch self {
         case .general: "gearshape"
-        case .capture: "viewfinder"
-        case .history: "clock.arrow.circlepath"
         case .provider: "sparkles"
         case .appearance: "sun.max"
-        case .data: "externaldrive"
-        case .advanced: "wrench.and.screwdriver"
+        case .history: "clock.arrow.circlepath"
         }
-    }
-}
-
-private struct SettingsSidebarRow: View {
-    let section: SettingsSection
-    let isSelected: Bool
-    let accentColor: Color
-    let accentForegroundColor: Color
-    let action: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Label {
-                Text(section.title)
-                    .font(MarrTypography.body(size: 14, weight: isActive ? .semibold : .regular))
-            } icon: {
-                Image(systemName: section.systemImage)
-                    .font(.system(size: 15, weight: .medium))
-                    .frame(width: 20)
-            }
-            .foregroundStyle(isActive ? accentForegroundColor : .primary)
-            .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isActive ? accentColor : .clear)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-    }
-
-    private var isActive: Bool {
-        isSelected || isHovered
     }
 }
 
 private struct GeneralSettingsPanel: View {
-    @ObservedObject var controller: MarrController
-    @AppStorage("menu.showStatus") private var showStatus = true
-
-    var body: some View {
-        Section("Menu Bar") {
-            Toggle("Show status", isOn: $showStatus)
-            SettingsValueRow(title: "Status", value: statusLabel)
-        }
-    }
-
-    private var statusLabel: String {
-        guard let message = controller.statusMessage else { return "Ready" }
-        if message.localizedCaseInsensitiveContains("could not") { return "Needs attention" }
-        if message.localizedCaseInsensitiveContains("drag") || message.localizedCaseInsensitiveContains("select") { return "Capturing" }
-        return "Ready"
-    }
-}
-
-private struct CaptureSettingsPanel: View {
     @ObservedObject var controller: MarrController
     @State private var runningApplications = RunningApplicationOption.currentOptions
     @AppStorage(MarrHotKeyConfiguration.keyCodeKey) private var keyCode = Int(kVK_ANSI_0)
@@ -183,7 +101,7 @@ private struct CaptureSettingsPanel: View {
     @AppStorage(MarrHotKeyConfiguration.scopeAppNameKey) private var scopeAppName = ""
 
     var body: some View {
-        Section("Shortcut") {
+        Section("Keyboard Shortcuts") {
             HStack {
                 Text("Capture area")
                 Spacer()
@@ -205,8 +123,10 @@ private struct CaptureSettingsPanel: View {
                 )
                 .frame(width: 132, height: 30)
             }
+        }
 
-            Picker("Hotkey scope", selection: scopeBinding) {
+        Section("Availability") {
+            Picker("Use shortcuts", selection: scopeBinding) {
                 ForEach(MarrHotKeyScope.allCases) { option in
                     Text(option.title).tag(option.rawValue)
                 }
@@ -224,15 +144,10 @@ private struct CaptureSettingsPanel: View {
             }
         }
 
-        Section("Answer Panel") {
-            SettingsValueRow(title: "New capture", value: "Open answer panel")
-            SettingsValueRow(title: "Shortcut", value: "Always starts capture")
-        }
-
-        Section("Planned Controls") {
-            SettingsValueRow(title: "Default capture mode", value: "Area selection")
-            SettingsValueRow(title: "Panel placement", value: "Near selection")
-            SettingsValueRow(title: "Screenshot retention", value: "Save with history")
+        Section("Application") {
+            Button("Quit Marr", role: .destructive) {
+                NSApp.terminate(nil)
+            }
         }
     }
 
@@ -400,7 +315,7 @@ private final class HotKeyRecorderView: NSButton {
 
 private struct ProviderSettingsPanel: View {
     @ObservedObject var controller: MarrController
-    @AppStorage("gateway.preset") private var gatewayPreset = GatewayPreset.none.rawValue
+    @AppStorage("gateway.preset") private var gatewayPreset = GatewayPreset.custom.rawValue
 
     var body: some View {
         Section("Provider") {
@@ -439,7 +354,7 @@ private struct ProviderSettingsPanel: View {
 
     private var gatewaySection: some View {
         Section("Gateway") {
-            Picker("Preset", selection: gatewayPresetBinding) {
+            Picker("Configuration", selection: gatewayPresetBinding) {
                 ForEach(GatewayPreset.allCases) { preset in
                     Text(preset.title).tag(preset.rawValue)
                 }
@@ -490,14 +405,14 @@ private struct ProviderSettingsPanel: View {
 }
 
 private enum GatewayPreset: String, CaseIterable, Identifiable {
-    case none
+    case custom = "none"
     case ccSwitch
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .none: "None"
+        case .custom: "Custom"
         case .ccSwitch: "CC Switch"
         }
     }
@@ -510,79 +425,25 @@ private struct AppearanceSettingsPanel: View {
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
 
     var body: some View {
-        Section("Theme") {
-            Picker("Color Scheme", selection: $colorScheme) {
+        Section("Appearance") {
+            Picker("Mode", selection: $colorScheme) {
                 Text("System").tag("System")
                 Text("Light").tag("Light")
                 Text("Dark").tag("Dark")
             }
             .pickerStyle(.segmented)
+            Toggle("Liquid Glass", isOn: $glassSurfaces)
         }
 
-        Section("Surfaces") {
-            Toggle("Use active glass surfaces", isOn: $glassSurfaces)
-            SettingsValueRow(
-                title: "Current style",
-                value: glassSurfaces ? "Active Liquid Glass" : "Unfocused Liquid Glass"
-            )
-
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        selectedAccent.color.opacity(0.72),
-                        Color.purple.opacity(0.52),
-                        Color.orange.opacity(0.46)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .allowsHitTesting(false)
-
-                HStack(spacing: 10) {
-                    Image(systemName: glassSurfaces ? "circle.hexagongrid.fill" : "drop.fill")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Surface preview")
-                            .font(MarrTypography.body(size: 13, weight: .semibold))
-                        Text(glassSurfaces ? "Adaptive refraction and highlights" : "Matches unfocused answer surfaces")
-                            .font(MarrTypography.caption2())
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .frame(height: 62)
-                .marrGlassSurface(cornerRadius: 14, isClear: true)
-            }
-            .frame(height: 62)
-        }
-
-        Section("Messages") {
+        Section("Colors") {
             BubbleColorPicker(selection: $bubbleColor)
             AccentColorPicker(selection: $accentColor)
         }
-
-        Section("Typography") {
-            SettingsValueRow(title: "Font selection", value: "Not configurable yet")
-            Text("Marr currently chooses the best available bundled font automatically.")
-                .font(MarrTypography.caption2())
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var selectedAccent: MarrAccentColor {
-        MarrAccentColor.resolve(accentColor)
     }
 }
 
 private struct BubbleColorPicker: View {
     @Binding var selection: String
-
-    private var selectedOption: MarrBubbleColor {
-        MarrBubbleColor.resolve(selection)
-    }
 
     var body: some View {
         HStack {
@@ -597,31 +458,12 @@ private struct BubbleColorPicker: View {
 private struct AccentColorPicker: View {
     @Binding var selection: String
 
-    private var selectedOption: MarrAccentColor {
-        MarrAccentColor.resolve(selection)
-    }
-
     var body: some View {
         HStack {
             Text("Accent Color")
             Spacer()
             AccentColorDropdown(selection: $selection)
             .frame(width: 150, alignment: .trailing)
-        }
-    }
-}
-
-private struct ColorOptionLabel: View {
-    let title: String
-    let color: Color
-
-    var body: some View {
-        Label {
-            Text(title)
-        } icon: {
-            Circle()
-                .fill(color)
-                .frame(width: 9, height: 9)
         }
     }
 }
@@ -765,82 +607,5 @@ private struct ColorMenuOptionLabel: View {
 
     private var selectedAccent: MarrAccentColor {
         MarrAccentColor.resolve(accentColor)
-    }
-}
-
-private struct DataSettingsPanel: View {
-    @ObservedObject var controller: MarrController
-    @State private var isConfirmingHistoryClear = false
-
-    var body: some View {
-        Section("History") {
-            SettingsValueRow(
-                title: "Saved conversations",
-                value: "\(controller.historyStore.conversations.count)"
-            )
-
-            Button(role: .destructive) {
-                isConfirmingHistoryClear = true
-            } label: {
-                Label("Clear History", systemImage: "trash")
-                    .font(MarrTypography.body(size: 13, weight: .semibold))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 3)
-            .disabled(controller.historyStore.conversations.isEmpty)
-            .confirmationDialog(
-                "Clear all conversation history?",
-                isPresented: $isConfirmingHistoryClear
-            ) {
-                Button("Clear History", role: .destructive) {
-                    controller.historyStore.deleteAll()
-                }
-                Button("Cancel", role: .cancel) {}
-            }
-        }
-
-        Section("Privacy") {
-            SettingsValueRow(title: "Credentials in history", value: "Never saved")
-            SettingsValueRow(title: "Screenshots", value: "Stored locally")
-        }
-    }
-}
-
-private struct AdvancedSettingsPanel: View {
-    @ObservedObject var controller: MarrController
-    @AppStorage(MarrHotKeyConfiguration.scopeKey) private var hotKeyScope = MarrHotKeyScope.global.rawValue
-
-    var body: some View {
-        Section("Diagnostics") {
-            SettingsValueRow(title: "Last history error", value: controller.historyStore.lastErrorMessage ?? "None")
-        }
-
-        Section("Runtime") {
-            SettingsValueRow(title: "Hotkey scope", value: resolvedHotKeyScope.title)
-            SettingsValueRow(title: "History storage", value: "Application Support")
-        }
-    }
-
-    private var resolvedHotKeyScope: MarrHotKeyScope {
-        MarrHotKeyScope(rawValue: hotKeyScope) ?? .global
-    }
-}
-
-private struct SettingsValueRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .font(MarrTypography.body(size: 13))
     }
 }
