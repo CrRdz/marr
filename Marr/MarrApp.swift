@@ -62,7 +62,7 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         guard statusItem == nil else { return }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.autosaveName = "MarrStatusItem"
+        item.autosaveName = nil
         item.behavior = []
         item.isVisible = true
         if let button = item.button {
