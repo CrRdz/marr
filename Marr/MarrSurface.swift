@@ -17,6 +17,65 @@ enum MarrSurfaceMode: Equatable {
     }
 }
 
+enum BackgroundBrightnessSampler {
+    static func isNearlyWhite(in rect: CGRect, on screen: NSScreen) -> Bool {
+        guard
+            let displayNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            return false
+        }
+
+        let scale = screen.backingScaleFactor
+        let pixelRect = CGRect(
+            x: (rect.minX - screen.frame.minX) * scale,
+            y: (screen.frame.maxY - rect.maxY) * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).integral
+        let displayID = CGDirectDisplayID(displayNumber.uint32Value)
+
+        guard
+            let image = CGDisplayCreateImage(displayID, rect: pixelRect),
+            let bitmap = NSBitmapImageRep(cgImage: image).retagging(with: .sRGB)
+        else {
+            return false
+        }
+
+        let columns = 32
+        let rows = 6
+        var luminanceTotal: CGFloat = 0
+        var nearWhiteSamples = 0
+        var sampleCount = 0
+
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let x = min(bitmap.pixelsWide - 1, (column * bitmap.pixelsWide + bitmap.pixelsWide / 2) / columns)
+                let y = min(bitmap.pixelsHigh - 1, (row * bitmap.pixelsHigh + bitmap.pixelsHigh / 2) / rows)
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else {
+                    continue
+                }
+
+                let luminance = 0.2126 * color.redComponent
+                    + 0.7152 * color.greenComponent
+                    + 0.0722 * color.blueComponent
+                luminanceTotal += luminance
+                if luminance >= 0.93 && color.saturationComponent <= 0.08 {
+                    nearWhiteSamples += 1
+                }
+                sampleCount += 1
+            }
+        }
+
+        guard sampleCount > 0 else {
+            return false
+        }
+
+        let averageLuminance = luminanceTotal / CGFloat(sampleCount)
+        let nearWhiteRatio = CGFloat(nearWhiteSamples) / CGFloat(sampleCount)
+        return averageLuminance >= 0.90 && nearWhiteRatio >= 0.72
+    }
+}
+
 extension View {
     func marrGlassSurface(cornerRadius: CGFloat, isClear: Bool = false) -> some View {
         modifier(MarrGlassSurfaceModifier(cornerRadius: cornerRadius, isClear: isClear))

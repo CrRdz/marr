@@ -8,6 +8,17 @@ import XCTest
 
 @MainActor
 final class ConversationHarnessTests: XCTestCase {
+    func testHotKeyActivationGateIgnoresRepeatedPressUntilRelease() {
+        var gate = HotKeyActivationGate()
+
+        XCTAssertTrue(gate.shouldActivate(identifier: 1))
+        XCTAssertFalse(gate.shouldActivate(identifier: 1))
+
+        gate.release(identifier: 1)
+
+        XCTAssertTrue(gate.shouldActivate(identifier: 1))
+    }
+
     func testScreenshotPreviewLayoutAvoidsSelectionAndPrompt() throws {
         let bounds = CGRect(x: 0, y: 0, width: 1_200, height: 800)
         let selection = CGRect(x: 300, y: 200, width: 600, height: 400)
