@@ -190,6 +190,18 @@ enum HotKeyFormatter {
     }
 }
 
+struct HotKeyActivationGate {
+    private var pressedIdentifiers = Set<UInt32>()
+
+    mutating func shouldActivate(identifier: UInt32) -> Bool {
+        pressedIdentifiers.insert(identifier).inserted
+    }
+
+    mutating func release(identifier: UInt32) {
+        pressedIdentifiers.remove(identifier)
+    }
+}
+
 final class HotKeyManager {
     enum HotKeyError: LocalizedError {
         case registerFailed(OSStatus)
@@ -214,6 +226,7 @@ final class HotKeyManager {
     private static let signature = HotKeyManager.fourCharCode("OLNS")
     private static var eventHandlerRef: EventHandlerRef?
     private static var actions: [UInt32: () -> Void] = [:]
+    private static var activationGate = HotKeyActivationGate()
 
     init(keyCode: UInt32, modifiers: UInt32, identifier: UInt32 = 1, action: @escaping () -> Void) {
         self.keyCode = keyCode
@@ -250,6 +263,7 @@ final class HotKeyManager {
 
     func unregister() {
         Self.actions[identifier] = nil
+        Self.activationGate.release(identifier: identifier)
 
         if let hotKeyRef {
             UnregisterEventHotKey(hotKeyRef)
@@ -262,7 +276,10 @@ final class HotKeyManager {
             return
         }
 
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
         let handlerStatus = InstallEventHandler(
             GetApplicationEventTarget(),
             { _, event, _ in
@@ -282,16 +299,29 @@ final class HotKeyManager {
                 )
 
                 guard parameterStatus == noErr,
-                      eventHotKeyID.signature == HotKeyManager.signature,
-                      let action = HotKeyManager.actions[eventHotKeyID.id] else {
+                      eventHotKeyID.signature == HotKeyManager.signature else {
                     return OSStatus(eventNotHandledErr)
                 }
 
-                action()
-                return noErr
+                switch GetEventKind(event) {
+                case UInt32(kEventHotKeyPressed):
+                    guard
+                        HotKeyManager.activationGate.shouldActivate(identifier: eventHotKeyID.id),
+                        let action = HotKeyManager.actions[eventHotKeyID.id]
+                    else {
+                        return noErr
+                    }
+                    action()
+                    return noErr
+                case UInt32(kEventHotKeyReleased):
+                    HotKeyManager.activationGate.release(identifier: eventHotKeyID.id)
+                    return noErr
+                default:
+                    return OSStatus(eventNotHandledErr)
+                }
             },
-            1,
-            &eventType,
+            eventTypes.count,
+            &eventTypes,
             nil,
             &eventHandlerRef
         )

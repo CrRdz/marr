@@ -576,10 +576,13 @@ struct ScreenshotSelectionView: View {
     @State private var cursorLocation: CGPoint?
     @State private var hoveredWindowCandidate: WindowCaptureCandidate?
     @State private var showsImagePreview = false
+    @State private var usesRegularTranslationGlass = false
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
     private let questionBarWidth: CGFloat = 500
+    private let translationButtonDiameter: CGFloat = 42
+    private let translationButtonGap: CGFloat = 10
     private let chatCapsuleScale: CGFloat = 1
     private let capsuleTransitionDuration = 0.42
     private let minimumSelectionDimension: CGFloat = 12
@@ -611,6 +614,10 @@ struct ScreenshotSelectionView: View {
                     promptBar(in: geometry.size)
                 }
 
+                if mode == .ask, showsPromptBar, !isSending {
+                    translationButton(in: geometry.size)
+                }
+
                 if showsImagePreview, hasSelection {
                     imagePreviewPanel(in: geometry.size)
                 }
@@ -637,7 +644,7 @@ struct ScreenshotSelectionView: View {
 
     private func captureCanvas(in bounds: CGSize) -> some View {
         Rectangle()
-            .fill(selection.width > 0 && selection.height > 0 ? Color.clear : Color.black.opacity(0.10))
+            .fill(selection.width > 0 && selection.height > 0 ? Color.clear : Color.black.opacity(0.04))
             .frame(width: bounds.width, height: bounds.height)
             .contentShape(Rectangle())
             .gesture(createSelectionGesture(in: bounds))
@@ -655,21 +662,21 @@ struct ScreenshotSelectionView: View {
     private func subtleDimmedBackdrop(in bounds: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             Rectangle()
-                .fill(.black.opacity(0.16))
+                .fill(.black.opacity(0.08))
                 .frame(width: bounds.width, height: selection.minY)
 
             Rectangle()
-                .fill(.black.opacity(0.16))
+                .fill(.black.opacity(0.08))
                 .frame(width: bounds.width, height: max(0, bounds.height - selection.maxY))
                 .position(x: bounds.width / 2, y: selection.maxY + max(0, bounds.height - selection.maxY) / 2)
 
             Rectangle()
-                .fill(.black.opacity(0.16))
+                .fill(.black.opacity(0.08))
                 .frame(width: selection.minX, height: selection.height)
                 .position(x: selection.minX / 2, y: selection.midY)
 
             Rectangle()
-                .fill(.black.opacity(0.16))
+                .fill(.black.opacity(0.08))
                 .frame(width: max(0, bounds.width - selection.maxX), height: selection.height)
                 .position(x: selection.maxX + max(0, bounds.width - selection.maxX) / 2, y: selection.midY)
         }
@@ -856,22 +863,6 @@ struct ScreenshotSelectionView: View {
                 }
 
             Button {
-                translateSelection()
-            } label: {
-                Image(systemName: "translate")
-                    .font(.system(size: 15, weight: .medium))
-                    .frame(width: 30, height: 34)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(canTranslate ? bubbleTint : .secondary.opacity(0.72))
-            .background(
-                Circle()
-                    .fill(canTranslate ? bubbleTint.opacity(0.14) : Color.secondary.opacity(0.10))
-            )
-            .disabled(!canTranslate)
-            .help("Translate")
-
-            Button {
                 sendQuestion()
             } label: {
                 Image(systemName: "arrow.up")
@@ -903,6 +894,40 @@ struct ScreenshotSelectionView: View {
         questionControls
             .allowsHitTesting(hasConfirmedSelection)
             .position(promptBarPosition(in: size))
+    }
+
+    private func translationButton(in size: CGSize) -> some View {
+        Button {
+            translateSelection()
+        } label: {
+            Image(systemName: "translate")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: translationButtonDiameter, height: translationButtonDiameter)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(canTranslate ? bubbleTint : .secondary.opacity(0.72))
+        .marrGlassSurface(
+            cornerRadius: translationButtonDiameter / 2,
+            isClear: !usesRegularTranslationGlass
+        )
+        .overlay(
+            Circle()
+                .stroke(.white.opacity(0.18), lineWidth: 0.8)
+                .allowsHitTesting(false)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 7)
+        .disabled(!canTranslate)
+        .help("Translate")
+        .position(translationButtonPosition(in: size))
+        .zIndex(2)
+        .onAppear {
+            updateTranslationButtonGlass(in: size)
+        }
+        .onChange(of: selection) { _, _ in
+            updateTranslationButtonGlass(in: size)
+        }
+        .transition(.scale(scale: 0.90).combined(with: .opacity))
     }
 
     private func dragHint(in size: CGSize) -> some View {
@@ -956,9 +981,9 @@ struct ScreenshotSelectionView: View {
     private func promptBarRect(in bounds: CGSize) -> CGRect {
         let position = promptBarPosition(in: bounds)
         return CGRect(
-            x: position.x - questionBarWidth / 2,
+            x: position.x - questionBarWidth / 2 - translationButtonGap - translationButtonDiameter,
             y: position.y - 27,
-            width: questionBarWidth,
+            width: questionBarWidth + translationButtonGap + translationButtonDiameter,
             height: 54
         )
     }
@@ -1070,7 +1095,12 @@ struct ScreenshotSelectionView: View {
 
     private func toolbarX(in bounds: CGSize) -> CGFloat {
         let halfWidth = questionBarWidth / 2
-        return min(max(selection.midX, halfWidth + 12), bounds.width - halfWidth - 12)
+        let minimumX = halfWidth + translationButtonDiameter + translationButtonGap + 12
+        let maximumX = bounds.width - halfWidth - 12
+        guard minimumX <= maximumX else {
+            return bounds.width / 2
+        }
+        return min(max(selection.midX, minimumX), maximumX)
     }
 
     private func toolbarY(in bounds: CGSize) -> CGFloat {
@@ -1112,6 +1142,34 @@ struct ScreenshotSelectionView: View {
             return CGPoint(x: toolbarX(in: bounds), y: toolbarY(in: bounds))
         }
         return initialPromptBarPosition(in: bounds)
+    }
+
+    private func translationButtonPosition(in bounds: CGSize) -> CGPoint {
+        let promptPosition = promptBarPosition(in: bounds)
+        return CGPoint(
+            x: promptPosition.x - questionBarWidth / 2 - translationButtonGap - translationButtonDiameter / 2,
+            y: promptPosition.y
+        )
+    }
+
+    private func updateTranslationButtonGlass(in bounds: CGSize) {
+        let position = translationButtonPosition(in: bounds)
+        let localRect = CGRect(
+            x: position.x - translationButtonDiameter / 2,
+            y: position.y - translationButtonDiameter / 2,
+            width: translationButtonDiameter,
+            height: translationButtonDiameter
+        )
+        let globalRect = CGRect(
+            x: screen.frame.minX + localRect.minX,
+            y: screen.frame.maxY - localRect.maxY,
+            width: localRect.width,
+            height: localRect.height
+        )
+        usesRegularTranslationGlass = BackgroundBrightnessSampler.isNearlyWhite(
+            in: globalRect,
+            on: screen
+        )
     }
 
     private func initialPromptBarPosition(in bounds: CGSize) -> CGPoint {
