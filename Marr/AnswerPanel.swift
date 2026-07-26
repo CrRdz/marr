@@ -8,8 +8,11 @@ final class AnswerPanelController {
     private let session: ConversationSession
     private let requestCoordinator: ConversationRequestCoordinator
     private let titleCoordinator: ConversationTitleCoordinator
+    private let initialFrame: CGRect
+    private let presentationStartFrame: CGRect
     private(set) var isMinimized = false
-    private let collapsedPanelSize = NSSize(width: 544, height: 468)
+    private var hasPresented = false
+    private let collapsedPanelSize = AnswerPanelConversationLayout.panelSize
 
     convenience init(
         controller: MarrController,
@@ -52,22 +55,27 @@ final class AnswerPanelController {
         let panelSize = collapsedPanelSize
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
-        let margin: CGFloat = 22
-
-        let x = visibleFrame.maxX - panelSize.width - margin
-        let y = visibleFrame.minY + margin
+        let targetFrame = AnswerPanelPlacement.initialFrame(
+            panelSize: panelSize,
+            anchorRect: anchorRect,
+            visibleFrame: visibleFrame
+        )
+        let startFrame = AnswerPanelPlacement.presentationStartFrame(
+            targetFrame: targetFrame,
+            anchorRect: anchorRect
+        )
         let composerRect = CGRect(
-            x: x + (panelSize.width - 420) / 2,
-            y: y + 12,
-            width: 420,
-            height: 46
+            x: targetFrame.midX - AnswerPanelConversationLayout.composerWidth / 2,
+            y: targetFrame.minY + AnswerPanelConversationLayout.windowPadding,
+            width: AnswerPanelConversationLayout.composerWidth,
+            height: AnswerPanelConversationLayout.composerHeight
         )
         let usesRegularComposerGlass = screen.map {
             BackgroundBrightnessSampler.isNearlyWhite(in: composerRect, on: $0)
         } ?? false
 
         let createdWindow = AnswerPanelWindow(
-            contentRect: CGRect(origin: CGPoint(x: x, y: y), size: panelSize),
+            contentRect: startFrame,
             styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -76,7 +84,8 @@ final class AnswerPanelController {
         createdWindow.isOpaque = false
         createdWindow.backgroundColor = .clear
         createdWindow.hasShadow = false
-        createdWindow.isMovableByWindowBackground = false
+        createdWindow.isMovable = true
+        createdWindow.isMovableByWindowBackground = true
         createdWindow.animationBehavior = .none
         createdWindow.isReleasedWhenClosed = false
         createdWindow.level = .screenSaver
@@ -85,6 +94,7 @@ final class AnswerPanelController {
         createdWindow.ignoresMouseEvents = false
         let createdHostingView = NSHostingView(
             rootView: AnswerPanelView(
+                controller: controller,
                 session: createdSession,
                 historyStore: historyStore,
                 requestCoordinator: createdRequestCoordinator,
@@ -104,14 +114,32 @@ final class AnswerPanelController {
         createdWindow.contentView = createdHostingView
 
         window = createdWindow
+        initialFrame = targetFrame
+        presentationStartFrame = startFrame
         createdHostingView.layoutSubtreeIfNeeded()
         createdHostingView.displayIfNeeded()
     }
 
     func show() {
         isMinimized = false
+        guard !hasPresented else {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        hasPresented = true
+        window.alphaValue = 0
+        window.setFrame(presentationStartFrame, display: false)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.24
+            context.allowsImplicitAnimation = true
+            window.animator().alphaValue = 1
+            window.animator().setFrame(initialFrame, display: true)
+        }
     }
 
     func minimize() {
@@ -168,8 +196,159 @@ private struct AnswerPanelActions {
 }
 
 enum AnswerPanelConversationLayout {
+    static let panelSize = NSSize(width: 420, height: 596)
+    static let windowPadding: CGFloat = 12
+    static let surfaceWidth: CGFloat = panelSize.width - windowPadding * 2
+    static let surfaceHeight: CGFloat = panelSize.height - windowPadding * 2
+    static let composerWidth: CGFloat = surfaceWidth - 64
+    static let composerHeight: CGFloat = 40
+    static let assistantTextWidth: CGFloat = composerWidth - 8
     static let surfaceCornerRadius: CGFloat = 24
     static let bottomInset: CGFloat = 16
+}
+
+enum AnswerPanelPlacement {
+    private enum Direction: Int, CaseIterable {
+        case right
+        case left
+        case above
+        case below
+    }
+
+    private struct Candidate {
+        let direction: Direction
+        let score: CGFloat
+        let frame: CGRect
+    }
+
+    static let gap: CGFloat = 14
+    static let screenMargin: CGFloat = 12
+    static let presentationOffset: CGFloat = 14
+
+    static func initialFrame(
+        panelSize: CGSize,
+        anchorRect: CGRect,
+        visibleFrame: CGRect
+    ) -> CGRect {
+        let safeFrame = visibleFrame.insetBy(dx: screenMargin, dy: screenMargin)
+        guard panelSize.width > 0, panelSize.height > 0, !safeFrame.isEmpty else {
+            return CGRect(origin: visibleFrame.origin, size: panelSize)
+        }
+
+        let candidates = Direction.allCases.map { direction in
+            Candidate(
+                direction: direction,
+                score: availableSpace(
+                    for: direction,
+                    anchorRect: anchorRect,
+                    safeFrame: safeFrame
+                ) / requiredSpace(for: direction, panelSize: panelSize),
+                frame: rawFrame(
+                    for: direction,
+                    panelSize: panelSize,
+                    anchorRect: anchorRect
+                )
+            )
+        }
+        let best = candidates.max { lhs, rhs in
+            if abs(lhs.score - rhs.score) > 0.001 {
+                return lhs.score < rhs.score
+            }
+            return lhs.direction.rawValue > rhs.direction.rawValue
+        } ?? candidates[0]
+
+        return clamped(best.frame, to: safeFrame)
+    }
+
+    static func presentationStartFrame(
+        targetFrame: CGRect,
+        anchorRect: CGRect
+    ) -> CGRect {
+        let deltaX = anchorRect.midX - targetFrame.midX
+        let deltaY = anchorRect.midY - targetFrame.midY
+        let distance = hypot(deltaX, deltaY)
+        guard distance > 0 else { return targetFrame }
+
+        return targetFrame.offsetBy(
+            dx: deltaX / distance * presentationOffset,
+            dy: deltaY / distance * presentationOffset
+        )
+    }
+
+    private static func availableSpace(
+        for direction: Direction,
+        anchorRect: CGRect,
+        safeFrame: CGRect
+    ) -> CGFloat {
+        switch direction {
+        case .right:
+            safeFrame.maxX - anchorRect.maxX - gap
+        case .left:
+            anchorRect.minX - safeFrame.minX - gap
+        case .above:
+            safeFrame.maxY - anchorRect.maxY - gap
+        case .below:
+            anchorRect.minY - safeFrame.minY - gap
+        }
+    }
+
+    private static func requiredSpace(
+        for direction: Direction,
+        panelSize: CGSize
+    ) -> CGFloat {
+        switch direction {
+        case .right, .left:
+            panelSize.width
+        case .above, .below:
+            panelSize.height
+        }
+    }
+
+    private static func rawFrame(
+        for direction: Direction,
+        panelSize: CGSize,
+        anchorRect: CGRect
+    ) -> CGRect {
+        let origin: CGPoint
+        switch direction {
+        case .right:
+            origin = CGPoint(
+                x: anchorRect.maxX + gap,
+                y: anchorRect.midY - panelSize.height / 2
+            )
+        case .left:
+            origin = CGPoint(
+                x: anchorRect.minX - gap - panelSize.width,
+                y: anchorRect.midY - panelSize.height / 2
+            )
+        case .above:
+            origin = CGPoint(
+                x: anchorRect.midX - panelSize.width / 2,
+                y: anchorRect.maxY + gap
+            )
+        case .below:
+            origin = CGPoint(
+                x: anchorRect.midX - panelSize.width / 2,
+                y: anchorRect.minY - gap - panelSize.height
+            )
+        }
+        return CGRect(origin: origin, size: panelSize)
+    }
+
+    private static func clamped(_ frame: CGRect, to safeFrame: CGRect) -> CGRect {
+        CGRect(
+            x: min(
+                max(frame.minX, safeFrame.minX),
+                max(safeFrame.minX, safeFrame.maxX - frame.width)
+            ),
+            y: min(
+                max(frame.minY, safeFrame.minY),
+                max(safeFrame.minY, safeFrame.maxY - frame.height)
+            ),
+            width: frame.width,
+            height: frame.height
+        )
+    }
 }
 
 enum AnswerPanelTitleFade {
@@ -191,11 +370,19 @@ private struct ConversationScrollMinYPreferenceKey: PreferenceKey {
 }
 
 enum AnswerPanelEscapeAction: Equatable {
+    case closeSettings
     case closeHistory
     case cancelEditing
     case closePanel
 
-    static func resolve(showsHistory: Bool, isEditing: Bool) -> AnswerPanelEscapeAction {
+    static func resolve(
+        showsSettings: Bool,
+        showsHistory: Bool,
+        isEditing: Bool
+    ) -> AnswerPanelEscapeAction {
+        if showsSettings {
+            return .closeSettings
+        }
         if showsHistory {
             return .closeHistory
         }
@@ -234,7 +421,7 @@ enum AnswerPanelConversationTitle {
 }
 
 private struct AnswerPanelView: View {
-    @Environment(\.openWindow) private var openWindow
+    @ObservedObject var controller: MarrController
     @ObservedObject var session: ConversationSession
     @ObservedObject private var historyStore: ConversationHistoryStore
     let requestCoordinator: ConversationRequestCoordinator
@@ -248,23 +435,26 @@ private struct AnswerPanelView: View {
     @State private var hoveredQuestionTurnID: UUID?
     @State private var editingTurnID: UUID?
     @State private var showsHistoryPanel = false
+    @State private var showsSettingsPanel = false
     @State private var historySearchText = ""
     @State private var panelControlsHovered = false
     @State private var conversationTitleHovered = false
     @State private var conversationScrollMinY: CGFloat = 0
     @State private var hoveredEditTurnID: UUID?
+    @State private var selectedSlashCommandIndex = 0
+    @State private var dismissedSlashMenuInput: String?
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
     @FocusState private var questionFocused: Bool
     @FocusState private var historySearchFocused: Bool
 
-    private let composerWidth: CGFloat = 420
+    private let composerWidth = AnswerPanelConversationLayout.composerWidth
     private let assistantRevealDelay = 0.30
-    private let collapsedContentHeight: CGFloat = 444
     private let conversationHeaderHeight: CGFloat = 78
-    private let primarySurfaceHeight: CGFloat = 362
+    private let primarySurfaceHeight = AnswerPanelConversationLayout.surfaceHeight
 
     init(
+        controller: MarrController,
         session: ConversationSession,
         historyStore: ConversationHistoryStore,
         requestCoordinator: ConversationRequestCoordinator,
@@ -272,6 +462,7 @@ private struct AnswerPanelView: View {
         usesRegularComposerGlass: Bool,
         actions: AnswerPanelActions
     ) {
+        self.controller = controller
         self.session = session
         self.requestCoordinator = requestCoordinator
         self.titleCoordinator = titleCoordinator
@@ -282,9 +473,9 @@ private struct AnswerPanelView: View {
 
     var body: some View {
         fixedAnswerStack
-        .frame(width: 520)
+        .frame(width: AnswerPanelConversationLayout.surfaceWidth)
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .padding(12)
+        .padding(AnswerPanelConversationLayout.windowPadding)
         .onAppear {
             DispatchQueue.main.async {
                 questionFocused = true
@@ -296,17 +487,83 @@ private struct AnswerPanelView: View {
             titleCoordinator.generateIfNeeded()
         }
         .onChange(of: session.focusRequestID) { _, _ in
-            if !showsHistoryPanel {
+            if !showsHistoryPanel, !showsSettingsPanel {
                 questionFocused = true
+            }
+        }
+        .onChange(of: question) { _, nextQuestion in
+            selectedSlashCommandIndex = 0
+            if dismissedSlashMenuInput != nextQuestion {
+                dismissedSlashMenuInput = nil
             }
         }
         .onExitCommand(perform: handleEscape)
     }
 
     private var fixedAnswerStack: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            primarySurface
+        primarySurface
+        .frame(
+            width: AnswerPanelConversationLayout.surfaceWidth,
+            height: AnswerPanelConversationLayout.surfaceHeight,
+            alignment: .bottom
+        )
+        .animation(.spring(response: 0.30, dampingFraction: 0.88), value: showsHistoryPanel)
+        .animation(.spring(response: 0.30, dampingFraction: 0.88), value: showsSettingsPanel)
+    }
 
+    private var primarySurface: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if showsSettingsPanel {
+                    settingsHeader
+                        .transition(.opacity)
+                } else if showsHistoryPanel {
+                    historyHeader
+                        .transition(.opacity)
+                } else {
+                    conversationHeader
+                        .transition(.opacity)
+                }
+            }
+
+            Group {
+                if showsSettingsPanel {
+                    settingsContent
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else if showsHistoryPanel {
+                    historyContent
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else {
+                    conversationScroll
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if !showsSettingsPanel {
+                composerFooter
+            }
+        }
+        .frame(
+            width: AnswerPanelConversationLayout.surfaceWidth,
+            height: primarySurfaceHeight,
+            alignment: .top
+        )
+        .marrGlassSurface(cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius, isClear: true)
+        .overlay(
+            RoundedRectangle(
+                cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
+                style: .continuous
+            )
+            .stroke(.white.opacity(0.18), lineWidth: 0.8)
+            .allowsHitTesting(false)
+        )
+        .clipped()
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var composerFooter: some View {
+        VStack(spacing: 7) {
             if !showsHistoryPanel, !session.pendingImageIDs.isEmpty {
                 Label(
                     "\(session.pendingImageIDs.count) screenshot\(session.pendingImageIDs.count == 1 ? "" : "s") attached to the next question",
@@ -327,44 +584,43 @@ private struct AnswerPanelView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(width: 520, height: collapsedContentHeight, alignment: .bottom)
-        .animation(.spring(response: 0.30, dampingFraction: 0.88), value: showsHistoryPanel)
+        .padding(.top, 8)
+        .padding(.bottom, AnswerPanelConversationLayout.windowPadding)
+        .frame(maxWidth: .infinity)
+        .zIndex(showsSlashCommandMenu ? 10 : 1)
     }
 
-    private var primarySurface: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Group {
-                if showsHistoryPanel {
-                    historyHeader
-                        .transition(.opacity)
-                } else {
-                    conversationHeader
-                        .transition(.opacity)
-                }
-            }
+    private var settingsHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            panelControls
 
-            Group {
-                if showsHistoryPanel {
-                    historyContent
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                } else {
-                    conversationScroll
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+            HStack(spacing: 8) {
+                Button {
+                    hideSettings()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 24, height: 24)
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary.opacity(0.86))
+                .help("Back to conversation")
+
+                Text("Settings")
+                    .font(.system(size: 18, weight: .regular, design: .default))
+                    .foregroundStyle(.primary)
+
+                Spacer()
             }
         }
-        .frame(width: composerWidth + 24, height: primarySurfaceHeight, alignment: .top)
-        .marrGlassSurface(cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius, isClear: true)
-        .overlay(
-            RoundedRectangle(
-                cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
-                style: .continuous
-            )
-            .stroke(.white.opacity(0.18), lineWidth: 0.8)
-            .allowsHitTesting(false)
-        )
-        .clipped()
-        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(height: conversationHeaderHeight, alignment: .topLeading)
+    }
+
+    private var settingsContent: some View {
+        AnswerPanelSettingsView(controller: controller)
     }
 
     private var historyHeader: some View {
@@ -384,7 +640,7 @@ private struct AnswerPanelView: View {
                 .help("Back to conversation")
 
                 Text("History")
-                    .font(MarrTypography.display(size: 18, weight: .semibold))
+                    .font(.system(size: 18, weight: .regular, design: .default))
                     .foregroundStyle(.primary)
 
                 Spacer()
@@ -439,13 +695,16 @@ private struct AnswerPanelView: View {
             Spacer(minLength: 0)
 
             Button {
-                openWindow(id: "marr-settings")
-                NSApp.activate(ignoringOtherApps: true)
+                if showsSettingsPanel {
+                    hideSettings()
+                } else {
+                    showSettings()
+                }
             } label: {
-                PanelUtilityButtonLabel(symbol: "gearshape")
+                PanelUtilityButtonLabel(symbol: showsSettingsPanel ? "gearshape.fill" : "gearshape")
             }
             .buttonStyle(.plain)
-            .help("Settings")
+            .help(showsSettingsPanel ? "Back to conversation" : "Settings")
         }
         .frame(maxWidth: .infinity)
     }
@@ -465,51 +724,50 @@ private struct AnswerPanelView: View {
 
     private var conversationScroll: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    GeometryReader { geometry in
-                        Color.clear.preference(
-                            key: ConversationScrollMinYPreferenceKey.self,
-                            value: geometry.frame(in: .named("AnswerPanelConversationScroll")).minY
-                        )
-                    }
-                    .frame(height: 0)
-
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(session.turns) { turn in
-                            turnView(turn, isCompact: false, showsUserMessage: true)
-                                .id(turn.id)
+            GeometryReader { availableSpace in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ConversationScrollMinYPreferenceKey.self,
+                                value: geometry.frame(in: .named("AnswerPanelConversationScroll")).minY
+                            )
                         }
-                    }
+                        .frame(height: 0)
 
-                    Color.clear
-                        .frame(height: AnswerPanelConversationLayout.bottomInset)
-                        .id(ConversationScrollAnchor.bottom)
+                        LazyVStack(alignment: .leading, spacing: 14) {
+                            ForEach(session.turns) { turn in
+                                turnView(turn, isCompact: false, showsUserMessage: true)
+                                    .id(turn.id)
+                            }
+                        }
+
+                        Color.clear
+                            .frame(height: AnswerPanelConversationLayout.bottomInset)
+                            .id(ConversationScrollAnchor.bottom)
+                    }
+                    .padding(.top, 14)
+                    .frame(width: composerWidth, alignment: .topLeading)
+                    .frame(minHeight: availableSpace.size.height, alignment: .bottom)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.top, 14)
-                .frame(width: composerWidth, alignment: .topLeading)
-                .frame(
-                    minHeight: max(0, primarySurfaceHeight - conversationHeaderHeight),
-                    alignment: .bottom
-                )
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .coordinateSpace(name: "AnswerPanelConversationScroll")
-            .onPreferenceChange(ConversationScrollMinYPreferenceKey.self) { nextMinY in
-                conversationScrollMinY = nextMinY
-            }
-            .onAppear {
-                guard !session.turns.isEmpty else { return }
-                lastAutoScrolledTurnCount = session.turns.count
-                DispatchQueue.main.async {
-                    proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
+                .coordinateSpace(name: "AnswerPanelConversationScroll")
+                .onPreferenceChange(ConversationScrollMinYPreferenceKey.self) { nextMinY in
+                    conversationScrollMinY = nextMinY
                 }
-            }
-            .onChange(of: session.turns.count) { _, nextCount in
-                guard nextCount > lastAutoScrolledTurnCount else { return }
-                lastAutoScrolledTurnCount = nextCount
-                DispatchQueue.main.async {
-                    proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
+                .onAppear {
+                    guard !session.turns.isEmpty else { return }
+                    lastAutoScrolledTurnCount = session.turns.count
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
+                    }
+                }
+                .onChange(of: session.turns.count) { _, nextCount in
+                    guard nextCount > lastAutoScrolledTurnCount else { return }
+                    lastAutoScrolledTurnCount = nextCount
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(ConversationScrollAnchor.bottom, anchor: .bottom)
+                    }
                 }
             }
         }
@@ -525,7 +783,7 @@ private struct AnswerPanelView: View {
                     .frame(width: 1, height: 20)
 
                 Text(conversationDisplayTitle)
-                    .font(MarrTypography.display(size: 16.5, weight: .semibold))
+                    .font(.system(size: 16.5, weight: .regular, design: .default))
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -574,14 +832,20 @@ private struct AnswerPanelView: View {
             }
 
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 10)
-        .padding(.vertical, 6)
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .padding(.vertical, 4)
         .frame(width: composerWidth)
-        .frame(minHeight: 46)
-        .marrGlassSurface(cornerRadius: 23, isClear: !usesRegularComposerGlass)
+        .frame(minHeight: AnswerPanelConversationLayout.composerHeight)
+        .marrGlassSurface(
+            cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+            isClear: !usesRegularComposerGlass
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
+            RoundedRectangle(
+                cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+                style: .continuous
+            )
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
                 .allowsHitTesting(false)
         )
@@ -602,12 +866,12 @@ private struct AnswerPanelView: View {
                         turnScreenshotAttachments(turn)
 
                         Text(turn.question)
-                            .font(MarrTypography.body(size: 13, weight: .medium))
+                            .font(MarrTypography.body(size: 12.5, weight: .medium))
                             .foregroundStyle(.primary)
                             .textSelection(.enabled)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(bubbleTint.opacity(0.92), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .background(bubbleTint.opacity(0.92), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .foregroundStyle(bubbleForegroundColor)
                             .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 3)
 
@@ -635,14 +899,12 @@ private struct AnswerPanelView: View {
                     errorMessage(turn)
                         .transition(.opacity)
                 } else {
-                    HStack(alignment: .top) {
-                        assistantMessage(turn, isCompact: isCompact)
-                        Spacer(minLength: 72)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .opacity
-                    ))
+                    assistantMessage(turn, isCompact: isCompact)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity
+                        ))
                 }
             }
         }
@@ -662,13 +924,13 @@ private struct AnswerPanelView: View {
                             .interpolation(.high)
                             .aspectRatio(contentMode: .fill)
                             .frame(width: size.width, height: size.height)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .stroke(.white.opacity(0.22), lineWidth: 0.8)
                                     .allowsHitTesting(false)
                             )
-                            .shadow(color: .black.opacity(0.13), radius: 8, x: 0, y: 4)
+                            .shadow(color: .black.opacity(0.11), radius: 6, x: 0, y: 3)
                     }
                 }
             }
@@ -676,7 +938,7 @@ private struct AnswerPanelView: View {
     }
 
     private func screenshotThumbnailSize(for image: NSImage) -> CGSize {
-        let maximum = CGSize(width: 280, height: 124)
+        let maximum = CGSize(width: 220, height: 96)
         guard image.size.width > 0, image.size.height > 0 else { return maximum }
         let scale = min(maximum.width / image.size.width, maximum.height / image.size.height, 1)
         return CGSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -729,10 +991,11 @@ private struct AnswerPanelView: View {
         } else {
             MarkdownResponseView(source: turn.answer.isEmpty ? " " : turn.answer)
                 .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .marrGlassSurface(cornerRadius: 15, isClear: true)
-                .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
+                .frame(
+                    width: AnswerPanelConversationLayout.assistantTextWidth,
+                    alignment: .leading
+                )
+                .padding(.vertical, 4)
         }
     }
 
@@ -757,22 +1020,34 @@ private struct AnswerPanelView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             if editingTurnID != nil {
                 Image(systemName: "pencil")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 16)
+                    .frame(width: 14)
             }
 
             TextField(editingTurnID == nil ? "Ask a follow-up" : "Edit latest message", text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 15))
+                .font(MarrTypography.body(size: 13.5))
                 .lineLimit(1...2)
                 .foregroundStyle(.primary)
                 .focused($questionFocused)
                 .onSubmit {
                     sendCurrentQuestion()
+                }
+                .onKeyPress(.upArrow) {
+                    moveSlashCommandSelection(by: -1)
+                }
+                .onKeyPress(.downArrow) {
+                    moveSlashCommandSelection(by: 1)
+                }
+                .onKeyPress(.return) {
+                    selectHighlightedSlashCommand()
+                }
+                .onKeyPress(.escape) {
+                    dismissSlashCommandMenu()
                 }
 
             if editingTurnID != nil {
@@ -792,25 +1067,129 @@ private struct AnswerPanelView: View {
                 sendCurrentQuestion()
             } label: {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(width: 34, height: 34)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .frame(width: 28, height: 28)
             }
             .sendCircleButton(isEnabled: canSend, color: bubbleTint, foregroundColor: bubbleForegroundColor)
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSend)
             .help("Send")
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 7)
-        .padding(.vertical, 6)
+        .padding(.leading, 12)
+        .padding(.trailing, 5)
+        .padding(.vertical, 4)
         .frame(width: composerWidth)
-        .frame(minHeight: 46)
-        .marrGlassSurface(cornerRadius: 23, isClear: !usesRegularComposerGlass)
+        .frame(minHeight: AnswerPanelConversationLayout.composerHeight)
+        .marrGlassSurface(
+            cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+            isClear: !usesRegularComposerGlass
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
+            RoundedRectangle(
+                cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+                style: .continuous
+            )
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
         )
         .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
+        .overlay(alignment: .top) {
+            if showsSlashCommandMenu {
+                slashCommandMenu
+                    .offset(y: AnswerPanelConversationLayout.composerHeight + 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .zIndex(showsSlashCommandMenu ? 10 : 0)
+        .animation(.easeOut(duration: 0.16), value: showsSlashCommandMenu)
+    }
+
+    private var slashCommandMenu: some View {
+        VStack(spacing: 2) {
+            ForEach(Array(slashCommandMatches.enumerated()), id: \.element.id) { index, command in
+                Button {
+                    chooseSlashCommand(command)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: command.symbol)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(selectedAccent.color)
+                            .frame(width: 26, height: 26)
+                            .background(selectedAccent.color.opacity(0.11), in: RoundedRectangle(cornerRadius: 7))
+
+                        Text(command.invocation)
+                            .font(MarrTypography.mono(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 82, alignment: .leading)
+
+                        Text(command.summary)
+                            .font(MarrTypography.body(size: 12.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(height: 40)
+                    .background(
+                        index == selectedSlashCommandIndex
+                            ? selectedAccent.color.opacity(0.14)
+                            : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovering in
+                    if isHovering {
+                        selectedSlashCommandIndex = index
+                    }
+                }
+                .accessibilityLabel("\(command.invocation), \(command.summary)")
+            }
+        }
+        .padding(6)
+        .frame(width: composerWidth)
+        .marrGlassSurface(cornerRadius: 16, isClear: !usesRegularComposerGlass)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.20), lineWidth: 0.8)
+                .allowsHitTesting(false)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 9)
+    }
+
+    private var slashCommandMatches: [ConversationSlashCommand] {
+        ConversationSlashCommand.matching(question)
+    }
+
+    private var showsSlashCommandMenu: Bool {
+        !slashCommandMatches.isEmpty && dismissedSlashMenuInput != question
+    }
+
+    private func moveSlashCommandSelection(by offset: Int) -> KeyPress.Result {
+        guard showsSlashCommandMenu else { return .ignored }
+        let count = slashCommandMatches.count
+        selectedSlashCommandIndex = (selectedSlashCommandIndex + offset + count) % count
+        return .handled
+    }
+
+    private func selectHighlightedSlashCommand() -> KeyPress.Result {
+        guard showsSlashCommandMenu else { return .ignored }
+        let index = min(selectedSlashCommandIndex, slashCommandMatches.count - 1)
+        chooseSlashCommand(slashCommandMatches[index])
+        return .handled
+    }
+
+    private func dismissSlashCommandMenu() -> KeyPress.Result {
+        guard showsSlashCommandMenu else { return .ignored }
+        dismissedSlashMenuInput = question
+        return .handled
+    }
+
+    private func chooseSlashCommand(_ command: ConversationSlashCommand) {
+        question = command.invocation + " "
+        dismissedSlashMenuInput = nil
+        questionFocused = true
     }
 
     private var canSend: Bool {
@@ -838,6 +1217,7 @@ private struct AnswerPanelView: View {
         questionFocused = false
         historySearchFocused = false
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showsSettingsPanel = false
             showsHistoryPanel = true
         }
         DispatchQueue.main.async {
@@ -858,11 +1238,34 @@ private struct AnswerPanelView: View {
         }
     }
 
+    private func showSettings() {
+        questionFocused = false
+        historySearchFocused = false
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showsHistoryPanel = false
+            historySearchText = ""
+            showsSettingsPanel = true
+        }
+    }
+
+    private func hideSettings() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+            showsSettingsPanel = false
+        }
+        DispatchQueue.main.async {
+            guard !showsSettingsPanel else { return }
+            questionFocused = true
+        }
+    }
+
     private func handleEscape() {
         switch AnswerPanelEscapeAction.resolve(
+            showsSettings: showsSettingsPanel,
             showsHistory: showsHistoryPanel,
             isEditing: editingTurnID != nil
         ) {
+        case .closeSettings:
+            hideSettings()
         case .closeHistory:
             hideHistorySearch()
         case .cancelEditing:

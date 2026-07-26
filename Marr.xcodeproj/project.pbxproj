@@ -23,6 +23,7 @@
 		1A0000222C00000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000242C00000000000001 /* SettingsView.swift */; };
 		1A0000232C00000000000001 /* MarrSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000252C00000000000001 /* MarrSurface.swift */; };
 		1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000272C00000000000001 /* MarrBubbleColor.swift */; };
+		1A0000282C00000000000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000292C00000000000001 /* OnboardingView.swift */; };
 		1D0000012C00000000000001 /* ConversationRequestCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */; };
 		1D0000022C00000000000001 /* TranslationOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000112C00000000000001 /* TranslationOverlay.swift */; };
 		1D0000032C00000000000001 /* TranslationRecognition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000122C00000000000001 /* TranslationRecognition.swift */; };
@@ -30,6 +31,7 @@
 		1D0000052C00000000000001 /* TranslationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000142C00000000000001 /* TranslationRenderer.swift */; };
 		1D0000062C00000000000001 /* BackgroundOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000152C00000000000001 /* BackgroundOperation.swift */; };
 		1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000102C00000000000001 /* ConversationHarnessTests.swift */; };
+		1B0000022C00000000000001 /* OnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000112C00000000000001 /* OnboardingTests.swift */; };
 		1C0000012C00000000000001 /* MarrCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000102C00000000000001 /* MarrCore */; };
 		1C0000022C00000000000001 /* MarrNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000112C00000000000001 /* MarrNetworking */; };
 		1C0000032C00000000000001 /* MarrSettings in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000122C00000000000001 /* MarrSettings */; };
@@ -68,6 +70,7 @@
 		1A0000242C00000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A0000252C00000000000001 /* MarrSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrSurface.swift; sourceTree = "<group>"; };
 		1A0000272C00000000000001 /* MarrBubbleColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrBubbleColor.swift; sourceTree = "<group>"; };
+		1A0000292C00000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationRequestCoordinator.swift; sourceTree = "<group>"; };
 		1D0000112C00000000000001 /* TranslationOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationOverlay.swift; sourceTree = "<group>"; };
 		1D0000122C00000000000001 /* TranslationRecognition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRecognition.swift; sourceTree = "<group>"; };
@@ -75,6 +78,7 @@
 		1D0000142C00000000000001 /* TranslationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRenderer.swift; sourceTree = "<group>"; };
 		1D0000152C00000000000001 /* BackgroundOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundOperation.swift; sourceTree = "<group>"; };
 		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
+		1B0000112C00000000000001 /* OnboardingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingTests.swift; sourceTree = "<group>"; };
 		1B0000202C00000000000001 /* MarrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MarrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -133,6 +137,7 @@
 				1A00001F2C00000000000001 /* MarrTypography.swift */,
 				1A0000252C00000000000001 /* MarrSurface.swift */,
 				1A0000272C00000000000001 /* MarrBubbleColor.swift */,
+				1A0000292C00000000000001 /* OnboardingView.swift */,
 				1A0000242C00000000000001 /* SettingsView.swift */,
 				1A0000132C00000000000001 /* PickedImage.swift */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
@@ -155,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				1B0000102C00000000000001 /* ConversationHarnessTests.swift */,
+				1B0000112C00000000000001 /* OnboardingTests.swift */,
 			);
 			path = MarrTests;
 			sourceTree = "<group>";
@@ -284,6 +290,7 @@
 				1A00000F2C00000000000001 /* MarrTypography.swift in Sources */,
 				1A0000232C00000000000001 /* MarrSurface.swift in Sources */,
 				1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */,
+				1A0000282C00000000000001 /* OnboardingView.swift in Sources */,
 				1A0000222C00000000000001 /* SettingsView.swift in Sources */,
 				1A0000042C00000000000001 /* PickedImage.swift in Sources */,
 			);
@@ -294,6 +301,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */,
+				1B0000022C00000000000001 /* OnboardingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

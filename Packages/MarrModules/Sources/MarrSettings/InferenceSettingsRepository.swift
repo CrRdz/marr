@@ -48,6 +48,34 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
     )
 }
 
+public struct InferenceSecretsSnapshot: Equatable, Sendable {
+    public var openAIAPIKey: String
+    public var gatewayAPIKey: String
+    public var customHeadersText: String
+
+    public init(
+        openAIAPIKey: String,
+        gatewayAPIKey: String,
+        customHeadersText: String
+    ) {
+        self.openAIAPIKey = openAIAPIKey
+        self.gatewayAPIKey = gatewayAPIKey
+        self.customHeadersText = customHeadersText
+    }
+
+    public static let empty = InferenceSecretsSnapshot(
+        openAIAPIKey: "",
+        gatewayAPIKey: "",
+        customHeadersText: ""
+    )
+}
+
+public enum InferenceCredential: CaseIterable, Hashable, Sendable {
+    case openAIAPIKey
+    case gatewayAPIKey
+    case customHeaders
+}
+
 public protocol SettingsKeyValueStore: Sendable {
     func string(forKey key: String) -> String?
     func integer(forKey key: String) -> Int?
@@ -80,7 +108,7 @@ public final class UserDefaultsSettingsStore: SettingsKeyValueStore, @unchecked 
 public struct KeychainSecretStore: SecretStore {
     private let service: String
 
-    public init(service: String = "com.marr.Marr.inference") {
+    public init(service: String = "com.marr.Marr.credentials.v2") {
         self.service = service
     }
 
@@ -151,6 +179,9 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
         static let openAIAPIKey = "openai-api-key"
         static let gatewayAPIKey = "gateway-api-key"
         static let customHeaders = "custom-headers"
+        static let openAIAPIKeyConfigured = "inference.credentials.v2.openAI.configured"
+        static let gatewayAPIKeyConfigured = "inference.credentials.v2.gateway.configured"
+        static let customHeadersConfigured = "inference.credentials.v2.customHeaders.configured"
     }
 
     private let values: any SettingsKeyValueStore
@@ -165,29 +196,102 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
     }
 
     public func load() throws -> InferenceSettingsSnapshot {
+        let configuration = loadConfiguration()
+        let secrets = try loadSecrets()
+        return InferenceSettingsSnapshot(
+            provider: configuration.provider,
+            openAIAPIKey: secrets.openAIAPIKey,
+            gatewayBaseURL: configuration.gatewayBaseURL,
+            gatewayAPIKey: secrets.gatewayAPIKey,
+            gatewayAuthScheme: configuration.gatewayAuthScheme,
+            gatewayAPIFormat: configuration.gatewayAPIFormat,
+            customHeadersText: secrets.customHeadersText,
+            model: configuration.model,
+            maximumOutputTokens: configuration.maximumOutputTokens
+        )
+    }
+
+    public func loadConfiguration() -> InferenceSettingsSnapshot {
         let fallback = InferenceSettingsSnapshot.default
         return InferenceSettingsSnapshot(
             provider: values.string(forKey: Key.provider).flatMap(InferenceProvider.init(rawValue:)) ?? fallback.provider,
-            openAIAPIKey: try secrets.string(for: Key.openAIAPIKey) ?? "",
+            openAIAPIKey: "",
             gatewayBaseURL: values.string(forKey: Key.gatewayBaseURL) ?? fallback.gatewayBaseURL,
-            gatewayAPIKey: try secrets.string(for: Key.gatewayAPIKey) ?? "",
+            gatewayAPIKey: "",
             gatewayAuthScheme: values.string(forKey: Key.gatewayAuthScheme).flatMap(GatewayAuthScheme.init(rawValue:)) ?? fallback.gatewayAuthScheme,
             gatewayAPIFormat: values.string(forKey: Key.gatewayAPIFormat).flatMap(GatewayAPIFormat.init(rawValue:)) ?? fallback.gatewayAPIFormat,
-            customHeadersText: try secrets.string(for: Key.customHeaders) ?? "",
+            customHeadersText: "",
             model: values.string(forKey: Key.model) ?? fallback.model,
             maximumOutputTokens: values.integer(forKey: Key.maximumOutputTokens) ?? fallback.maximumOutputTokens
         )
     }
 
+    public func loadSecrets() throws -> InferenceSecretsSnapshot {
+        InferenceSecretsSnapshot(
+            openAIAPIKey: try credential(.openAIAPIKey) ?? "",
+            gatewayAPIKey: try credential(.gatewayAPIKey) ?? "",
+            customHeadersText: try credential(.customHeaders) ?? ""
+        )
+    }
+
+    public func credentialIsStored(_ credential: InferenceCredential) -> Bool {
+        values.integer(forKey: configuredKey(for: credential)) == 1
+    }
+
+    public func credential(_ credential: InferenceCredential) throws -> String? {
+        let value = try secrets.string(for: account(for: credential))
+        values.set(value?.isEmpty == false ? 1 : 0, forKey: configuredKey(for: credential))
+        return value
+    }
+
+    public func setCredential(_ value: String, for credential: InferenceCredential) throws {
+        try secrets.set(value, for: account(for: credential))
+        values.set(value.isEmpty ? 0 : 1, forKey: configuredKey(for: credential))
+    }
+
     public func save(_ settings: InferenceSettingsSnapshot) throws {
+        saveConfiguration(settings)
+        try saveSecrets(InferenceSecretsSnapshot(
+            openAIAPIKey: settings.openAIAPIKey,
+            gatewayAPIKey: settings.gatewayAPIKey,
+            customHeadersText: settings.customHeadersText
+        ))
+    }
+
+    public func saveConfiguration(_ settings: InferenceSettingsSnapshot) {
         values.set(settings.provider.rawValue, forKey: Key.provider)
         values.set(settings.gatewayBaseURL, forKey: Key.gatewayBaseURL)
         values.set(settings.gatewayAuthScheme.rawValue, forKey: Key.gatewayAuthScheme)
         values.set(settings.gatewayAPIFormat.rawValue, forKey: Key.gatewayAPIFormat)
         values.set(settings.model, forKey: Key.model)
         values.set(settings.maximumOutputTokens, forKey: Key.maximumOutputTokens)
-        try secrets.set(settings.openAIAPIKey, for: Key.openAIAPIKey)
-        try secrets.set(settings.gatewayAPIKey, for: Key.gatewayAPIKey)
-        try secrets.set(settings.customHeadersText, for: Key.customHeaders)
+    }
+
+    public func saveSecrets(_ settings: InferenceSecretsSnapshot) throws {
+        try setCredential(settings.openAIAPIKey, for: .openAIAPIKey)
+        try setCredential(settings.gatewayAPIKey, for: .gatewayAPIKey)
+        try setCredential(settings.customHeadersText, for: .customHeaders)
+    }
+
+    private func account(for credential: InferenceCredential) -> String {
+        switch credential {
+        case .openAIAPIKey:
+            Key.openAIAPIKey
+        case .gatewayAPIKey:
+            Key.gatewayAPIKey
+        case .customHeaders:
+            Key.customHeaders
+        }
+    }
+
+    private func configuredKey(for credential: InferenceCredential) -> String {
+        switch credential {
+        case .openAIAPIKey:
+            Key.openAIAPIKeyConfigured
+        case .gatewayAPIKey:
+            Key.gatewayAPIKeyConfigured
+        case .customHeaders:
+            Key.customHeadersConfigured
+        }
     }
 }

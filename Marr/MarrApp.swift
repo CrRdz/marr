@@ -77,6 +77,7 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         bootstrapApplicationIfNeeded()
         suppressLegacyInitialSettingsWindow()
+        showOnboardingIfNeeded()
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -105,6 +106,18 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         ProcessInfo.processInfo.disableAutomaticTermination("Marr runs from the menu bar")
         installStatusItem()
         controller.installHotKeyIfNeeded()
+    }
+
+    private func showOnboardingIfNeeded() {
+        let environment = ProcessInfo.processInfo.environment
+        let isRunningTests = environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCInjectBundleInto"] != nil
+        guard !isRunningTests, MarrOnboarding.isRequired() else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            MarrOnboardingPresenter.shared.show(controller: self.controller)
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

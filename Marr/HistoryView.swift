@@ -18,42 +18,32 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            header
-            searchField
+        Form {
+            Section {
+                historyToolbar
+            }
 
-            if store.conversations.isEmpty {
-                emptyState(
-                    title: "No History",
-                    systemImage: "clock.arrow.circlepath",
-                    description: "Captured conversations will appear here."
-                )
-            } else if filteredConversations.isEmpty {
-                emptyState(
-                    title: "No Matches",
-                    systemImage: "magnifyingglass",
-                    description: "Try a different search."
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredConversations) { conversation in
-                            historyListRow(conversation)
-                            if conversation.id != filteredConversations.last?.id {
-                                Divider()
-                                    .padding(.leading, 24)
-                            }
-                        }
+            Section("Conversations") {
+                if store.conversations.isEmpty {
+                    emptyState(
+                        title: "No History",
+                        systemImage: "clock.arrow.circlepath",
+                        description: "Captured conversations will appear here."
+                    )
+                } else if filteredConversations.isEmpty {
+                    emptyState(
+                        title: "No Matches",
+                        systemImage: "magnifyingglass",
+                        description: "Try a different search."
+                    )
+                } else {
+                    ForEach(filteredConversations) { conversation in
+                        historyListRow(conversation)
                     }
                 }
-                .scrollIndicators(.automatic)
             }
         }
-        .padding(.horizontal, 34)
-        .padding(.top, 34)
-        .padding(.bottom, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .formStyle(.grouped)
         .tint(selectedAccentColor)
         .accentColor(selectedAccentColor)
         .onAppear {
@@ -89,56 +79,62 @@ struct HistoryView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("History")
-                .font(MarrTypography.display(size: 30, weight: .semibold))
-                .foregroundStyle(.primary)
+    private var historyToolbar: some View {
+        HStack(spacing: 12) {
+            searchField
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Text("\(store.conversations.count) saved")
-                .font(MarrTypography.body(size: 13, weight: .medium))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
 
             Button(role: .destructive) {
                 isConfirmingClearAll = true
             } label: {
                 Label("Clear All", systemImage: "trash")
             }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
             .disabled(store.conversations.isEmpty)
         }
+        .padding(.vertical, 2)
     }
 
     private var searchField: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(.secondary)
 
             TextField("Search history...", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 17))
+                .font(.system(size: 13, weight: .regular))
 
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 24, height: 24)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("Clear search")
             }
         }
-        .padding(.horizontal, 16)
-        .frame(height: 48)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 9)
+        .frame(minWidth: 190, idealWidth: 240, maxWidth: 280)
+        .frame(height: 28)
+        .background(
+            Color(nsColor: .textBackgroundColor).opacity(0.82),
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.separator.opacity(0.78), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(.separator.opacity(0.68), lineWidth: 0.7)
         )
     }
 
@@ -149,36 +145,36 @@ struct HistoryView: View {
             selectedConversationID = conversation.id
             controller.openHistoryConversation(conversation)
         } label: {
-            HStack(spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(displayTitle(for: conversation))
-                        .font(MarrTypography.body(size: 16, weight: .medium))
+                        .font(.system(size: 13.5, weight: .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Text(metadata(for: conversation))
-                        .font(MarrTypography.caption())
+                        .font(.system(size: 11.5, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 12)
 
                 Text(dateLabel(for: conversation.updatedAt))
-                    .font(MarrTypography.body(size: 14))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .layoutPriority(1)
             }
-            .padding(.horizontal, 24)
-            .frame(height: 64)
+            .padding(.horizontal, 6)
+            .frame(minHeight: 46)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isActive ? selectedAccentColor.opacity(0.11) : .clear)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isActive ? selectedAccentColor.opacity(0.09) : .clear)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { isHovering in
@@ -192,12 +188,19 @@ struct HistoryView: View {
     }
 
     private func emptyState(title: String, systemImage: String, description: String) -> some View {
-        ContentUnavailableView(
-            title,
-            systemImage: systemImage,
-            description: Text(description)
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        VStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(.secondary)
+
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+
+            Text(description)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 220, alignment: .center)
     }
 
     private var filteredConversations: [ConversationHistoryRecord] {

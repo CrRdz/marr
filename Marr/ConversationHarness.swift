@@ -1269,6 +1269,81 @@ struct ConversationContextPolicy: Equatable, Sendable {
     static let `default` = ConversationContextPolicy()
 }
 
+enum ConversationSlashCommand: String, CaseIterable, Identifiable, Sendable {
+    case explain
+    case translate
+    case summarize
+    case extract
+    case steps
+
+    var id: String { rawValue }
+
+    var invocation: String { "/\(rawValue)" }
+
+    var symbol: String {
+        switch self {
+        case .explain: "text.magnifyingglass"
+        case .translate: "translate"
+        case .summarize: "text.alignleft"
+        case .extract: "doc.text.viewfinder"
+        case .steps: "list.number"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .explain: "Explain what is shown"
+        case .translate: "Translate visible content"
+        case .summarize: "Give a concise summary"
+        case .extract: "Extract all readable text"
+        case .steps: "Turn it into action steps"
+        }
+    }
+
+    static func matching(_ input: String) -> [ConversationSlashCommand] {
+        guard input.hasPrefix("/") else { return [] }
+        let query = String(input.dropFirst())
+        guard !query.contains(where: \.isWhitespace) else { return [] }
+        return allCases.filter { $0.rawValue.hasPrefix(query.lowercased()) }
+    }
+
+    static func expandedPrompt(for rawInput: String) -> String {
+        let input = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = input.split(maxSplits: 1, whereSeparator: \.isWhitespace)
+        guard
+            let token = parts.first,
+            token.hasPrefix("/"),
+            let command = ConversationSlashCommand(
+                rawValue: String(token.dropFirst()).lowercased()
+            )
+        else {
+            return input
+        }
+
+        let additionalInstruction = parts.count > 1
+            ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            : ""
+        let prompt = command.basePrompt
+        guard !additionalInstruction.isEmpty else { return prompt }
+        return "\(prompt)\n\nAdditional instruction: \(additionalInstruction)"
+    }
+
+    private var basePrompt: String {
+        switch self {
+        case .explain:
+            return "Explain the latest screenshot or referenced content clearly. Identify the important elements, what they mean, and any context needed to understand them."
+        case .translate:
+            return "Translate the latest screenshot or referenced content. If an additional instruction specifies a target language, use it; otherwise translate into Simplified Chinese. Preserve names, numbers, code, and structure where practical."
+        case .summarize:
+            return "Summarize the latest screenshot or referenced content concisely. Lead with the main point, then include only the most important supporting details."
+        case .extract:
+            return "Extract all readable text from the latest screenshot or referenced content. Preserve the original reading order and useful structure, and do not add commentary."
+        case .steps:
+            return "Turn the latest screenshot or referenced content into a short, ordered list of practical next steps. Call out any missing information or risks that affect the steps."
+        }
+    }
+}
+
 struct ConversationContextBuilder: Sendable {
     static let systemPrompt = """
     You answer questions about screenshots. Answer the latest user question directly and use earlier turns only when they are relevant.
@@ -1309,7 +1384,7 @@ struct ConversationContextBuilder: Sendable {
             var userContent: [VisionContent] = turn.imageIDs.compactMap { imageID in
                 images[imageID].map(VisionContent.image)
             }
-            userContent.append(.text(turn.question))
+            userContent.append(.text(ConversationSlashCommand.expandedPrompt(for: turn.question)))
             messages.append(VisionMessage(role: .user, content: userContent))
 
             if turn.id != target.id, !turn.answer.isEmpty {

@@ -38,16 +38,56 @@ final class ConversationHarnessTests: XCTestCase {
 
     func testAnswerPanelEscapeClosesNestedStateBeforePanel() {
         XCTAssertEqual(
-            AnswerPanelEscapeAction.resolve(showsHistory: true, isEditing: true),
+            AnswerPanelEscapeAction.resolve(
+                showsSettings: true,
+                showsHistory: true,
+                isEditing: true
+            ),
+            .closeSettings
+        )
+        XCTAssertEqual(
+            AnswerPanelEscapeAction.resolve(
+                showsSettings: false,
+                showsHistory: true,
+                isEditing: true
+            ),
             .closeHistory
         )
         XCTAssertEqual(
-            AnswerPanelEscapeAction.resolve(showsHistory: false, isEditing: true),
+            AnswerPanelEscapeAction.resolve(
+                showsSettings: false,
+                showsHistory: false,
+                isEditing: true
+            ),
             .cancelEditing
         )
         XCTAssertEqual(
-            AnswerPanelEscapeAction.resolve(showsHistory: false, isEditing: false),
+            AnswerPanelEscapeAction.resolve(
+                showsSettings: false,
+                showsHistory: false,
+                isEditing: false
+            ),
             .closePanel
+        )
+    }
+
+    func testSlashCommandMenuFiltersAndStopsAfterArgumentsBegin() {
+        XCTAssertEqual(ConversationSlashCommand.matching("/").count, 5)
+        XCTAssertEqual(ConversationSlashCommand.matching("/tr"), [.translate])
+        XCTAssertTrue(ConversationSlashCommand.matching("/translate ").isEmpty)
+        XCTAssertTrue(ConversationSlashCommand.matching("explain").isEmpty)
+    }
+
+    func testSlashCommandsExpandBeforeBeingSentToTheModel() {
+        let expanded = ConversationSlashCommand.expandedPrompt(
+            for: "/translate to Japanese"
+        )
+
+        XCTAssertTrue(expanded.contains("Translate the latest screenshot"))
+        XCTAssertTrue(expanded.contains("Additional instruction: to Japanese"))
+        XCTAssertEqual(
+            ConversationSlashCommand.expandedPrompt(for: "/unknown keep this"),
+            "/unknown keep this"
         )
     }
 
@@ -229,6 +269,66 @@ final class ConversationHarnessTests: XCTestCase {
         )
     }
 
+    func testAnswerPanelUsesReferenceInspiredTallLayoutWithEmbeddedComposer() {
+        XCTAssertEqual(AnswerPanelConversationLayout.panelSize.width, 420)
+        XCTAssertEqual(AnswerPanelConversationLayout.panelSize.height, 596)
+        XCTAssertLessThan(
+            AnswerPanelConversationLayout.panelSize.width
+                / AnswerPanelConversationLayout.panelSize.height,
+            0.75
+        )
+        XCTAssertEqual(
+            AnswerPanelConversationLayout.composerWidth,
+            AnswerPanelConversationLayout.surfaceWidth - 64
+        )
+        XCTAssertEqual(AnswerPanelConversationLayout.composerHeight, 40)
+        XCTAssertEqual(
+            AnswerPanelConversationLayout.assistantTextWidth,
+            AnswerPanelConversationLayout.composerWidth - 8
+        )
+    }
+
+    func testAnswerPanelAppearsBesideQuestionBarWhenRightSideFits() {
+        let frame = AnswerPanelPlacement.initialFrame(
+            panelSize: AnswerPanelConversationLayout.panelSize,
+            anchorRect: CGRect(x: 300, y: 370, width: 500, height: 46),
+            visibleFrame: CGRect(x: 0, y: 24, width: 1440, height: 876)
+        )
+
+        XCTAssertEqual(frame.minX, 814)
+        XCTAssertEqual(frame.midY, 393)
+    }
+
+    func testAnswerPanelChoosesLeftSideNearRightScreenEdge() {
+        let anchor = CGRect(x: 900, y: 370, width: 500, height: 46)
+        let frame = AnswerPanelPlacement.initialFrame(
+            panelSize: AnswerPanelConversationLayout.panelSize,
+            anchorRect: anchor,
+            visibleFrame: CGRect(x: 0, y: 24, width: 1440, height: 876)
+        )
+
+        XCTAssertEqual(frame.maxX, anchor.minX - AnswerPanelPlacement.gap)
+        XCTAssertEqual(frame.midY, anchor.midY)
+    }
+
+    func testAnswerPanelPlacementStaysInsideVisibleScreen() {
+        let visibleFrame = CGRect(x: -1200, y: 24, width: 1200, height: 760)
+        let frame = AnswerPanelPlacement.initialFrame(
+            panelSize: AnswerPanelConversationLayout.panelSize,
+            anchorRect: CGRect(x: -260, y: 40, width: 500, height: 46),
+            visibleFrame: visibleFrame
+        )
+
+        XCTAssertTrue(
+            visibleFrame
+                .insetBy(
+                    dx: AnswerPanelPlacement.screenMargin,
+                    dy: AnswerPanelPlacement.screenMargin
+                )
+                .contains(frame)
+        )
+    }
+
     func testConversationTitleFadesWithoutFullyDisappearingWhileScrolling() {
         XCTAssertEqual(AnswerPanelTitleFade.opacity(forScrollDistance: 0), 1)
         XCTAssertLessThan(AnswerPanelTitleFade.opacity(forScrollDistance: 36), 1)
@@ -269,17 +369,19 @@ final class ConversationHarnessTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.25))
         let originalMinY = window.frame.minY
 
-        XCTAssertEqual(window.frame.width, 544, accuracy: 1)
-        XCTAssertEqual(window.frame.height, 468, accuracy: 1)
+        XCTAssertEqual(window.frame.width, 420, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 596, accuracy: 1)
+        XCTAssertTrue(window.isMovable)
+        XCTAssertTrue(window.isMovableByWindowBackground)
 
         panel.setHistoryExpanded(true)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
-        XCTAssertEqual(window.frame.height, 468, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 596, accuracy: 1)
         XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
 
         panel.setHistoryExpanded(false)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
-        XCTAssertEqual(window.frame.height, 468, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 596, accuracy: 1)
         XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
     }
 
