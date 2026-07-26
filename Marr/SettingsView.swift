@@ -216,6 +216,18 @@ private struct CompactGeneralSettingsPanel: View {
 
             CompactSettingsGroup("Marr") {
                 Button {
+                    openMarrWelcomeGuide(controller: controller)
+                } label: {
+                    Label("Welcome Guide", systemImage: "graduationcap")
+                        .font(MarrTypography.body(size: 13, weight: .medium))
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                CompactSettingsDivider()
+
+                Button {
                     NSApp.terminate(nil)
                 } label: {
                     Label("Quit", systemImage: "power")
@@ -812,6 +824,14 @@ private struct GeneralSettingsPanel: View {
             }
         }
 
+        Section("Help") {
+            Button {
+                openMarrWelcomeGuide(controller: controller)
+            } label: {
+                Label("Open Welcome Guide", systemImage: "graduationcap")
+            }
+        }
+
         Section("Application") {
             Button("Quit Marr", role: .destructive) {
                 NSApp.terminate(nil)
@@ -869,6 +889,11 @@ private struct GeneralSettingsPanel: View {
         ).save()
         controller.reloadHotKey()
     }
+}
+
+@MainActor
+func openMarrWelcomeGuide(controller: MarrController) {
+    MarrOnboardingPresenter.shared.show(controller: controller)
 }
 
 private struct RunningApplicationOption: Identifiable, Hashable {
