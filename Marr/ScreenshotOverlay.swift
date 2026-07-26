@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class ScreenshotOverlayController {
-    var onCapture: ((PickedImage, CGRect, String) -> Void)?
+    var onCapture: ((PickedImage, CGRect, CGRect, String) -> Void)?
     var onTranslate: ((PickedImage, CGRect) -> Void)?
     var onWindowCapture: ((WindowCaptureCandidate) -> Void)?
     var onCancel: (() -> Void)?
@@ -79,8 +79,13 @@ final class ScreenshotOverlayController {
                 onCancel: { [weak self] in
                     self?.cancel()
                 },
-                onCapture: { [weak self] rect, question in
-                    self?.capture(rect: rect, question: question, on: screen)
+                onCapture: { [weak self] rect, answerAnchorRect, question in
+                    self?.capture(
+                        rect: rect,
+                        answerAnchorRect: answerAnchorRect,
+                        question: question,
+                        on: screen
+                    )
                 },
                 onTranslate: { [weak self] rect in
                     self?.translate(rect: rect, on: screen)
@@ -199,7 +204,12 @@ final class ScreenshotOverlayController {
         }
     }
 
-    private func capture(rect: CGRect, question: String, on screen: NSScreen) {
+    private func capture(
+        rect: CGRect,
+        answerAnchorRect: CGRect,
+        question: String,
+        on screen: NSScreen
+    ) {
         let screenSnapshot = snapshot(for: screen)
         close()
 
@@ -217,7 +227,7 @@ final class ScreenshotOverlayController {
                 return
             }
 
-            self.onCapture?(image, rect, question)
+            self.onCapture?(image, rect, answerAnchorRect, question)
         }
     }
 
@@ -407,7 +417,7 @@ private final class OverlayWindow: NSWindow {
     }
 }
 
-private enum ResizeHandle: CaseIterable, Hashable {
+private enum SelectionResizeHandle: CaseIterable, Hashable {
     case topLeft
     case top
     case topRight
@@ -419,13 +429,9 @@ private enum ResizeHandle: CaseIterable, Hashable {
 
     var cursor: NSCursor {
         switch self {
-        case .topLeft, .bottomRight:
-            return .resizeUpDown
-        case .topRight, .bottomLeft:
-            return .resizeUpDown
         case .left, .right:
             return .resizeLeftRight
-        case .top, .bottom:
+        case .top, .bottom, .topLeft, .topRight, .bottomRight, .bottomLeft:
             return .resizeUpDown
         }
     }
@@ -560,7 +566,7 @@ struct ScreenshotSelectionView: View {
     let mode: ScreenshotOverlayMode
     let windowCandidates: [WindowCaptureCandidate]
     let onCancel: () -> Void
-    let onCapture: (CGRect, String) -> Void
+    let onCapture: (CGRect, CGRect, String) -> Void
     let onTranslate: (CGRect) -> Void
     let onWindowCapture: (WindowCaptureCandidate) -> Void
 
@@ -570,21 +576,23 @@ struct ScreenshotSelectionView: View {
     @State private var isDrawingSelection = false
     @State private var dragStart: CGRect = .zero
     @State private var isMovingSelection = false
-    @State private var activeResizeHandle: ResizeHandle?
+    @State private var activeResizeHandle: SelectionResizeHandle?
     @State private var isSending = false
     @State private var pendingCapture: DispatchWorkItem?
     @State private var cursorLocation: CGPoint?
     @State private var hoveredWindowCandidate: WindowCaptureCandidate?
     @State private var showsImagePreview = false
     @State private var usesRegularTranslationGlass = false
+    @State private var selectedSlashCommandIndex = 0
+    @State private var dismissedSlashMenuInput: String?
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @FocusState private var questionFocused: Bool
 
     private let questionBarWidth: CGFloat = 500
+    private let questionBarHeight: CGFloat = 46
     private let translationButtonDiameter: CGFloat = 42
     private let translationButtonGap: CGFloat = 10
-    private let chatCapsuleScale: CGFloat = 1
-    private let capsuleTransitionDuration = 0.42
+    private let capsuleTransitionDuration = 0.24
     private let minimumSelectionDimension: CGFloat = 12
 
     var body: some View {
@@ -639,6 +647,12 @@ struct ScreenshotSelectionView: View {
                 pendingCapture?.cancel()
                 pendingCapture = nil
             }
+            .onChange(of: question) { _, nextQuestion in
+                selectedSlashCommandIndex = 0
+                if dismissedSlashMenuInput != nextQuestion {
+                    dismissedSlashMenuInput = nil
+                }
+            }
         }
     }
 
@@ -691,14 +705,11 @@ struct ScreenshotSelectionView: View {
                 .frame(width: selection.width, height: selection.height)
                 .overlay(
                     Rectangle()
-                        .stroke(
-                            .white.opacity(0.88),
-                            style: StrokeStyle(lineWidth: 1.2, dash: [4, 3])
-                        )
+                        .stroke(.white.opacity(0.90), lineWidth: 1.25)
                 )
                 .overlay(
                     Rectangle()
-                        .stroke(.black.opacity(0.24), lineWidth: 1)
+                        .stroke(.black.opacity(0.22), lineWidth: 0.8)
                         .padding(1)
                 )
                 .contentShape(Rectangle())
@@ -706,8 +717,8 @@ struct ScreenshotSelectionView: View {
                 .gesture(moveGesture)
 
             if !isDrawingSelection {
-                ForEach(ResizeHandle.allCases, id: \.self) { handle in
-                    resizeHandle(handle)
+                ForEach(SelectionResizeHandle.allCases, id: \.self) { handle in
+                    resizeHitTarget(handle)
                 }
             }
         }
@@ -774,19 +785,13 @@ struct ScreenshotSelectionView: View {
             }
     }
 
-    private func resizeHandle(_ handle: ResizeHandle) -> some View {
-        Circle()
-            .fill(.white.opacity(0.94))
-            .frame(width: 9, height: 9)
-            .overlay(Circle().stroke(.black.opacity(0.30), lineWidth: 1))
-            .shadow(color: .black.opacity(0.28), radius: 3, x: 0, y: 1)
+    private func resizeHitTarget(_ handle: SelectionResizeHandle) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .frame(width: hitTargetSize(for: handle).width, height: hitTargetSize(for: handle).height)
             .position(position(for: handle))
             .onHover { inside in
-                if inside {
-                    handle.cursor.set()
-                } else {
-                    NSCursor.arrow.set()
-                }
+                (inside ? handle.cursor : .arrow).set()
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -795,8 +800,12 @@ struct ScreenshotSelectionView: View {
                             dragStart = selection
                             activeResizeHandle = handle
                         }
-
-                        selection = resize(dragStart, handle: handle, translation: value.translation, bounds: screen.frame.size)
+                        selection = resize(
+                            dragStart,
+                            handle: handle,
+                            translation: value.translation,
+                            bounds: screen.frame.size
+                        )
                     }
                     .onEnded { _ in
                         activeResizeHandle = nil
@@ -861,6 +870,18 @@ struct ScreenshotSelectionView: View {
                 .onSubmit {
                     sendQuestion()
                 }
+                .onKeyPress(.upArrow) {
+                    moveSlashCommandSelection(by: -1)
+                }
+                .onKeyPress(.downArrow) {
+                    moveSlashCommandSelection(by: 1)
+                }
+                .onKeyPress(.return) {
+                    selectHighlightedSlashCommand()
+                }
+                .onKeyPress(.escape) {
+                    dismissSlashCommandMenu()
+                }
 
             Button {
                 sendQuestion()
@@ -887,12 +908,78 @@ struct ScreenshotSelectionView: View {
         )
         .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 10)
         .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
+        .overlay(alignment: .top) {
+            if showsSlashCommandMenu {
+                slashCommandMenu
+                    .offset(y: questionBarHeight + 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .zIndex(showsSlashCommandMenu ? 10 : 0)
         .animation(.easeOut(duration: 0.18), value: hasConfirmedSelection)
+        .animation(.easeOut(duration: 0.16), value: showsSlashCommandMenu)
+    }
+
+    private var slashCommandMenu: some View {
+        VStack(spacing: 2) {
+            ForEach(Array(slashCommandMatches.enumerated()), id: \.element.id) { index, command in
+                Button {
+                    chooseSlashCommand(command)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: command.symbol)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(bubbleTint)
+                            .frame(width: 26, height: 26)
+                            .background(bubbleTint.opacity(0.11), in: RoundedRectangle(cornerRadius: 7))
+
+                        Text(command.invocation)
+                            .font(MarrTypography.mono(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 82, alignment: .leading)
+
+                        Text(command.summary)
+                            .font(MarrTypography.body(size: 12.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(height: 40)
+                    .background(
+                        index == selectedSlashCommandIndex
+                            ? bubbleTint.opacity(0.14)
+                            : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovering in
+                    if isHovering {
+                        selectedSlashCommandIndex = index
+                    }
+                }
+                .accessibilityLabel("\(command.invocation), \(command.summary)")
+            }
+        }
+        .padding(6)
+        .frame(width: questionBarWidth)
+        .marrGlassSurface(cornerRadius: 16, isClear: true)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.20), lineWidth: 0.8)
+                .allowsHitTesting(false)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 9)
     }
 
     private func promptBar(in size: CGSize) -> some View {
         questionControls
             .allowsHitTesting(hasConfirmedSelection)
+            .scaleEffect(isSending ? 0.97 : 1)
+            .opacity(isSending ? 0 : 1)
             .position(promptBarPosition(in: size))
     }
 
@@ -995,6 +1082,43 @@ struct ScreenshotSelectionView: View {
             && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var slashCommandMatches: [ConversationSlashCommand] {
+        ConversationSlashCommand.matching(question)
+    }
+
+    private var showsSlashCommandMenu: Bool {
+        hasConfirmedSelection
+            && questionFocused
+            && !slashCommandMatches.isEmpty
+            && dismissedSlashMenuInput != question
+    }
+
+    private func moveSlashCommandSelection(by offset: Int) -> KeyPress.Result {
+        guard showsSlashCommandMenu else { return .ignored }
+        let count = slashCommandMatches.count
+        selectedSlashCommandIndex = (selectedSlashCommandIndex + offset + count) % count
+        return .handled
+    }
+
+    private func selectHighlightedSlashCommand() -> KeyPress.Result {
+        guard showsSlashCommandMenu else { return .ignored }
+        let index = min(selectedSlashCommandIndex, slashCommandMatches.count - 1)
+        chooseSlashCommand(slashCommandMatches[index])
+        return .handled
+    }
+
+    private func dismissSlashCommandMenu() -> KeyPress.Result {
+        guard showsSlashCommandMenu else { return .ignored }
+        dismissedSlashMenuInput = question
+        return .handled
+    }
+
+    private func chooseSlashCommand(_ command: ConversationSlashCommand) {
+        question = command.invocation + " "
+        dismissedSlashMenuInput = nil
+        questionFocused = true
+    }
+
     private var questionPlaceholder: String {
         hoveredWindowCandidate == nil
             ? "What can I help you with today?"
@@ -1031,7 +1155,8 @@ struct ScreenshotSelectionView: View {
         }
 
         isSending = true
-        onCapture(globalSelectionRect(), "")
+        let rect = globalSelectionRect()
+        onCapture(rect, rect, "")
     }
 
     private func sendQuestion() {
@@ -1041,6 +1166,7 @@ struct ScreenshotSelectionView: View {
         }
 
         let rect = globalSelectionRect()
+        let answerAnchorRect = globalQuestionBarRect(in: screen.frame.size)
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
@@ -1052,7 +1178,7 @@ struct ScreenshotSelectionView: View {
         }
 
         let capture = DispatchWorkItem {
-            onCapture(rect, trimmedQuestion)
+            onCapture(rect, answerAnchorRect, trimmedQuestion)
         }
         pendingCapture = capture
         DispatchQueue.main.asyncAfter(deadline: .now() + capsuleTransitionDuration + 0.08, execute: capture)
@@ -1073,24 +1199,29 @@ struct ScreenshotSelectionView: View {
         onTranslate(globalSelectionRect())
     }
 
-    private func position(for handle: ResizeHandle) -> CGPoint {
+    private func position(for handle: SelectionResizeHandle) -> CGPoint {
         switch handle {
-        case .topLeft:
-            return CGPoint(x: selection.minX, y: selection.minY)
-        case .top:
-            return CGPoint(x: selection.midX, y: selection.minY)
-        case .topRight:
-            return CGPoint(x: selection.maxX, y: selection.minY)
-        case .right:
-            return CGPoint(x: selection.maxX, y: selection.midY)
-        case .bottomRight:
-            return CGPoint(x: selection.maxX, y: selection.maxY)
-        case .bottom:
-            return CGPoint(x: selection.midX, y: selection.maxY)
-        case .bottomLeft:
-            return CGPoint(x: selection.minX, y: selection.maxY)
-        case .left:
-            return CGPoint(x: selection.minX, y: selection.midY)
+        case .topLeft: CGPoint(x: selection.minX, y: selection.minY)
+        case .top: CGPoint(x: selection.midX, y: selection.minY)
+        case .topRight: CGPoint(x: selection.maxX, y: selection.minY)
+        case .right: CGPoint(x: selection.maxX, y: selection.midY)
+        case .bottomRight: CGPoint(x: selection.maxX, y: selection.maxY)
+        case .bottom: CGPoint(x: selection.midX, y: selection.maxY)
+        case .bottomLeft: CGPoint(x: selection.minX, y: selection.maxY)
+        case .left: CGPoint(x: selection.minX, y: selection.midY)
+        }
+    }
+
+    private func hitTargetSize(for handle: SelectionResizeHandle) -> CGSize {
+        let thickness: CGFloat = 12
+        let corner: CGFloat = 18
+        switch handle {
+        case .top, .bottom:
+            return CGSize(width: max(corner, selection.width - corner * 2), height: thickness)
+        case .left, .right:
+            return CGSize(width: thickness, height: max(corner, selection.height - corner * 2))
+        case .topLeft, .topRight, .bottomRight, .bottomLeft:
+            return CGSize(width: corner, height: corner)
         }
     }
 
@@ -1114,35 +1245,21 @@ struct ScreenshotSelectionView: View {
         return max(selection.minY - toolbarHeight / 2 - 14, toolbarHeight / 2 + 8)
     }
 
-    private func chatCapsulePosition(in bounds: CGSize) -> CGPoint {
-        let visibleFrame = screen.visibleFrame
-        let panelWidth: CGFloat = 544
-        let panelMargin: CGFloat = 22
-        let panelContentPadding: CGFloat = 12
-        let composerVisualHeight: CGFloat = 46
-
-        let globalX = visibleFrame.maxX - panelMargin - panelWidth / 2
-        let globalY = visibleFrame.minY + panelMargin + panelContentPadding + composerVisualHeight / 2
-
-        let localX = globalX - screen.frame.minX
-        let localY = screen.frame.maxY - globalY
-        let halfWidth = questionBarWidth * chatCapsuleScale / 2
-        let halfHeight = composerVisualHeight * chatCapsuleScale / 2
-
-        return CGPoint(
-            x: min(max(localX, halfWidth + 12), bounds.width - halfWidth - 12),
-            y: min(max(localY, halfHeight + 12), bounds.height - halfHeight - 12)
-        )
-    }
-
     private func promptBarPosition(in bounds: CGSize) -> CGPoint {
-        if isSending {
-            return chatCapsulePosition(in: bounds)
-        }
         if hasConfirmedSelection {
             return CGPoint(x: toolbarX(in: bounds), y: toolbarY(in: bounds))
         }
         return initialPromptBarPosition(in: bounds)
+    }
+
+    private func globalQuestionBarRect(in bounds: CGSize) -> CGRect {
+        let position = promptBarPosition(in: bounds)
+        return CGRect(
+            x: screen.frame.minX + position.x - questionBarWidth / 2,
+            y: screen.frame.maxY - position.y - questionBarHeight / 2,
+            width: questionBarWidth,
+            height: questionBarHeight
+        )
     }
 
     private func translationButtonPosition(in bounds: CGSize) -> CGPoint {
@@ -1252,7 +1369,12 @@ struct ScreenshotSelectionView: View {
             || selection.height > 0
     }
 
-    private func resize(_ rect: CGRect, handle: ResizeHandle, translation: CGSize, bounds: CGSize) -> CGRect {
+    private func resize(
+        _ rect: CGRect,
+        handle: SelectionResizeHandle,
+        translation: CGSize,
+        bounds: CGSize
+    ) -> CGRect {
         var next = rect
         let minSize: CGFloat = 80
 

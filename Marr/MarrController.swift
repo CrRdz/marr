@@ -5,18 +5,42 @@ import MarrNetworking
 import MarrSettings
 import SwiftUI
 
+struct InferenceCredentialState: Equatable {
+    enum Activity: Equatable {
+        case idle
+        case checking
+        case saving
+        case verifying
+        case removing
+    }
+
+    var isConfigured: Bool?
+    var activity: Activity
+    var message: String?
+    var messageIsError: Bool
+
+    static let unknown = InferenceCredentialState(
+        isConfigured: nil,
+        activity: .idle,
+        message: nil,
+        messageIsError: false
+    )
+
+    var isBusy: Bool {
+        activity != .idle
+    }
+}
+
 @MainActor
 final class MarrController: ObservableObject {
     @Published var provider: InferenceProvider = .gateway { didSet { scheduleInferenceSettingsSave() } }
-    @Published var apiKey = "" { didSet { scheduleInferenceSettingsSave() } }
     @Published var gatewayBaseURL = "http://127.0.0.1:15721/claude-desktop" { didSet { scheduleInferenceSettingsSave() } }
-    @Published var gatewayAPIKey = "" { didSet { scheduleInferenceSettingsSave() } }
     @Published var gatewayAuthScheme: GatewayAuthScheme = .bearer { didSet { scheduleInferenceSettingsSave() } }
     @Published var gatewayAPIFormat: GatewayAPIFormat = .anthropicMessages { didSet { scheduleInferenceSettingsSave() } }
-    @Published var customHeadersText = "" { didSet { scheduleInferenceSettingsSave() } }
     @Published var model = "claude-sonnet-4-6" { didSet { scheduleInferenceSettingsSave() } }
     @Published var maximumOutputTokens = 4_096 { didSet { scheduleInferenceSettingsSave() } }
     @Published var statusMessage: String?
+    @Published private var credentialStates: [InferenceCredential: InferenceCredentialState] = [:]
     @Published private(set) var hotKeyConfiguration = MarrHotKeyConfiguration.current
     @Published private(set) var windowCaptureHotKeyConfiguration = MarrWindowCaptureHotKeyConfiguration.current
     let historyStore: ConversationHistoryStore
@@ -42,20 +66,13 @@ final class MarrController: ObservableObject {
         self.historyStore = historyStore ?? ConversationHistoryStore()
         self.settingsRepository = settingsRepository
 
-        do {
-            let settings = try settingsRepository.load()
-            provider = settings.provider
-            apiKey = settings.openAIAPIKey
-            gatewayBaseURL = settings.gatewayBaseURL
-            gatewayAPIKey = settings.gatewayAPIKey
-            gatewayAuthScheme = settings.gatewayAuthScheme
-            gatewayAPIFormat = settings.gatewayAPIFormat
-            customHeadersText = settings.customHeadersText
-            model = settings.model
-            maximumOutputTokens = settings.maximumOutputTokens
-        } catch {
-            statusMessage = "Could not load AI settings: \(error.localizedDescription)"
-        }
+        let settings = settingsRepository.loadConfiguration()
+        provider = settings.provider
+        gatewayBaseURL = settings.gatewayBaseURL
+        gatewayAuthScheme = settings.gatewayAuthScheme
+        gatewayAPIFormat = settings.gatewayAPIFormat
+        model = settings.model
+        maximumOutputTokens = settings.maximumOutputTokens
     }
 
     func installHotKeyIfNeeded() {
@@ -220,10 +237,10 @@ final class MarrController: ObservableObject {
                 self?.statusMessage = "Capture cancelled."
             }
         }
-        overlay.onCapture = { [weak self] image, rect, question in
+        overlay.onCapture = { [weak self] image, _, answerAnchorRect, question in
             Task { @MainActor in
                 self?.overlayController = nil
-                self?.showAnswerPanel(for: image, near: rect, question: question)
+                self?.showAnswerPanel(for: image, near: answerAnchorRect, question: question)
                 self?.statusMessage = "Screenshot captured."
             }
         }
@@ -269,7 +286,7 @@ final class MarrController: ObservableObject {
                 self?.statusMessage = "Capture cancelled."
             }
         }
-        overlay.onCapture = { [weak self] image, _, _ in
+        overlay.onCapture = { [weak self] image, _, _, _ in
             Task { @MainActor in
                 self?.overlayController = nil
                 self?.answerPanelController?.appendScreenshot(image)
@@ -337,21 +354,15 @@ final class MarrController: ObservableObject {
     }
 
     func submit(request: MarrCore.VisionRequest) async throws -> String {
+        let selectedProvider = provider
+        let selectedGatewayAuthScheme = gatewayAuthScheme
+        let selectedGatewayAPIFormat = gatewayAPIFormat
+        let selectedMaximumOutputTokens = maximumOutputTokens
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedGatewayBaseURL = gatewayBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedGatewayAPIKey = gatewayAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard provider != .openAI || !trimmedAPIKey.isEmpty else {
-            throw UserFacingError("OpenAI API Key required.")
-        }
-
-        guard provider != .gateway || !trimmedGatewayBaseURL.isEmpty else {
+        guard selectedProvider != .gateway || !trimmedGatewayBaseURL.isEmpty else {
             throw UserFacingError("Gateway Base URL required.")
-        }
-
-        guard provider != .gateway || gatewayAuthScheme == .none || !trimmedGatewayAPIKey.isEmpty else {
-            throw UserFacingError("Gateway API Key required, or set auth to None.")
         }
 
         guard !request.messages.isEmpty else {
@@ -362,16 +373,142 @@ final class MarrController: ObservableObject {
             throw UserFacingError("Model name required.")
         }
 
+        let credentials = try await requestCredentials(
+            provider: selectedProvider,
+            gatewayAuthScheme: selectedGatewayAuthScheme
+        )
+
+        guard selectedProvider != .openAI || !credentials.apiKey.isEmpty else {
+            throw UserFacingError("OpenAI API Key required.")
+        }
+
+        guard selectedProvider != .gateway
+                || selectedGatewayAuthScheme == .none
+                || !credentials.apiKey.isEmpty
+        else {
+            throw UserFacingError("Gateway API Key required, or set auth to None.")
+        }
+
         let requestConnection = connection(
-            openAIKey: trimmedAPIKey,
+            provider: selectedProvider,
+            openAIKey: credentials.apiKey,
             gatewayBaseURL: trimmedGatewayBaseURL,
-            gatewayKey: trimmedGatewayAPIKey
+            gatewayKey: credentials.apiKey,
+            gatewayAuthScheme: selectedGatewayAuthScheme,
+            gatewayAPIFormat: selectedGatewayAPIFormat,
+            customHeadersText: credentials.customHeadersText,
+            maximumOutputTokens: selectedMaximumOutputTokens
         )
         return try await client.ask(
             request: request,
             model: trimmedModel,
             connection: requestConnection
         )
+    }
+
+    func credentialState(for credential: InferenceCredential) -> InferenceCredentialState {
+        credentialStates[credential] ?? .unknown
+    }
+
+    func refreshCredentialState(for credential: InferenceCredential) async {
+        guard !credentialState(for: credential).isBusy else { return }
+
+        updateCredentialState(credential) {
+            $0.activity = .checking
+            $0.message = nil
+            $0.messageIsError = false
+        }
+
+        let isStored = settingsRepository.credentialIsStored(credential)
+        updateCredentialState(credential) {
+            $0.isConfigured = isStored
+            $0.activity = .idle
+        }
+    }
+
+    @discardableResult
+    func saveAndVerifyCredential(
+        _ value: String,
+        for credential: InferenceCredential
+    ) async -> Bool {
+        let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedValue.isEmpty else {
+            updateCredentialState(credential) {
+                $0.message = "Enter a value before saving."
+                $0.messageIsError = true
+            }
+            return false
+        }
+
+        updateCredentialState(credential) {
+            $0.activity = .saving
+            $0.message = nil
+            $0.messageIsError = false
+        }
+
+        let repository = settingsRepository
+        do {
+            try await BackgroundOperation.run(priority: .utility) {
+                try repository.setCredential(normalizedValue, for: credential)
+            }
+            updateCredentialState(credential) {
+                $0.isConfigured = true
+                $0.activity = .verifying
+            }
+        } catch {
+            updateCredentialState(credential) {
+                $0.activity = .idle
+                $0.message = "Could not save the credential: \(error.localizedDescription)"
+                $0.messageIsError = true
+            }
+            return false
+        }
+
+        do {
+            try await verifyCredential(credential, using: normalizedValue)
+            updateCredentialState(credential) {
+                $0.activity = .idle
+                $0.message = "Saved and verified."
+                $0.messageIsError = false
+            }
+        } catch {
+            updateCredentialState(credential) {
+                $0.activity = .idle
+                $0.message = "Saved, but the connection check failed: \(userFacingMessage(for: error))"
+                $0.messageIsError = true
+            }
+        }
+
+        return true
+    }
+
+    @discardableResult
+    func removeCredential(_ credential: InferenceCredential) async -> Bool {
+        updateCredentialState(credential) {
+            $0.activity = .removing
+            $0.message = nil
+            $0.messageIsError = false
+        }
+
+        let repository = settingsRepository
+        do {
+            try await BackgroundOperation.run(priority: .utility) {
+                try repository.setCredential("", for: credential)
+            }
+            updateCredentialState(credential) {
+                $0.isConfigured = false
+                $0.activity = .idle
+                $0.message = "Removed."
+            }
+            return true
+        } catch {
+            updateCredentialState(credential) {
+                $0.activity = .idle
+                $0.message = "Could not remove the credential: \(error.localizedDescription)"
+                $0.messageIsError = true
+            }
+            return false
+        }
     }
 
     private func translateScreenshot(_ image: PickedImage, near rect: CGRect) {
@@ -667,7 +804,106 @@ final class MarrController: ObservableObject {
         return CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
-    private func connection(openAIKey: String, gatewayBaseURL: String, gatewayKey: String) -> InferenceConnection {
+    private func requestCredentials(
+        provider: InferenceProvider,
+        gatewayAuthScheme: GatewayAuthScheme
+    ) async throws -> InferenceRequestCredentials {
+        let repository = settingsRepository
+        return try await BackgroundOperation.run(priority: .userInitiated) {
+            switch provider {
+            case .openAI:
+                return InferenceRequestCredentials(
+                    apiKey: try repository.credential(.openAIAPIKey) ?? "",
+                    customHeadersText: ""
+                )
+            case .gateway:
+                let apiKey = gatewayAuthScheme == .none
+                    ? ""
+                    : try repository.credential(.gatewayAPIKey) ?? ""
+                return InferenceRequestCredentials(
+                    apiKey: apiKey,
+                    customHeadersText: try repository.credential(.customHeaders) ?? ""
+                )
+            }
+        }
+    }
+
+    private func verifyCredential(
+        _ credential: InferenceCredential,
+        using value: String
+    ) async throws {
+        let selectedProvider: InferenceProvider = credential == .openAIAPIKey ? .openAI : .gateway
+        let selectedGatewayAuthScheme = gatewayAuthScheme
+        let selectedGatewayAPIFormat = gatewayAPIFormat
+        let trimmedGatewayBaseURL = gatewayBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedModel.isEmpty else {
+            throw UserFacingError("Model name required.")
+        }
+        guard selectedProvider != .gateway || !trimmedGatewayBaseURL.isEmpty else {
+            throw UserFacingError("Gateway Base URL required.")
+        }
+
+        let repository = settingsRepository
+        let credentials = try await BackgroundOperation.run(priority: .userInitiated) {
+            switch credential {
+            case .openAIAPIKey:
+                return InferenceRequestCredentials(apiKey: value, customHeadersText: "")
+            case .gatewayAPIKey:
+                return InferenceRequestCredentials(
+                    apiKey: value,
+                    customHeadersText: try repository.credential(.customHeaders) ?? ""
+                )
+            case .customHeaders:
+                let apiKey = selectedGatewayAuthScheme == .none
+                    ? ""
+                    : try repository.credential(.gatewayAPIKey) ?? ""
+                return InferenceRequestCredentials(apiKey: apiKey, customHeadersText: value)
+            }
+        }
+
+        guard selectedProvider != .gateway
+                || selectedGatewayAuthScheme == .none
+                || !credentials.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw UserFacingError("Gateway API Key required, or set auth to None.")
+        }
+
+        let verificationConnection = connection(
+            provider: selectedProvider,
+            openAIKey: credentials.apiKey,
+            gatewayBaseURL: trimmedGatewayBaseURL,
+            gatewayKey: credentials.apiKey,
+            gatewayAuthScheme: selectedGatewayAuthScheme,
+            gatewayAPIFormat: selectedGatewayAPIFormat,
+            customHeadersText: credentials.customHeadersText,
+            maximumOutputTokens: 256
+        )
+        let verificationRequest = VisionRequest(
+            systemPrompt: "This is a connection check.",
+            messages: [
+                VisionMessage(role: .user, content: [.text("Reply with OK.")])
+            ]
+        )
+
+        _ = try await client.ask(
+            request: verificationRequest,
+            model: trimmedModel,
+            connection: verificationConnection
+        )
+    }
+
+    private func connection(
+        provider: InferenceProvider,
+        openAIKey: String,
+        gatewayBaseURL: String,
+        gatewayKey: String,
+        gatewayAuthScheme: GatewayAuthScheme,
+        gatewayAPIFormat: GatewayAPIFormat,
+        customHeadersText: String,
+        maximumOutputTokens: Int
+    ) -> InferenceConnection {
         switch provider {
         case .openAI:
             return .openAI(apiKey: openAIKey, maximumOutputTokens: maximumOutputTokens)
@@ -708,12 +944,12 @@ final class MarrController: ObservableObject {
         settingsSaveTask?.cancel()
         let settings = InferenceSettingsSnapshot(
             provider: provider,
-            openAIAPIKey: apiKey,
+            openAIAPIKey: "",
             gatewayBaseURL: gatewayBaseURL,
-            gatewayAPIKey: gatewayAPIKey,
+            gatewayAPIKey: "",
             gatewayAuthScheme: gatewayAuthScheme,
             gatewayAPIFormat: gatewayAPIFormat,
-            customHeadersText: customHeadersText,
+            customHeadersText: "",
             model: model,
             maximumOutputTokens: maximumOutputTokens
         )
@@ -724,7 +960,7 @@ final class MarrController: ObservableObject {
                 try await Task.sleep(for: .milliseconds(350))
                 try Task.checkCancellation()
                 try await BackgroundOperation.run(priority: .utility) {
-                    try repository.save(settings)
+                    repository.saveConfiguration(settings)
                 }
             } catch is CancellationError {
                 return
@@ -733,6 +969,20 @@ final class MarrController: ObservableObject {
             }
         }
     }
+
+    private func updateCredentialState(
+        _ credential: InferenceCredential,
+        update: (inout InferenceCredentialState) -> Void
+    ) {
+        var state = credentialState(for: credential)
+        update(&state)
+        credentialStates[credential] = state
+    }
+}
+
+private struct InferenceRequestCredentials: Sendable {
+    let apiKey: String
+    let customHeadersText: String
 }
 
 private struct HistoryImageAssetSource: Sendable {
