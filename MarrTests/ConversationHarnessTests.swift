@@ -953,6 +953,71 @@ final class ConversationHarnessTests: XCTestCase {
         )
     }
 
+    func testTranslationStrategyDoesNotPreserveSingleBrandPrefixInsideSentence() {
+        XCTAssertEqual(
+            ImageTranslationSourcePolicy.translationStrategy(
+                tokenTexts: ["Siri", "understands", "your", "personal", "context"],
+                protectedIndexes: Set([0]),
+                lineCount: 1
+            ),
+            .block
+        )
+    }
+
+    func testTranslationStrategyFindsMisorderedSentenceTerminator() {
+        XCTAssertEqual(
+            ImageTranslationSourcePolicy.translationStrategy(
+                tokenTexts: ["Siri", "understands", "your", "personal", ".", "context"],
+                protectedIndexes: Set([0, 4]),
+                lineCount: 1
+            ),
+            .block
+        )
+    }
+
+    func testTranslationTypographyPreservesSourceScaleForWideCrops() {
+        XCTAssertEqual(
+            ImageTranslationTextRecognizer.fontSize(
+                for: .paragraph,
+                sourceLineHeight: 0.12
+            ),
+            0.1296,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ImageTranslationTextRecognizer.fontSize(
+                for: .heading,
+                sourceLineHeight: 0.12
+            ),
+            0.0984,
+            accuracy: 0.0001
+        )
+    }
+
+    func testTranslationTypographyCompensatesForDenseCJKGlyphs() {
+        XCTAssertEqual(
+            ImageTranslationRenderer.targetScriptFontScale(
+                for: "只需询问 Siri AI，并获得相关答案。"
+            ),
+            0.88,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ImageTranslationRenderer.targetScriptFontScale(
+                for: "Siri understands your personal context."
+            ),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ImageTranslationRenderer.targetScriptFontScale(
+                for: "使用 `ConversationSession`"
+            ),
+            1,
+            accuracy: 0.0001
+        )
+    }
+
     func testTranslationSegmentParserAcceptsTokenRangesAndEmptyPreserveResult() throws {
         let replacements = ImageTranslationResponseParser.parseReplacements(
             #"{"translations":[{"id":"r001","kind":"heading","segments":[{"tokenStart":3,"tokenEnd":5,"targetMarkdown":"研究档案"}]},{"id":"r002","segments":[]}]}"#
@@ -1415,6 +1480,26 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertTrue(lines.allSatisfy { !$0.contains(" ") })
     }
 
+    func testMarkdownLineLayoutUsesOnlyNeededLeadingSourceRows() throws {
+        let lineRects = [
+            CGRect(x: 0, y: 60, width: 50, height: 16),
+            CGRect(x: 0, y: 40, width: 50, height: 16),
+            CGRect(x: 0, y: 20, width: 50, height: 16),
+            CGRect(x: 0, y: 0, width: 50, height: 16)
+        ]
+
+        let lines = try XCTUnwrap(ImageTranslationMarkdownLineLayout.lines(
+            for: "翻译文字较短",
+            lineRects: lineRects,
+            codeRects: [],
+            availableWidth: { $0.width },
+            measuredWidth: { text, _ in CGFloat(text.count * 10) }
+        ))
+
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertEqual(lines.joined(), "翻译文字较短")
+    }
+
     func testMarkdownLineLayoutKeepsFixedListMarkerColumn() throws {
         let lineRects = [
             CGRect(x: 0, y: 20, width: 50, height: 16),
@@ -1554,6 +1639,94 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(expanded.minX, 100)
         XCTAssertGreaterThan(expanded.width, 295)
         XCTAssertLessThan(expanded.width, 315)
+    }
+
+    func testTranslationReadingOrderKeepsDistantColumnsAsSeparateVisualLines() {
+        let leftColumnLine = CGRect(x: 0.03, y: 0.42, width: 0.45, height: 0.026)
+        let rightColumnLine = CGRect(x: 0.54, y: 0.421, width: 0.40, height: 0.025)
+
+        XCTAssertFalse(
+            ImageTranslationReadingOrderLayout.belongsToSameVisualLine(
+                rightColumnLine,
+                lineRect: leftColumnLine
+            )
+        )
+    }
+
+    func testTranslationReadingOrderStillJoinsNearbyStyledFragments() {
+        let boldPrefix = CGRect(x: 0.03, y: 0.42, width: 0.12, height: 0.026)
+        let regularSuffix = CGRect(x: 0.158, y: 0.421, width: 0.31, height: 0.025)
+
+        XCTAssertTrue(
+            ImageTranslationReadingOrderLayout.belongsToSameVisualLine(
+                regularSuffix,
+                lineRect: boldPrefix
+            )
+        )
+    }
+
+    func testTranslationReadingOrderKeepsOverlappingAdjacentRowsSeparate() {
+        let upperRow = CGRect(x: 0.0247, y: 0.5447, width: 0.4012, height: 0.0279)
+        let lowerRow = CGRect(x: 0.0208, y: 0.5183, width: 0.3625, height: 0.0366)
+
+        XCTAssertFalse(
+            ImageTranslationReadingOrderLayout.belongsToSameVisualLine(
+                lowerRow,
+                lineRect: upperRow
+            )
+        )
+    }
+
+    func testTranslationReadingOrderContinuesEarlierColumnBlock() throws {
+        let previousLeftLine = CGRect(x: 0.03, y: 0.48, width: 0.44, height: 0.026)
+        let previousRightLine = CGRect(x: 0.54, y: 0.48, width: 0.40, height: 0.026)
+        let nextLeftLine = CGRect(x: 0.03, y: 0.44, width: 0.42, height: 0.026)
+        let previousLines = [previousLeftLine, previousRightLine]
+
+        let blockIndex = try XCTUnwrap(
+            ImageTranslationReadingOrderLayout.closestCompatibleBlockIndex(
+                for: nextLeftLine,
+                lastLineRects: previousLines,
+                isCompatible: { index in
+                    abs(previousLines[index].minX - nextLeftLine.minX) < 0.035
+                }
+            )
+        )
+
+        XCTAssertEqual(blockIndex, 0)
+    }
+
+    func testTranslationReadingOrderJoinsWrappedLargeHeadingLines() {
+        XCTAssertTrue(
+            ImageTranslationReadingOrderLayout.isWrappedHeadingContinuation(
+                previousRect: CGRect(x: 0.06, y: 0.50, width: 0.70, height: 0.10),
+                candidateRect: CGRect(x: 0.068, y: 0.39, width: 0.30, height: 0.09),
+                previousLooksLikeHeading: true,
+                candidateLooksLikeHeading: true
+            )
+        )
+    }
+
+    func testTranslationReadingOrderDoesNotJoinHeadingWithSmallerBody() {
+        XCTAssertFalse(
+            ImageTranslationReadingOrderLayout.isWrappedHeadingContinuation(
+                previousRect: CGRect(x: 0.06, y: 0.50, width: 0.70, height: 0.10),
+                candidateRect: CGRect(x: 0.06, y: 0.43, width: 0.62, height: 0.035),
+                previousLooksLikeHeading: true,
+                candidateLooksLikeHeading: true
+            )
+        )
+    }
+
+    func testTranslationReadingOrderDoesNotJoinDistantHeadings() {
+        XCTAssertFalse(
+            ImageTranslationReadingOrderLayout.isWrappedHeadingContinuation(
+                previousRect: CGRect(x: 0.06, y: 0.60, width: 0.70, height: 0.10),
+                candidateRect: CGRect(x: 0.06, y: 0.31, width: 0.42, height: 0.09),
+                previousLooksLikeHeading: true,
+                candidateLooksLikeHeading: true
+            )
+        )
     }
 
     func testCompareLayoutFitsLargeCaptureInsideVisibleScreen() throws {
@@ -1716,6 +1889,67 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertGreaterThan(color.redComponent, 0.95)
         XCTAssertGreaterThan(color.greenComponent, 0.95)
         XCTAssertGreaterThan(color.blueComponent, 0.95)
+    }
+
+    func testTranslationRendererPreservesRetinaLogicalSizeAcrossEncoding() throws {
+        let logicalSize = NSSize(width: 120, height: 60)
+        let bitmap = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: 240,
+                pixelsHigh: 120,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bitmapFormat: [],
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )
+        )
+        bitmap.size = logicalSize
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        NSColor(calibratedWhite: 0.12, alpha: 1).setFill()
+        NSBezierPath(rect: CGRect(origin: .zero, size: logicalSize)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+
+        let sourceData = try XCTUnwrap(
+            bitmap.representation(using: .png, properties: [:])
+        )
+        let sourceImage = try XCTUnwrap(NSImage(data: sourceData))
+        let translatedData = try XCTUnwrap(
+            ImageTranslationRenderer.renderData(
+                sourceData: sourceData,
+                blocks: [
+                    ImageTranslationBlock(
+                        text: "字号测试",
+                        x: 0.10,
+                        y: 0.20,
+                        width: 0.60,
+                        height: 0.30,
+                        textColor: "#ffffff",
+                        backgroundColor: "#1f1f1f",
+                        fontSize: 0.16
+                    )
+                ]
+            )
+        )
+        let translatedImage = try XCTUnwrap(NSImage(data: translatedData))
+
+        XCTAssertEqual(sourceImage.size.width, logicalSize.width, accuracy: 0.01)
+        XCTAssertEqual(sourceImage.size.height, logicalSize.height, accuracy: 0.01)
+        XCTAssertEqual(translatedImage.size.width, sourceImage.size.width, accuracy: 0.01)
+        XCTAssertEqual(translatedImage.size.height, sourceImage.size.height, accuracy: 0.01)
+        XCTAssertEqual(
+            translatedImage.representations.first?.pixelsWide,
+            sourceImage.representations.first?.pixelsWide
+        )
+        XCTAssertEqual(
+            translatedImage.representations.first?.pixelsHigh,
+            sourceImage.representations.first?.pixelsHigh
+        )
     }
 
     func testTranslationRendererPreservesSourceDetailsOutsideTranslatedRegion() throws {
@@ -2237,12 +2471,12 @@ final class ConversationHarnessTests: XCTestCase {
             blocks: [first, second]
         ))
         let bitmap = try XCTUnwrap(displayBitmap(for: rendered, size: size))
-        let wideBadge = try XCTUnwrap(firstPixel(in: bitmap) { color in
+        let wideBadge = try XCTUnwrap(leftmostPixel(in: bitmap) { color in
             color.redComponent > 0.75
                 && color.blueComponent > 0.75
                 && color.greenComponent < 0.35
         })
-        let narrowBadge = try XCTUnwrap(firstPixel(in: bitmap) { color in
+        let narrowBadge = try XCTUnwrap(leftmostPixel(in: bitmap) { color in
             color.greenComponent > 0.55
                 && color.greenComponent > color.redComponent + 0.30
                 && color.greenComponent > color.blueComponent + 0.30
@@ -2311,6 +2545,24 @@ final class ConversationHarnessTests: XCTestCase {
     ) -> (x: Int, y: Int)? {
         for y in 0..<bitmap.pixelsHigh {
             for x in 0..<bitmap.pixelsWide {
+                guard
+                    let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                    predicate(color)
+                else {
+                    continue
+                }
+                return (x, y)
+            }
+        }
+        return nil
+    }
+
+    private func leftmostPixel(
+        in bitmap: NSBitmapImageRep,
+        matching predicate: (NSColor) -> Bool
+    ) -> (x: Int, y: Int)? {
+        for x in 0..<bitmap.pixelsWide {
+            for y in 0..<bitmap.pixelsHigh {
                 guard
                     let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
                     predicate(color)
