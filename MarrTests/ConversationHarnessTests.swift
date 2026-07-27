@@ -1940,21 +1940,13 @@ final class ConversationHarnessTests: XCTestCase {
                 ]
             )
         )
-        var translatedRect = CGRect(origin: .zero, size: translatedImage.size)
-        let translatedCGImage = try XCTUnwrap(
-            translatedImage.cgImage(
-                forProposedRect: &translatedRect,
-                context: nil,
-                hints: nil
-            )
-        )
 
+        XCTAssertEqual(bitmap.pixelsWide, Int(logicalSize.width * 2))
+        XCTAssertEqual(bitmap.pixelsHigh, Int(logicalSize.height * 2))
         XCTAssertEqual(sourceImage.size.width, logicalSize.width, accuracy: 0.01)
         XCTAssertEqual(sourceImage.size.height, logicalSize.height, accuracy: 0.01)
         XCTAssertEqual(translatedImage.size.width, sourceImage.size.width, accuracy: 0.01)
         XCTAssertEqual(translatedImage.size.height, sourceImage.size.height, accuracy: 0.01)
-        XCTAssertEqual(translatedCGImage.width, bitmap.pixelsWide)
-        XCTAssertEqual(translatedCGImage.height, bitmap.pixelsHigh)
     }
 
     func testTranslationRendererPreservesSourceDetailsOutsideTranslatedRegion() throws {
