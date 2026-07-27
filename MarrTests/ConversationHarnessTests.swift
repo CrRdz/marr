@@ -1891,7 +1891,7 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertGreaterThan(color.blueComponent, 0.95)
     }
 
-    func testTranslationRendererPreservesRetinaLogicalSizeAcrossEncoding() throws {
+    func testTranslationRendererPreservesRetinaLogicalSize() throws {
         let logicalSize = NSSize(width: 120, height: 60)
         let bitmap = try XCTUnwrap(
             NSBitmapImageRep(
@@ -1915,13 +1915,17 @@ final class ConversationHarnessTests: XCTestCase {
         NSBezierPath(rect: CGRect(origin: .zero, size: logicalSize)).fill()
         NSGraphicsContext.restoreGraphicsState()
 
-        let sourceData = try XCTUnwrap(
-            bitmap.representation(using: .png, properties: [:])
+        let sourceImage = NSImage(size: logicalSize)
+        sourceImage.addRepresentation(bitmap)
+        let pickedImage = PickedImage(
+            data: Data(),
+            mimeType: "image/tiff",
+            fileName: "retina-source.tiff",
+            image: sourceImage
         )
-        let sourceImage = try XCTUnwrap(NSImage(data: sourceData))
-        let translatedData = try XCTUnwrap(
-            ImageTranslationRenderer.renderData(
-                sourceData: sourceData,
+        let translatedImage = try XCTUnwrap(
+            ImageTranslationRenderer.render(
+                source: pickedImage,
                 blocks: [
                     ImageTranslationBlock(
                         text: "字号测试",
@@ -1936,20 +1940,21 @@ final class ConversationHarnessTests: XCTestCase {
                 ]
             )
         )
-        let translatedImage = try XCTUnwrap(NSImage(data: translatedData))
+        var translatedRect = CGRect(origin: .zero, size: translatedImage.size)
+        let translatedCGImage = try XCTUnwrap(
+            translatedImage.cgImage(
+                forProposedRect: &translatedRect,
+                context: nil,
+                hints: nil
+            )
+        )
 
         XCTAssertEqual(sourceImage.size.width, logicalSize.width, accuracy: 0.01)
         XCTAssertEqual(sourceImage.size.height, logicalSize.height, accuracy: 0.01)
         XCTAssertEqual(translatedImage.size.width, sourceImage.size.width, accuracy: 0.01)
         XCTAssertEqual(translatedImage.size.height, sourceImage.size.height, accuracy: 0.01)
-        XCTAssertEqual(
-            translatedImage.representations.first?.pixelsWide,
-            sourceImage.representations.first?.pixelsWide
-        )
-        XCTAssertEqual(
-            translatedImage.representations.first?.pixelsHigh,
-            sourceImage.representations.first?.pixelsHigh
-        )
+        XCTAssertEqual(translatedCGImage.width, bitmap.pixelsWide)
+        XCTAssertEqual(translatedCGImage.height, bitmap.pixelsHigh)
     }
 
     func testTranslationRendererPreservesSourceDetailsOutsideTranslatedRegion() throws {
