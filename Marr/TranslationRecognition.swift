@@ -146,13 +146,13 @@ enum ImageTranslationSourcePolicy {
             return .block
         }
 
-        let hasProtectedPrefix = firstTranslatableIndex > 0
+        let hasProtectedPrefix = firstTranslatableIndex >= 2
             && (0..<firstTranslatableIndex).allSatisfy { protectedIndexes.contains($0) }
         let hasStructuralSeparator = tokenTexts.contains(where: isStructuralSeparator)
-        let hasSentenceTerminator = tokenTexts.last.map { token in
-            token.trimmingCharacters(in: .whitespacesAndNewlines)
-                .allSatisfy { ".!?。！？".contains($0) }
-        } ?? false
+        let hasSentenceTerminator = tokenTexts.contains { token in
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !trimmed.isEmpty && trimmed.allSatisfy { ".!?。！？".contains($0) }
+        }
 
         guard
             !hasSentenceTerminator,
@@ -416,7 +416,7 @@ enum ImageTranslationTextRecognizer {
         let isProtected: Bool
     }
 
-    private enum TextBlockKind: String {
+    enum TextBlockKind: String {
         case title
         case heading
         case paragraph
@@ -673,9 +673,13 @@ enum ImageTranslationTextRecognizer {
 
         var blocks: [TextBlock] = []
         for line in sorted where shouldUseSourceText(line.text) {
-            if let lastIndex = blocks.indices.last,
-               belongsToSameTextBlock(line, block: blocks[lastIndex]) {
-                blocks[lastIndex].append(line)
+            let lastLineRects = blocks.compactMap { $0.lines.last?.boundingBox }
+            if let blockIndex = ImageTranslationReadingOrderLayout.closestCompatibleBlockIndex(
+                for: line.boundingBox,
+                lastLineRects: lastLineRects,
+                isCompatible: { belongsToSameTextBlock(line, block: blocks[$0]) }
+            ) {
+                blocks[blockIndex].append(line)
             } else {
                 blocks.append(TextBlock(lines: [line]))
             }
@@ -712,6 +716,15 @@ enum ImageTranslationTextRecognizer {
                 && (isIndentedContinuation || !endsTextBlock(previousLine.text))
                 && currentBox.minX <= block.boundingBox.maxX + 0.025
                 && verticalGap < maxLineHeight * 1.35
+        }
+
+        if ImageTranslationReadingOrderLayout.isWrappedHeadingContinuation(
+            previousRect: previousBox,
+            candidateRect: currentBox,
+            previousLooksLikeHeading: looksLikeStandaloneHeading(previousLine.text),
+            candidateLooksLikeHeading: looksLikeStandaloneHeading(line.text)
+        ) {
+            return true
         }
 
         if looksLikeStandaloneHeading(line.text) || endsTextBlock(previousLine.text) {
@@ -830,9 +843,7 @@ enum ImageTranslationTextRecognizer {
             .flatMap { line in
                 line.fragments
                     .sorted { $0.boundingBox.minX < $1.boundingBox.minX }
-                    .flatMap { fragment in
-                        fragment.tokens.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
-                    }
+                    .flatMap(\.tokens)
             }
     }
 
@@ -1063,35 +1074,34 @@ enum ImageTranslationTextRecognizer {
         return .paragraph
     }
 
-    private static func fontSize(for kind: TextBlockKind, sourceLineHeight: CGFloat) -> Double {
+    /// This value is normalized against the image height. A fixed upper bound
+    /// makes text in wide, shallow crops several times smaller than its source;
+    /// the renderer already constrains the result to the recognized line rect.
+    static func fontSize(for kind: TextBlockKind, sourceLineHeight: CGFloat) -> Double {
         switch kind {
         case .title:
             let baseSize = sourceLineHeight * 0.82
-            return Double(min(max(baseSize, 0.018), 0.046))
+            return Double(max(baseSize, 0.018))
         case .heading:
             let baseSize = sourceLineHeight * 0.82
-            return Double(min(max(baseSize, 0.014), 0.034))
+            return Double(max(baseSize, 0.014))
         case .paragraph, .listItem:
             let baseSize = sourceLineHeight * 1.08
-            return Double(min(max(baseSize, 0.010), 0.034))
+            return Double(max(baseSize, 0.010))
         case .caption:
             let baseSize = sourceLineHeight * 1.06
-            return Double(min(max(baseSize, 0.008), 0.030))
+            return Double(max(baseSize, 0.008))
         case .code:
             let baseSize = sourceLineHeight * 0.82
-            return Double(min(max(baseSize, 0.009), 0.024))
+            return Double(max(baseSize, 0.009))
         }
     }
 
     private static func belongsToSameVisualLine(_ fragment: Fragment, line: VisualLine) -> Bool {
-        let box = line.boundingBox
-        let smallerHeight = min(fragment.boundingBox.height, box.height)
-        let verticalOverlap = min(fragment.boundingBox.maxY, box.maxY) - max(fragment.boundingBox.minY, box.minY)
-        let overlapRatio = verticalOverlap / max(smallerHeight, 0.001)
-        let midlineDistance = abs(fragment.boundingBox.midY - box.midY)
-        let allowedDistance = max(fragment.boundingBox.height, box.height) * 0.45
-
-        return overlapRatio > 0.35 || midlineDistance < allowedDistance
+        ImageTranslationReadingOrderLayout.belongsToSameVisualLine(
+            fragment.boundingBox,
+            lineRect: line.boundingBox
+        )
     }
 
     private static func isBulletLine(_ text: String) -> Bool {

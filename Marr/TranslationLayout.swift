@@ -20,7 +20,7 @@ enum ImageTranslationMarkdownLineLayout {
         }
 
         let tokens = markdownLineTokens(markdown)
-        guard tokens.count >= lineRects.count else {
+        guard tokens.count > 1 else {
             return nil
         }
 
@@ -52,7 +52,6 @@ enum ImageTranslationMarkdownLineLayout {
 
             if lineIndex < lineRects.count - 1, !lineTokens[lineIndex].isEmpty {
                 let remainingTokensAfterThis = tokens.count - tokenIndex - 1
-                let remainingLinesAfterThis = lineRects.count - lineIndex - 1
                 let nextCodeLineIndex: Int
                 if let codeLineIndices, codeTokenIndex < codeLineIndices.count {
                     nextCodeLineIndex = codeLineIndices[codeTokenIndex]
@@ -64,7 +63,7 @@ enum ImageTranslationMarkdownLineLayout {
                 let lineRect = lineRects[lineIndex]
 
                 if measuredWidth(candidateText, lineRect) > availableWidth(lineRect) * 0.98,
-                   remainingTokensAfterThis >= remainingLinesAfterThis,
+                   remainingTokensAfterThis > 0,
                    canAdvanceBeforeNextCode {
                     lineIndex += 1
                 }
@@ -78,10 +77,17 @@ enum ImageTranslationMarkdownLineLayout {
         }
 
         let lines = lineTokens.map(markdownLine)
-        guard lines.allSatisfy({ !$0.isEmpty }) else {
+        guard let lastUsedLineIndex = lines.lastIndex(where: { !$0.isEmpty }) else {
             return nil
         }
-        return lines
+        let usedLines = Array(lines[...lastUsedLineIndex])
+        guard
+            usedLines.count > 1,
+            usedLines.allSatisfy({ !$0.isEmpty })
+        else {
+            return nil
+        }
+        return usedLines
     }
 
     private static func codeLineIndices(
@@ -288,6 +294,85 @@ enum ImageTranslationMarkdownLineLayout {
     }
 }
 
+enum ImageTranslationReadingOrderLayout {
+    static func belongsToSameVisualLine(_ candidate: CGRect, lineRect: CGRect) -> Bool {
+        let smallerHeight = min(candidate.height, lineRect.height)
+        let verticalOverlap = min(candidate.maxY, lineRect.maxY)
+            - max(candidate.minY, lineRect.minY)
+        let overlapRatio = verticalOverlap / max(smallerHeight, 0.001)
+        let midlineDistance = abs(candidate.midY - lineRect.midY)
+        let isVerticallyAligned = overlapRatio > 0.30
+            && midlineDistance < max(candidate.height, lineRect.height) * 0.42
+        guard isVerticallyAligned else {
+            return false
+        }
+
+        // Vision can split a styled sentence into multiple observations, but
+        // vertical alignment alone also joins unrelated columns. Require the
+        // observations to be close enough to plausibly belong to one run.
+        let horizontalGap = max(
+            0,
+            max(candidate.minX, lineRect.minX) - min(candidate.maxX, lineRect.maxX)
+        )
+        let allowedGap = max(0.010, max(candidate.height, lineRect.height))
+        return horizontalGap <= allowedGap
+    }
+
+    static func closestCompatibleBlockIndex(
+        for candidate: CGRect,
+        lastLineRects: [CGRect],
+        isCompatible: (Int) -> Bool
+    ) -> Int? {
+        lastLineRects.indices
+            .filter(isCompatible)
+            .min { lhsIndex, rhsIndex in
+                let lhs = lastLineRects[lhsIndex]
+                let rhs = lastLineRects[rhsIndex]
+                let lhsVerticalDistance = axisGap(candidate.minY...candidate.maxY, lhs.minY...lhs.maxY)
+                let rhsVerticalDistance = axisGap(candidate.minY...candidate.maxY, rhs.minY...rhs.maxY)
+
+                if abs(lhsVerticalDistance - rhsVerticalDistance) > 0.000_1 {
+                    return lhsVerticalDistance < rhsVerticalDistance
+                }
+                return abs(candidate.minX - lhs.minX) < abs(candidate.minX - rhs.minX)
+            }
+    }
+
+    static func isWrappedHeadingContinuation(
+        previousRect: CGRect,
+        candidateRect: CGRect,
+        previousLooksLikeHeading: Bool,
+        candidateLooksLikeHeading: Bool
+    ) -> Bool {
+        guard previousLooksLikeHeading, candidateLooksLikeHeading else {
+            return false
+        }
+
+        let maximumHeight = max(previousRect.height, candidateRect.height)
+        guard maximumHeight > 0 else {
+            return false
+        }
+
+        let heightRatio = min(previousRect.height, candidateRect.height) / maximumHeight
+        let verticalGap = previousRect.minY - candidateRect.maxY
+        let indentationDelta = abs(previousRect.minX - candidateRect.minX)
+
+        // Large display headings often wrap into independently recognized rows.
+        // Their comparable size and tight, aligned geometry distinguish them
+        // from the smaller paragraph that commonly follows a heading.
+        return heightRatio >= 0.62
+            && indentationDelta < 0.040
+            && verticalGap > -maximumHeight * 0.25
+            && verticalGap < maximumHeight * 1.15
+    }
+
+    private static func axisGap(
+        _ lhs: ClosedRange<CGFloat>,
+        _ rhs: ClosedRange<CGFloat>
+    ) -> CGFloat {
+        max(0, max(lhs.lowerBound, rhs.lowerBound) - min(lhs.upperBound, rhs.upperBound))
+    }
+}
 
 enum ImageTranslationLayoutGeometry {
     static func expandedLineRects(
