@@ -20,7 +20,10 @@ enum ImageTranslationRenderer {
             return nil
         }
 
-        let imageSize = NSSize(width: cgImage.width, height: cgImage.height)
+        let imageSize = pickedImage.image.size
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            return nil
+        }
         let bounds = CGRect(origin: .zero, size: imageSize)
         let bitmap = NSBitmapImageRep(cgImage: cgImage)
         let backgroundSourceImage = NSImage(cgImage: cgImage, size: imageSize)
@@ -366,7 +369,8 @@ enum ImageTranslationRenderer {
         )
         let sampledLocalBackgroundColor = sampledBackgroundColor(
                 in: backgroundSampleRect,
-                bitmap: bitmap
+                bitmap: bitmap,
+                bounds: bounds
             )
             ?? dominantInteriorBackgroundColor(
                 in: eraseRects,
@@ -860,7 +864,7 @@ enum ImageTranslationRenderer {
 
         let sourceImage = NSImage(
             cgImage: cgImage,
-            size: NSSize(width: bitmap.pixelsWide, height: bitmap.pixelsHigh)
+            size: bounds.size
         )
         var cursorX = renderedTextRect.maxX
         for sourceRect in drawableBlock.sourceTrailingAttachmentRects {
@@ -921,7 +925,7 @@ enum ImageTranslationRenderer {
             rect: textRect,
             weight: effectiveFontWeight(for: block),
             paragraph: paragraph,
-            minimumFontSize: max(6, baseSize * 0.50)
+            minimumFontSize: minimumReadableFontSize(baseSize)
         )
         configureParagraphStyle(paragraph, for: block, fontSize: fontSize)
         let rendered = attributedMarkdownLayout(
@@ -989,7 +993,7 @@ enum ImageTranslationRenderer {
             rect: textRect,
             weight: weight,
             paragraph: paragraph,
-            minimumFontSize: max(6, baseFontSize * 0.50)
+            minimumFontSize: minimumReadableFontSize(baseFontSize)
         )
         configureParagraphStyle(paragraph, for: block, fontSize: fontSize)
         let renderedText = attributedMarkdownLayout(
@@ -1119,7 +1123,7 @@ enum ImageTranslationRenderer {
                 rect: textRect,
                 weight: weight,
                 paragraph: paragraph,
-                minimumFontSize: max(6, baseFontSize * 0.56)
+                minimumFontSize: minimumReadableFontSize(baseFontSize)
             )
             configureParagraphStyle(paragraph, for: block, fontSize: fontSize)
             let renderedText = attributedMarkdownLayout(
@@ -1418,7 +1422,7 @@ enum ImageTranslationRenderer {
                 rect: segmentRect,
                 weight: weight,
                 paragraph: paragraph,
-                minimumFontSize: max(6, baseFontSize * 0.56)
+                minimumFontSize: minimumReadableFontSize(baseFontSize)
             )
             configureParagraphStyle(paragraph, for: block, fontSize: fontSize)
             let attributed = NSAttributedString(
@@ -1507,7 +1511,7 @@ enum ImageTranslationRenderer {
             block.fontSize,
             imageHeight: imageHeight,
             rect: rect
-        )
+        ) * targetScriptFontScale(for: block.text)
 
         switch normalizedKind(block.kind) {
         case "title":
@@ -1519,6 +1523,29 @@ enum ImageTranslationRenderer {
         default:
             return min(rect.height * 0.90, inferred)
         }
+    }
+
+    /// CJK glyphs occupy more of the em square than Latin body text. Rendering
+    /// both scripts at the same point size therefore makes translated Chinese
+    /// look heavier and leaves noticeably less whitespace between source rows.
+    static func targetScriptFontScale(for text: String) -> CGFloat {
+        let letterScalars = text.unicodeScalars.filter {
+            CharacterSet.letters.contains($0)
+        }
+        guard !letterScalars.isEmpty else {
+            return 1
+        }
+
+        let cjkCount = letterScalars.filter { scalar in
+            let value = Int(scalar.value)
+            return (0x3400...0x4DBF).contains(value)
+                || (0x4E00...0x9FFF).contains(value)
+                || (0xF900...0xFAFF).contains(value)
+        }.count
+
+        return cjkCount > 0 && cjkCount * 2 >= letterScalars.count
+            ? 0.88
+            : 1
     }
 
     private static func layoutMarkdown(for block: ImageTranslationBlock) -> String {
@@ -1627,6 +1654,10 @@ enum ImageTranslationRenderer {
         }
 
         return max(minimumFontSize, fontSize)
+    }
+
+    private static func minimumReadableFontSize(_ baseFontSize: CGFloat) -> CGFloat {
+        max(7, baseFontSize * 0.88)
     }
 
     private static func textAttributes(
@@ -1963,13 +1994,11 @@ enum ImageTranslationRenderer {
         return sqrt(red * red + green * green + blue * blue)
     }
 
-    private static func sampledBackgroundColor(in rect: CGRect, bitmap: NSBitmapImageRep) -> NSColor? {
-        let bounds = CGRect(
-            x: 0,
-            y: 0,
-            width: bitmap.pixelsWide,
-            height: bitmap.pixelsHigh
-        )
+    private static func sampledBackgroundColor(
+        in rect: CGRect,
+        bitmap: NSBitmapImageRep,
+        bounds: CGRect
+    ) -> NSColor? {
         let sampleOffset = max(2, min(10, rect.height * 0.20))
         let fractions: [CGFloat] = [0.08, 0.22, 0.38, 0.5, 0.62, 0.78, 0.92]
         var points: [CGPoint] = []
@@ -2079,8 +2108,20 @@ enum ImageTranslationRenderer {
     ) -> NSColor? {
         let clampedX = min(max(bounds.minX, appKitX), bounds.maxX - 1)
         let clampedY = min(max(bounds.minY, appKitY), bounds.maxY - 1)
-        let x = min(max(0, Int(clampedX.rounded())), bitmap.pixelsWide - 1)
-        let y = min(max(0, bitmap.pixelsHigh - 1 - Int(clampedY.rounded())), bitmap.pixelsHigh - 1)
+        let normalizedX = (clampedX - bounds.minX) / max(bounds.width, 1)
+        let normalizedY = (clampedY - bounds.minY) / max(bounds.height, 1)
+        let x = min(
+            max(0, Int((normalizedX * CGFloat(bitmap.pixelsWide)).rounded(.down))),
+            bitmap.pixelsWide - 1
+        )
+        let y = min(
+            max(
+                0,
+                bitmap.pixelsHigh - 1
+                    - Int((normalizedY * CGFloat(bitmap.pixelsHigh)).rounded(.down))
+            ),
+            bitmap.pixelsHigh - 1
+        )
         return bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB)
     }
 
