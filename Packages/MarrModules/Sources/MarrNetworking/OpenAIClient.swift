@@ -13,6 +13,7 @@ public enum OpenAIClientError: LocalizedError, Equatable, Sendable {
     case apiError(String)
     case emptyAnswer
     case outputTruncated
+    case unsupportedAttachment(String)
 
     public var errorDescription: String? {
         switch self {
@@ -26,6 +27,8 @@ public enum OpenAIClientError: LocalizedError, Equatable, Sendable {
             "The AI provider returned an empty answer."
         case .outputTruncated:
             "The AI provider stopped because the output limit was reached. Increase Maximum Output Tokens and retry."
+        case .unsupportedAttachment(let message):
+            message
         }
     }
 }
@@ -42,6 +45,14 @@ public struct OpenAIClient: VisionAIClient {
         model: String,
         connection: InferenceConnection
     ) async throws -> String {
+        try await askWithUsage(request: request, model: model, connection: connection).text
+    }
+
+    public func askWithUsage(
+        request: VisionRequest,
+        model: String,
+        connection: InferenceConnection
+    ) async throws -> VisionResponse {
         let endpoint: URL?
 
         switch connection.apiFormat {
@@ -76,7 +87,7 @@ public struct OpenAIClient: VisionAIClient {
         visionRequest: VisionRequest,
         model: String,
         connection: InferenceConnection
-    ) async throws -> String {
+    ) async throws -> VisionResponse {
         let body = ResponsesRequest(
             model: model,
             input: openAIInputMessages(from: visionRequest),
@@ -103,7 +114,12 @@ public struct OpenAIClient: VisionAIClient {
             .joined(separator: "\n\n")
 
         guard !answer.isEmpty else { throw OpenAIClientError.emptyAnswer }
-        return answer
+        return VisionResponse(
+            text: answer,
+            usage: envelope.usage.map {
+                InferenceTokenUsage(inputTokens: $0.inputTokens, outputTokens: $0.outputTokens)
+            }
+        )
     }
 
     private func askAnthropicMessages(
@@ -111,12 +127,12 @@ public struct OpenAIClient: VisionAIClient {
         visionRequest: VisionRequest,
         model: String,
         connection: InferenceConnection
-    ) async throws -> String {
+    ) async throws -> VisionResponse {
         let body = AnthropicMessagesRequest(
             model: model,
             maxTokens: connection.maximumOutputTokens,
             system: visionRequest.systemPrompt,
-            messages: anthropicMessages(from: visionRequest)
+            messages: try anthropicMessages(from: visionRequest)
         )
         let (data, response) = try await performRequest(
             endpoint: endpoint,
@@ -139,7 +155,15 @@ public struct OpenAIClient: VisionAIClient {
             .joined(separator: "\n\n")
 
         guard !answer.isEmpty else { throw OpenAIClientError.emptyAnswer }
-        return answer
+        return VisionResponse(
+            text: answer,
+            usage: envelope.usage.map {
+                InferenceTokenUsage(
+                    inputTokens: $0.inputTokens + $0.cacheCreationInputTokens + $0.cacheReadInputTokens,
+                    outputTokens: $0.outputTokens
+                )
+            }
+        )
     }
 
     private func performRequest<Body: Encodable>(
@@ -192,8 +216,13 @@ public struct OpenAIClient: VisionAIClient {
                     case .image(let image):
                         .init(
                             type: "input_image",
-                            text: nil,
                             imageURL: "data:\(image.mimeType);base64,\(image.data.base64EncodedString())"
+                        )
+                    case .file(let file):
+                        .init(
+                            type: "input_file",
+                            fileData: "data:\(file.mimeType);base64,\(file.data.base64EncodedString())",
+                            filename: file.fileName
                         )
                     }
                 }
@@ -202,16 +231,22 @@ public struct OpenAIClient: VisionAIClient {
         return messages
     }
 
-    private func anthropicMessages(from request: VisionRequest) -> [AnthropicMessagesRequest.Message] {
-        request.messages.map { message in
+    private func anthropicMessages(
+        from request: VisionRequest
+    ) throws -> [AnthropicMessagesRequest.Message] {
+        try request.messages.map { message in
             AnthropicMessagesRequest.Message(
                 role: message.role.rawValue,
-                content: message.content.map { content in
+                content: try message.content.map { content in
                     switch content {
                     case .text(let text):
-                        .init(type: "text", text: text, source: nil)
+                        return AnthropicMessagesRequest.Content(
+                            type: "text",
+                            text: text,
+                            source: nil
+                        )
                     case .image(let image):
-                        .init(
+                        return AnthropicMessagesRequest.Content(
                             type: "image",
                             text: nil,
                             source: .init(
@@ -220,10 +255,59 @@ public struct OpenAIClient: VisionAIClient {
                                 data: image.data.base64EncodedString()
                             )
                         )
+                    case .file(let file):
+                        if file.mimeType == "application/pdf" {
+                            return .init(
+                                type: "document",
+                                text: nil,
+                                source: .init(
+                                    type: "base64",
+                                    mediaType: file.mimeType,
+                                    data: file.data.base64EncodedString()
+                                ),
+                                title: file.fileName
+                            )
+                        }
+
+                        guard let text = decodedText(from: file) else {
+                            throw OpenAIClientError.unsupportedAttachment(
+                                "The Anthropic Messages format only supports PDF and plain-text attachments. Use the OpenAI Responses format for \"\(file.fileName)\"."
+                            )
+                        }
+                        return .init(
+                            type: "document",
+                            text: nil,
+                            source: .init(
+                                type: "text",
+                                mediaType: "text/plain",
+                                data: text
+                            ),
+                            title: file.fileName
+                        )
                     }
                 }
             )
         }
+    }
+
+    private func decodedText(from file: ConversationImageAsset) -> String? {
+        guard
+            file.mimeType.hasPrefix("text/")
+                || [
+                    "application/json",
+                    "application/javascript",
+                    "application/typescript",
+                    "application/toml",
+                    "application/yaml",
+                    "application/x-yaml"
+                ].contains(file.mimeType)
+        else {
+            return nil
+        }
+
+        return String(data: file.data, encoding: .utf8)
+            ?? String(data: file.data, encoding: .utf16)
+            ?? String(data: file.data, encoding: .isoLatin1)
     }
 
     private func apiEndpoint(from baseURLString: String, finalPathComponents: [String]) -> URL? {
@@ -293,10 +377,27 @@ private struct ResponsesRequest: Encodable {
         let type: String
         let text: String?
         let imageURL: String?
+        let fileData: String?
+        let filename: String?
+
+        init(
+            type: String,
+            text: String? = nil,
+            imageURL: String? = nil,
+            fileData: String? = nil,
+            filename: String? = nil
+        ) {
+            self.type = type
+            self.text = text
+            self.imageURL = imageURL
+            self.fileData = fileData
+            self.filename = filename
+        }
 
         enum CodingKeys: String, CodingKey {
-            case type, text
+            case type, text, filename
             case imageURL = "image_url"
+            case fileData = "file_data"
         }
 
         func encode(to encoder: Encoder) throws {
@@ -304,6 +405,8 @@ private struct ResponsesRequest: Encodable {
             try container.encode(type, forKey: .type)
             try container.encodeIfPresent(text, forKey: .text)
             try container.encodeIfPresent(imageURL, forKey: .imageURL)
+            try container.encodeIfPresent(fileData, forKey: .fileData)
+            try container.encodeIfPresent(filename, forKey: .filename)
         }
     }
 }
@@ -312,9 +415,10 @@ private struct ResponsesEnvelope: Decodable {
     let status: String?
     let incompleteDetails: IncompleteDetails?
     let output: [Output]
+    let usage: Usage?
 
     enum CodingKeys: String, CodingKey {
-        case status, output
+        case status, output, usage
         case incompleteDetails = "incomplete_details"
     }
 
@@ -323,6 +427,15 @@ private struct ResponsesEnvelope: Decodable {
     struct Content: Decodable {
         let type: String
         let text: String?
+    }
+    struct Usage: Decodable {
+        let inputTokens: Int
+        let outputTokens: Int
+
+        enum CodingKeys: String, CodingKey {
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+        }
     }
 }
 
@@ -345,10 +458,18 @@ private struct AnthropicMessagesRequest: Encodable {
     struct Content: Encodable {
         let type: String
         let text: String?
-        let source: ImageSource?
+        let source: Source?
+        let title: String?
+
+        init(type: String, text: String?, source: Source?, title: String? = nil) {
+            self.type = type
+            self.text = text
+            self.source = source
+            self.title = title
+        }
     }
 
-    struct ImageSource: Encodable {
+    struct Source: Encodable {
         let type: String
         let mediaType: String
         let data: String
@@ -363,14 +484,36 @@ private struct AnthropicMessagesRequest: Encodable {
 private struct AnthropicMessagesEnvelope: Decodable {
     let content: [Content]
     let stopReason: String?
+    let usage: Usage?
 
     enum CodingKeys: String, CodingKey {
-        case content
+        case content, usage
         case stopReason = "stop_reason"
     }
 
     struct Content: Decodable {
         let type: String
         let text: String?
+    }
+    struct Usage: Decodable {
+        let inputTokens: Int
+        let outputTokens: Int
+        let cacheCreationInputTokens: Int
+        let cacheReadInputTokens: Int
+
+        enum CodingKeys: String, CodingKey {
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+            case cacheCreationInputTokens = "cache_creation_input_tokens"
+            case cacheReadInputTokens = "cache_read_input_tokens"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            inputTokens = try container.decode(Int.self, forKey: .inputTokens)
+            outputTokens = try container.decode(Int.self, forKey: .outputTokens)
+            cacheCreationInputTokens = try container.decodeIfPresent(Int.self, forKey: .cacheCreationInputTokens) ?? 0
+            cacheReadInputTokens = try container.decodeIfPresent(Int.self, forKey: .cacheReadInputTokens) ?? 0
+        }
     }
 }

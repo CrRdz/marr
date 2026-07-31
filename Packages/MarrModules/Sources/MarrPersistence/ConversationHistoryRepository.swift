@@ -32,7 +32,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
         try prepareDatabase()
 
         let candidateFileURLs = archive.images.compactMap { image -> URL? in
-            let storedFileName = image.id.uuidString + fileExtension(for: image.mimeType)
+            let storedFileName = storedFileName(for: image)
             let url = attachmentsURL.appendingPathComponent(storedFileName)
             return fileManager.fileExists(atPath: url.path) ? nil : url
         }
@@ -249,7 +249,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
         try fileManager.createDirectory(at: attachmentsURL, withIntermediateDirectories: true)
 
         return try images.map { image in
-            let storedFileName = image.id.uuidString + fileExtension(for: image.mimeType)
+            let storedFileName = storedFileName(for: image)
             let imageURL = attachmentsURL.appendingPathComponent(storedFileName)
             if !fileManager.fileExists(atPath: imageURL.path) {
                 try image.data.write(to: imageURL, options: .atomic)
@@ -486,8 +486,35 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
         legacyHistoryURL.appendingPathComponent(conversationID.uuidString, isDirectory: true)
     }
 
-    private func fileExtension(for mimeType: String) -> String {
-        mimeType == "image/png" ? ".png" : ".jpg"
+    private func storedFileName(for attachment: ConversationImageAsset) -> String {
+        let originalExtension = URL(fileURLWithPath: attachment.fileName).pathExtension.lowercased()
+        let safeExtension: String
+        if !originalExtension.isEmpty,
+           originalExtension.count <= 16,
+           originalExtension.rangeOfCharacter(from: CharacterSet.alphanumerics.inverted) == nil {
+            safeExtension = originalExtension
+        } else {
+            safeExtension = preferredFileExtension(for: attachment.mimeType)
+        }
+        return attachment.id.uuidString + (safeExtension.isEmpty ? "" : ".\(safeExtension)")
+    }
+
+    private func preferredFileExtension(for mimeType: String) -> String {
+        switch mimeType.lowercased() {
+        case "image/png": "png"
+        case "image/jpeg": "jpg"
+        case "image/gif": "gif"
+        case "image/webp": "webp"
+        case "application/pdf": "pdf"
+        case "text/csv": "csv"
+        case "text/tsv": "tsv"
+        case "application/json": "json"
+        case "text/markdown": "md"
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
+        case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx"
+        case "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx"
+        default: "txt"
+        }
     }
 
     private func dateString(_ date: Date) -> String {
