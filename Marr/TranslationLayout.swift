@@ -1,6 +1,325 @@
 import AppKit
 import Foundation
 
+struct ImageTranslationHighlightPair: Identifiable, Equatable, Sendable {
+    let id: String
+    let sourceID: String?
+    let targetText: String?
+    let sourceRects: [CGRect]
+    let translatedRects: [CGRect]
+
+    init(
+        id: String,
+        sourceID: String? = nil,
+        targetText: String? = nil,
+        sourceRects: [CGRect],
+        translatedRects: [CGRect]
+    ) {
+        self.id = id
+        self.sourceID = sourceID
+        self.targetText = targetText
+        self.sourceRects = sourceRects
+        self.translatedRects = translatedRects
+    }
+}
+
+enum ImageTranslationHighlightBuilder {
+    static func hasReliableAlignments(
+        replacement: ImageTranslationReplacement,
+        region: ImageTranslationSourceRegion
+    ) -> Bool {
+        let alignments = validAlignments(replacement.alignments, for: region)
+        guard !alignments.isEmpty, !region.tokens.isEmpty else { return false }
+
+        var expectedTokenStart = 0
+        var targetSearchStart = replacement.text.startIndex
+        var coveredTargetCharacters = 0
+        let totalTargetCharacters = visibleCharacterCount(replacement.text)
+
+        for alignment in alignments {
+            guard alignment.tokenStart == expectedTokenStart else { return false }
+            expectedTokenStart = alignment.tokenEnd
+
+            guard let range = replacement.text.range(
+                of: alignment.targetText,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                range: targetSearchStart..<replacement.text.endIndex
+            ) else { return false }
+            targetSearchStart = range.upperBound
+            coveredTargetCharacters += visibleCharacterCount(alignment.targetText)
+
+            let sourceShare = CGFloat(alignment.tokenEnd - alignment.tokenStart)
+                / CGFloat(max(region.tokens.count, 1))
+            let targetShare = CGFloat(visibleCharacterCount(alignment.targetText))
+                / CGFloat(max(totalTargetCharacters, 1))
+            if sourceShare > 0.08, targetShare > 0, sourceShare / targetShare > 4.0 {
+                return false
+            }
+        }
+
+        return expectedTokenStart == region.tokens.count
+            && CGFloat(coveredTargetCharacters) / CGFloat(max(totalTargetCharacters, 1)) >= 0.82
+    }
+
+    static func pairs(
+        regions: [ImageTranslationSourceRegion],
+        replacements: [ImageTranslationReplacement]
+    ) -> [ImageTranslationHighlightPair] {
+        let replacementByID = Dictionary(
+            replacements.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return regions.flatMap { region -> [ImageTranslationHighlightPair] in
+            guard let replacement = replacementByID[region.id] else {
+                return []
+            }
+
+            if region.translationStrategy == .selective {
+                return replacement.segments.enumerated().compactMap { index, segment in
+                    let range = max(0, segment.tokenStart)..<min(region.tokens.count, segment.tokenEnd)
+                    guard !range.isEmpty else { return nil }
+                    let rects = sourceRects(for: range, tokens: region.tokens)
+                    guard !rects.isEmpty else { return nil }
+                    return ImageTranslationHighlightPair(
+                        id: "\(region.id)-s\(index)",
+                        sourceID: region.id,
+                        sourceRects: rects,
+                        translatedRects: rects
+                    )
+                }
+            }
+
+            let alignments = hasReliableAlignments(replacement: replacement, region: region)
+                ? validAlignments(replacement.alignments, for: region)
+                : []
+            let resolvedAlignments = alignments.isEmpty
+                ? fallbackAlignments(region: region, targetText: replacement.text)
+                : alignments
+            let placements = targetPlacements(
+                text: replacement.text,
+                targets: resolvedAlignments.map(\.targetText),
+                lineRects: region.lineRects,
+                fallbackRect: regionRect(region),
+                fontSize: CGFloat(region.fontSize ?? 0)
+            )
+
+            return resolvedAlignments.enumerated().compactMap { index, alignment in
+                let range = alignment.tokenStart..<alignment.tokenEnd
+                let source = sourceRects(for: range, tokens: region.tokens)
+                let translated = placements.indices.contains(index) ? placements[index] : []
+                guard !source.isEmpty, !translated.isEmpty else { return nil }
+                return ImageTranslationHighlightPair(
+                    id: "\(region.id)-a\(index)",
+                    sourceID: region.id,
+                    targetText: alignment.targetText,
+                    sourceRects: source,
+                    translatedRects: translated
+                )
+            }
+        }
+    }
+
+    private static func validAlignments(
+        _ alignments: [ImageTranslationAlignment],
+        for region: ImageTranslationSourceRegion
+    ) -> [ImageTranslationAlignment] {
+        alignments
+            .filter {
+                $0.tokenStart >= 0
+                    && $0.tokenEnd <= region.tokens.count
+                    && $0.tokenEnd > $0.tokenStart
+                    && !$0.targetText.isEmpty
+            }
+            .sorted {
+                if $0.tokenStart == $1.tokenStart { return $0.tokenEnd < $1.tokenEnd }
+                return $0.tokenStart < $1.tokenStart
+            }
+    }
+
+    private static func fallbackAlignments(
+        region: ImageTranslationSourceRegion,
+        targetText: String
+    ) -> [ImageTranslationAlignment] {
+        guard !region.tokens.isEmpty, !targetText.isEmpty else { return [] }
+        var ranges: [Range<Int>] = []
+        var start = 0
+        for index in region.tokens.indices {
+            let token = region.tokens[index].text
+            let closesSentence = token.range(of: #"[.!?。！？][\"'”’)]?$"#, options: .regularExpression) != nil
+            if closesSentence || index - start >= 11 {
+                ranges.append(start..<(index + 1))
+                start = index + 1
+            }
+        }
+        if start < region.tokens.count {
+            ranges.append(start..<region.tokens.count)
+        }
+
+        let phrases = targetPhrases(targetText, count: ranges.count)
+        return zip(ranges, phrases).map { range, phrase in
+            ImageTranslationAlignment(
+                tokenStart: range.lowerBound,
+                tokenEnd: range.upperBound,
+                targetText: phrase
+            )
+        }
+    }
+
+    private static func targetPhrases(_ text: String, count: Int) -> [String] {
+        guard count > 1 else { return [text] }
+        var sentences: [String] = []
+        var current = ""
+        for character in text {
+            current.append(character)
+            if "。！？.!?".contains(character), !current.trimmingCharacters(in: .whitespaces).isEmpty {
+                sentences.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            }
+        }
+        if !current.trimmingCharacters(in: .whitespaces).isEmpty {
+            sentences.append(current.trimmingCharacters(in: .whitespaces))
+        }
+        if sentences.count == count {
+            return sentences
+        }
+
+        let characters = Array(text)
+        return (0..<count).map { index in
+            let lower = characters.count * index / count
+            let upper = characters.count * (index + 1) / count
+            return String(characters[lower..<upper]).trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+    private struct GlyphPlacement {
+        let range: Range<String.Index>
+        let lineIndex: Int
+        let rect: CGRect
+    }
+
+    private static func targetPlacements(
+        text: String,
+        targets: [String],
+        lineRects: [ImageTranslationLineRect],
+        fallbackRect: CGRect,
+        fontSize: CGFloat
+    ) -> [[CGRect]] {
+        let lines = (lineRects.isEmpty ? [fallbackRect] : lineRects.map(rect))
+            .sorted { lhs, rhs in
+                if abs(lhs.minY - rhs.minY) > 0.002 { return lhs.minY < rhs.minY }
+                return lhs.minX < rhs.minX
+            }
+        guard !lines.isEmpty else { return Array(repeating: [], count: targets.count) }
+
+        let resolvedFontSize = fontSize > 0
+            ? fontSize
+            : (lines.map(\.height).sorted().dropFirst(lines.count / 2).first ?? lines[0].height) * 0.82
+        var placements: [GlyphPlacement] = []
+        var lineIndex = 0
+        var xOffset: CGFloat = 0
+
+        for index in text.indices {
+            let next = text.index(after: index)
+            let character = text[index]
+            let width = glyphWidth(character, fontSize: resolvedFontSize)
+            let line = lines[min(lineIndex, lines.count - 1)]
+            let inset = min(line.height * 0.08, line.width * 0.035)
+            let usableWidth = max(0.004, line.width - inset * 2)
+
+            if xOffset > 0, xOffset + width > usableWidth, lineIndex < lines.count - 1 {
+                lineIndex += 1
+                xOffset = 0
+            }
+
+            let activeLine = lines[min(lineIndex, lines.count - 1)]
+            let activeInset = min(activeLine.height * 0.08, activeLine.width * 0.035)
+            placements.append(GlyphPlacement(
+                range: index..<next,
+                lineIndex: lineIndex,
+                rect: CGRect(
+                    x: activeLine.minX + activeInset + xOffset,
+                    y: activeLine.minY,
+                    width: max(width, 0.002),
+                    height: activeLine.height
+                )
+            ))
+            xOffset += width
+        }
+
+        var searchStart = text.startIndex
+        return targets.map { target in
+            let found = text.range(
+                of: target,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                range: searchStart..<text.endIndex
+            ) ?? text.range(of: target, options: [.caseInsensitive, .diacriticInsensitive])
+            guard let found else { return [] }
+            searchStart = found.upperBound
+
+            let matching = placements.filter { $0.range.overlaps(found) }
+            return Dictionary(grouping: matching, by: \.lineIndex)
+                .keys
+                .sorted()
+                .compactMap { line in
+                    let rects = matching.filter { $0.lineIndex == line }.map(\.rect)
+                    return rects.reduce(nil as CGRect?) { partial, rect in
+                        partial?.union(rect) ?? rect
+                    }?.insetBy(dx: -0.002, dy: -0.001)
+                }
+        }
+    }
+
+    private static func glyphWidth(_ character: Character, fontSize: CGFloat) -> CGFloat {
+        if character == "`" { return 0 }
+        let layoutScale: CGFloat = 1_000
+        let isCJK = character.unicodeScalars.contains { scalar in
+            let value = Int(scalar.value)
+            return (0x3400...0x4DBF).contains(value)
+                || (0x4E00...0x9FFF).contains(value)
+                || (0xF900...0xFAFF).contains(value)
+        }
+        let renderedFontSize = fontSize * (isCJK ? 0.88 : 1)
+        let font = NSFont.systemFont(ofSize: renderedFontSize * layoutScale)
+        return ceil((String(character) as NSString).size(withAttributes: [.font: font]).width)
+            / layoutScale
+    }
+
+    private static func visibleCharacterCount(_ text: String) -> Int {
+        text.reduce(into: 0) { count, character in
+            if !character.isWhitespace, character != "`" {
+                count += 1
+            }
+        }
+    }
+
+    private static func sourceRects(
+        for range: Range<Int>,
+        tokens: [ImageTranslationSourceToken]
+    ) -> [CGRect] {
+        let valid = max(0, range.lowerBound)..<min(tokens.count, range.upperBound)
+        guard !valid.isEmpty else { return [] }
+        let grouped = Dictionary(grouping: valid.map { tokens[$0] }) { token in
+            Int((token.y * 1_000).rounded())
+        }
+        return grouped.values.map { row in
+            row.map { token in
+                CGRect(x: token.x, y: token.y, width: token.width, height: token.height)
+            }
+            .reduce(CGRect.null) { $0.union($1) }
+            .insetBy(dx: -0.002, dy: -0.001)
+        }
+    }
+
+    private static func regionRect(_ region: ImageTranslationSourceRegion) -> CGRect {
+        CGRect(x: region.x, y: region.y, width: region.width, height: region.height)
+    }
+
+    private static func rect(_ value: ImageTranslationLineRect) -> CGRect {
+        CGRect(x: value.x, y: value.y, width: value.width, height: value.height)
+    }
+}
+
 enum ImageTranslationMarkdownLineLayout {
     struct Token {
         let markdown: String
@@ -364,6 +683,29 @@ enum ImageTranslationReadingOrderLayout {
             && indentationDelta < 0.040
             && verticalGap > -maximumHeight * 0.25
             && verticalGap < maximumHeight * 1.15
+    }
+
+    static func isTightWrappedParagraphContinuation(
+        previousRect: CGRect,
+        candidateRect: CGRect,
+        blockRect: CGRect
+    ) -> Bool {
+        let maximumHeight = max(previousRect.height, candidateRect.height)
+        guard maximumHeight > 0 else {
+            return false
+        }
+
+        let verticalGap = previousRect.minY - candidateRect.maxY
+        let indentationDelta = abs(previousRect.minX - candidateRect.minX)
+        let trailingSlack = max(0, blockRect.maxX - previousRect.maxX)
+
+        // A sentence ending exactly at a visual line boundary is still part of
+        // the same paragraph when the preceding row fills the text column and
+        // the next row resumes immediately at the same leading edge.
+        return indentationDelta < 0.035
+            && verticalGap > -maximumHeight * 0.45
+            && verticalGap < maximumHeight * 0.85
+            && trailingSlack < max(0.045, maximumHeight * 2.2)
     }
 
     private static func axisGap(

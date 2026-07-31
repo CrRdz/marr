@@ -1,6 +1,11 @@
 import AppKit
 import Foundation
 
+struct ImageTranslationRenderResult: Sendable {
+    let data: Data
+    let translatedHighlightRects: [String: [CGRect]]
+}
+
 enum ImageTranslationRenderer {
     static func renderData(sourceData: Data, blocks: [ImageTranslationBlock]) -> Data? {
         guard !Task.isCancelled else { return nil }
@@ -14,7 +19,45 @@ enum ImageTranslationRenderer {
         return render(source: pickedImage, blocks: blocks)?.tiffRepresentation
     }
 
+    static func renderDataWithHighlights(
+        sourceData: Data,
+        blocks: [ImageTranslationBlock],
+        highlightPairs: [ImageTranslationHighlightPair]
+    ) -> ImageTranslationRenderResult? {
+        guard !Task.isCancelled, let sourceImage = NSImage(data: sourceData) else { return nil }
+        let pickedImage = PickedImage(
+            data: sourceData,
+            mimeType: "application/octet-stream",
+            fileName: "translation-source",
+            image: sourceImage
+        )
+        guard let output = renderOutput(
+            source: pickedImage,
+            blocks: blocks,
+            highlightPairs: highlightPairs
+        ), let data = output.image.tiffRepresentation else {
+            return nil
+        }
+        return ImageTranslationRenderResult(
+            data: data,
+            translatedHighlightRects: output.translatedHighlightRects
+        )
+    }
+
     static func render(source pickedImage: PickedImage, blocks: [ImageTranslationBlock]) -> NSImage? {
+        renderOutput(source: pickedImage, blocks: blocks, highlightPairs: [])?.image
+    }
+
+    private struct RenderOutput {
+        let image: NSImage
+        let translatedHighlightRects: [String: [CGRect]]
+    }
+
+    private static func renderOutput(
+        source pickedImage: PickedImage,
+        blocks: [ImageTranslationBlock],
+        highlightPairs: [ImageTranslationHighlightPair]
+    ) -> RenderOutput? {
         guard !Task.isCancelled else { return nil }
         guard let cgImage = sourceCGImage(from: pickedImage) else {
             return nil
@@ -37,7 +80,7 @@ enum ImageTranslationRenderer {
 
         let translatedBlocks = blocks.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard !translatedBlocks.isEmpty else {
-            return output
+            return RenderOutput(image: output, translatedHighlightRects: [:])
         }
 
         let drawableBlocks = layoutDrawableBlocks(
@@ -49,19 +92,28 @@ enum ImageTranslationRenderer {
             bitmap: bitmap,
             bounds: bounds
         )
+        var translatedHighlightRects: [String: [CGRect]] = [:]
         for drawableBlock in drawableBlocks {
             guard !Task.isCancelled else { return nil }
-            draw(
+            let blockPairs = highlightPairs.filter { pair in
+                pair.sourceID != nil && pair.sourceID == drawableBlock.block.sourceID
+            }
+            let blockHighlightRects = draw(
                 drawableBlock,
                 imageSize: imageSize,
                 bounds: bounds,
                 bitmap: bitmap,
                 backgroundSourceImage: backgroundSourceImage,
-                canvasBackgroundColor: canvasBackgroundColor
+                canvasBackgroundColor: canvasBackgroundColor,
+                highlightPairs: blockPairs
             )
+            translatedHighlightRects.merge(blockHighlightRects) { _, latest in latest }
         }
 
-        return output
+        return RenderOutput(
+            image: output,
+            translatedHighlightRects: translatedHighlightRects
+        )
     }
 
     private static func sourceCGImage(from pickedImage: PickedImage) -> CGImage? {
@@ -350,12 +402,13 @@ enum ImageTranslationRenderer {
         bounds: CGRect,
         bitmap: NSBitmapImageRep,
         backgroundSourceImage: NSImage,
-        canvasBackgroundColor: NSColor
-    ) {
+        canvasBackgroundColor: NSColor,
+        highlightPairs: [ImageTranslationHighlightPair]
+    ) -> [String: [CGRect]] {
         let block = drawableBlock.block
         let rect = drawableBlock.layoutRect.intersection(bounds).integral
         guard rect.width > 1, rect.height > 1 else {
-            return
+            return [:]
         }
 
         let backgroundSampleRect = drawableBlock.sourceRect
@@ -426,7 +479,7 @@ enum ImageTranslationRenderer {
 
         let preservesSourceCode = block.translationStrategy == .selective
             && !drawableBlock.sourceCodeRects.isEmpty
-        drawText(
+        let translatedHighlightRects = drawText(
             block,
             in: rect,
             lineRects: drawableBlock.layoutLineRects,
@@ -437,7 +490,9 @@ enum ImageTranslationRenderer {
             inlineCodeBackgroundColor: inlineCodeBackgroundColor,
             alignment: textAlignment(from: block.alignment),
             sourceHeight: drawableBlock.sourceRect.height,
-            preserveSourceCode: preservesSourceCode
+            preserveSourceCode: preservesSourceCode,
+            highlightPairs: highlightPairs,
+            imageSize: imageSize
         )
 
         drawTrailingAttachments(
@@ -446,6 +501,7 @@ enum ImageTranslationRenderer {
             bounds: bounds,
             bitmap: bitmap
         )
+        return translatedHighlightRects
     }
 
     private static func paintBackgroundPatch(
@@ -956,8 +1012,10 @@ enum ImageTranslationRenderer {
         inlineCodeBackgroundColor: NSColor,
         alignment: NSTextAlignment,
         sourceHeight: CGFloat,
-        preserveSourceCode: Bool
-    ) {
+        preserveSourceCode: Bool,
+        highlightPairs: [ImageTranslationHighlightPair],
+        imageSize: CGSize
+    ) -> [String: [CGRect]] {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = alignment
         paragraph.lineBreakMode = .byWordWrapping
@@ -966,7 +1024,7 @@ enum ImageTranslationRenderer {
         let textRect = rect.insetBy(dx: horizontalInset, dy: 0)
         let layoutText = layoutMarkdown(for: block)
 
-        if drawExplicitMarkdownLines(
+        if let explicitHighlightRects = drawExplicitMarkdownLines(
             block,
             lineRects: lineRects,
             codeRects: codeRects,
@@ -975,9 +1033,11 @@ enum ImageTranslationRenderer {
             backgroundColor: backgroundColor,
             inlineCodeBackgroundColor: inlineCodeBackgroundColor,
             alignment: alignment,
-            preserveSourceCode: preserveSourceCode
+            preserveSourceCode: preserveSourceCode,
+            highlightPairs: highlightPairs,
+            imageSize: imageSize
         ) {
-            return
+            return explicitHighlightRects
         }
 
         let baseFontSize = typographicBaseFontSize(
@@ -1038,9 +1098,13 @@ enum ImageTranslationRenderer {
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             context: nil
         )
+        return exactHighlightRects(
+            for: highlightPairs,
+            layouts: [TextHighlightLayout(attributed: renderedText.attributed, drawRect: drawRect)],
+            imageSize: imageSize
+        )
     }
 
-    @discardableResult
     private static func drawExplicitMarkdownLines(
         _ block: ImageTranslationBlock,
         lineRects: [CGRect],
@@ -1050,14 +1114,16 @@ enum ImageTranslationRenderer {
         backgroundColor: NSColor,
         inlineCodeBackgroundColor: NSColor,
         alignment: NSTextAlignment,
-        preserveSourceCode: Bool
-    ) -> Bool {
+        preserveSourceCode: Bool,
+        highlightPairs: [ImageTranslationHighlightPair],
+        imageSize: CGSize
+    ) -> [String: [CGRect]]? {
         let layoutText = layoutMarkdown(for: block)
         let explicitLines = layoutText.components(separatedBy: .newlines)
         let lines: [String]
         if explicitLines.count > 1 {
             guard explicitLines.count == lineRects.count else {
-                return false
+                return nil
             }
             lines = explicitLines
         } else if let wrappedLines = automaticMarkdownLines(
@@ -1071,9 +1137,10 @@ enum ImageTranslationRenderer {
                   ) {
             lines = wrappedLines
         } else {
-            return false
+            return nil
         }
 
+        var highlightLayouts: [TextHighlightLayout] = []
         for (line, rawLineRect) in zip(lines, lineRects) {
             let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else {
@@ -1157,9 +1224,164 @@ enum ImageTranslationRenderer {
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 context: nil
             )
+            highlightLayouts.append(TextHighlightLayout(
+                attributed: renderedText.attributed,
+                drawRect: drawRect
+            ))
         }
 
-        return true
+        return exactHighlightRects(
+            for: highlightPairs,
+            layouts: highlightLayouts,
+            imageSize: imageSize
+        )
+    }
+
+    private struct TextHighlightLayout {
+        let attributed: NSAttributedString
+        let drawRect: CGRect
+    }
+
+    private struct NormalizedTextUnit {
+        let layoutIndex: Int
+        let characterRange: NSRange
+        let normalizedRange: NSRange
+    }
+
+    private static func exactHighlightRects(
+        for pairs: [ImageTranslationHighlightPair],
+        layouts: [TextHighlightLayout],
+        imageSize: CGSize
+    ) -> [String: [CGRect]] {
+        guard !pairs.isEmpty, !layouts.isEmpty,
+              imageSize.width > 0, imageSize.height > 0
+        else { return [:] }
+
+        let normalized = NSMutableString()
+        var units: [NormalizedTextUnit] = []
+        for (layoutIndex, layout) in layouts.enumerated() {
+            let string = layout.attributed.string
+            string.enumerateSubstrings(
+                in: string.startIndex..<string.endIndex,
+                options: .byComposedCharacterSequences
+            ) { substring, substringRange, _, _ in
+                guard let substring else { return }
+                let folded = normalizedHighlightText(substring)
+                guard !folded.isEmpty else { return }
+                let normalizedRange = NSRange(
+                    location: normalized.length,
+                    length: (folded as NSString).length
+                )
+                normalized.append(folded)
+                units.append(NormalizedTextUnit(
+                    layoutIndex: layoutIndex,
+                    characterRange: NSRange(substringRange, in: string),
+                    normalizedRange: normalizedRange
+                ))
+            }
+        }
+        guard normalized.length > 0 else { return [:] }
+
+        var result: [String: [CGRect]] = [:]
+        var searchLocation = 0
+        for pair in pairs {
+            guard let targetText = pair.targetText else { continue }
+            let target = normalizedHighlightText(targetText)
+            guard !target.isEmpty else { continue }
+            let targetLength = (target as NSString).length
+            var found = normalized.range(
+                of: target,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                range: NSRange(
+                    location: min(searchLocation, normalized.length),
+                    length: max(0, normalized.length - min(searchLocation, normalized.length))
+                )
+            )
+            if found.location == NSNotFound {
+                found = normalized.range(
+                    of: target,
+                    options: [.caseInsensitive, .diacriticInsensitive]
+                )
+            }
+            guard found.location != NSNotFound, found.length == targetLength else { continue }
+            searchLocation = NSMaxRange(found)
+
+            let matchingUnits = units.filter {
+                NSIntersectionRange($0.normalizedRange, found).length > 0
+            }
+            let byLayout = Dictionary(grouping: matchingUnits, by: \.layoutIndex)
+            let rects = byLayout.keys.sorted().flatMap { layoutIndex -> [CGRect] in
+                guard let selectedUnits = byLayout[layoutIndex],
+                      let lower = selectedUnits.map(\.characterRange.location).min(),
+                      let upper = selectedUnits.map({ NSMaxRange($0.characterRange) }).max()
+                else { return [] }
+                return enclosingTextRects(
+                    characterRange: NSRange(location: lower, length: upper - lower),
+                    layout: layouts[layoutIndex]
+                ).map { appKitRect in
+                    CGRect(
+                        x: appKitRect.minX / imageSize.width,
+                        y: (imageSize.height - appKitRect.maxY) / imageSize.height,
+                        width: appKitRect.width / imageSize.width,
+                        height: appKitRect.height / imageSize.height
+                    )
+                    .insetBy(dx: -0.002, dy: -0.001)
+                }
+            }
+            if !rects.isEmpty {
+                result[pair.id] = rects
+            }
+        }
+        return result
+    }
+
+    private static func enclosingTextRects(
+        characterRange: NSRange,
+        layout: TextHighlightLayout
+    ) -> [CGRect] {
+        guard characterRange.length > 0, layout.attributed.length > 0 else { return [] }
+        let textStorage = NSTextStorage(attributedString: layout.attributed)
+        let layoutManager = NSLayoutManager()
+        let textContainer = NSTextContainer(size: layout.drawRect.size)
+        textContainer.lineFragmentPadding = 0
+        textContainer.maximumNumberOfLines = 0
+        if let paragraph = layout.attributed.attribute(
+            .paragraphStyle,
+            at: 0,
+            effectiveRange: nil
+        ) as? NSParagraphStyle {
+            textContainer.lineBreakMode = paragraph.lineBreakMode
+        }
+        layoutManager.addTextContainer(textContainer)
+        textStorage.addLayoutManager(layoutManager)
+        layoutManager.ensureLayout(for: textContainer)
+
+        let glyphRange = layoutManager.glyphRange(
+            forCharacterRange: characterRange,
+            actualCharacterRange: nil
+        )
+        var rects: [CGRect] = []
+        layoutManager.enumerateEnclosingRects(
+            forGlyphRange: glyphRange,
+            withinSelectedGlyphRange: glyphRange,
+            in: textContainer
+        ) { enclosingRect, _ in
+            let appKitRect = CGRect(
+                x: layout.drawRect.minX + enclosingRect.minX,
+                y: layout.drawRect.maxY - enclosingRect.maxY,
+                width: enclosingRect.width,
+                height: enclosingRect.height
+            )
+            if appKitRect.width > 0, appKitRect.height > 0 {
+                rects.append(appKitRect)
+            }
+        }
+        return rects
+    }
+
+    private static func normalizedHighlightText(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .filter { !$0.isWhitespace && $0 != "`" }
     }
 
     private struct MarkdownLineToken {

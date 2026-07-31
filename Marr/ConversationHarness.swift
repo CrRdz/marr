@@ -3,6 +3,7 @@ import Combine
 import MarrCore
 
 struct ImageTranslationBlock: Equatable, Sendable {
+    let sourceID: String?
     let text: String
     let x: Double
     let y: Double
@@ -22,6 +23,7 @@ struct ImageTranslationBlock: Equatable, Sendable {
     let fontSize: Double?
 
     init(
+        sourceID: String? = nil,
         text: String,
         x: Double,
         y: Double,
@@ -40,6 +42,7 @@ struct ImageTranslationBlock: Equatable, Sendable {
         weight: String? = nil,
         fontSize: Double? = nil
     ) {
+        self.sourceID = sourceID
         self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.x = Self.clamp(x)
         self.y = Self.clamp(y)
@@ -187,6 +190,7 @@ struct ImageTranslationSourceRegion: Equatable, Sendable, Identifiable {
     func translationBlock(text: String, kind replacementKind: String? = nil) -> ImageTranslationBlock {
         let isSelective = translationStrategy == .selective
         return ImageTranslationBlock(
+            sourceID: id,
             text: text,
             x: x,
             y: y,
@@ -213,17 +217,32 @@ struct ImageTranslationReplacement: Equatable, Sendable {
     let text: String
     let kind: String?
     let segments: [ImageTranslationReplacementSegment]
+    let alignments: [ImageTranslationAlignment]
 
     init(
         id: String,
         text: String,
         kind: String? = nil,
-        segments: [ImageTranslationReplacementSegment] = []
+        segments: [ImageTranslationReplacementSegment] = [],
+        alignments: [ImageTranslationAlignment] = []
     ) {
         self.id = id
         self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         self.kind = kind?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.segments = segments
+        self.alignments = alignments
+    }
+}
+
+struct ImageTranslationAlignment: Equatable, Sendable {
+    let tokenStart: Int
+    let tokenEnd: Int
+    let targetText: String
+
+    init(tokenStart: Int, tokenEnd: Int, targetText: String) {
+        self.tokenStart = tokenStart
+        self.tokenEnd = tokenEnd
+        self.targetText = targetText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -274,18 +293,19 @@ enum ImageTranslationPrompt {
     You classify and translate tokenized OCR layout regions from a screenshot into Simplified Chinese for natural in-place image replacement.
 
     Return only valid compact JSON with this exact shape:
-    {"translations":[{"id":"r001","strategy":"block","kind":"paragraph","targetMarkdown":"complete translated block","segments":[]},{"id":"r002","strategy":"selective","kind":"heading","segments":[{"tokenStart":2,"tokenEnd":4,"targetMarkdown":"translated label"}]}]}
+    {"translations":[{"id":"r001","strategy":"block","kind":"paragraph","targetMarkdown":"complete translated block","segments":[],"alignments":[{"tokenStart":0,"tokenEnd":3,"targetText":"exact translated phrase"}]},{"id":"r002","strategy":"selective","kind":"heading","segments":[{"tokenStart":2,"tokenEnd":4,"targetMarkdown":"translated label"}],"alignments":[]}]}
 
     Rules:
     - Return exactly one item for every provided id. Do not omit ids, merge ids, split ids, or invent ids.
     - Follow the supplied strategy for every region. Never change a region from block to selective or vice versa.
     - The preserve flag is meaningful only for strategy=selective. For strategy=block, translate every natural-language token even when it begins with a capital letter. Ordinary sentence-initial words such as "Screenshots", "Long", and "Failed" are not names.
-    - For strategy=block, translate the complete text as one coherent targetMarkdown value and return an empty segments array. Use fluent, idiomatic Simplified Chinese rather than word-for-word English syntax. Preserve only genuine personal names, products, brands, acronyms, and code identifiers. Do not insert visual line breaks; the renderer will reflow the complete translation.
+    - For strategy=block, translate the complete text as one coherent targetMarkdown value and return an empty segments array. Also return ordered alignments that partition ALL source tokens and ALL visible targetMarkdown text into consecutive semantic groups of roughly 2-8 source tokens. Do not omit articles, punctuation, identifiers, or short translated words from the partition. Each alignment targetText must be the complete exact contiguous substring corresponding to its source token range, not merely a keyword from that phrase. Keep semantic dependents together: purpose, cause, condition, negation, degree, and modifier phrases belong with the clause whose meaning they complete. Adjacent targetText values must appear in targetMarkdown in the same order without overlaps or unexplained gaps. For example, "delivering a final assessment to guide emergency intervention or hospital transfer" must align to the complete phrase "给出最终评估，以指导紧急干预或转院", not merely "给出最终评估". Likewise, "the system initiates a proactive consultation request" must align to the complete Chinese clause, not only to "请求". Alignments may represent a one-to-many or many-to-one translation. Use fluent, idiomatic Simplified Chinese rather than word-for-word English syntax. Preserve only genuine personal names, products, brands, acronyms, and code identifiers. Do not insert visual line breaks; the renderer will reflow the complete translation.
     - For strategy=block, translate English articles, verbs, adjectives, and sentence tails completely. Apart from genuine names, brands, acronyms, and code identifiers, targetMarkdown must not contain leftover English natural-language words.
     - Translate English hyphenated compounds idiomatically. Do not mechanically preserve a hyphen in phrases such as "early-stage" when natural Chinese does not use one.
     - Prefer context-appropriate technical Chinese: translate "publications" as "论文" or "出版成果" when discussing research, and translate phrases such as "owns turns" idiomatically as "管理轮次" or "负责轮次", never as a literal possession.
     - For strategy=block with codeRects, keep those exact code tokens unchanged, in their original order, and wrap only those tokens in single backticks. The renderer will erase the source chips and recreate them in the translated text flow.
     - For strategy=selective, omit targetMarkdown at item level and return only the contiguous token ranges that should change.
+    - For strategy=selective, return an empty alignments array; each segment already defines one semantic correspondence group.
     - Token indexes are zero-based. tokenStart is inclusive and tokenEnd is exclusive.
     - Selective segments must be ordered, non-overlapping, and inside the supplied token array.
     - Do not include preserved tokens inside a translated segment. Tokens marked preserve=true must never appear in a segment.
@@ -326,6 +346,58 @@ enum ImageTranslationPrompt {
                     content: [
                         .image(asset),
                         .text(regionPromptText(regions))
+                    ]
+                )
+            ]
+        )
+    }
+
+    static func alignmentRepairRequest(
+        for image: PickedImage,
+        regions: [ImageTranslationSourceRegion],
+        replacements: [ImageTranslationReplacement]
+    ) -> VisionRequest {
+        let replacementByID = Dictionary(
+            replacements.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let payload = regions.compactMap { region -> [String: Any]? in
+            guard let replacement = replacementByID[region.id] else { return nil }
+            return [
+                "id": region.id,
+                "sourceText": region.sourceText,
+                "sourceTokens": region.tokens.enumerated().map { index, token in
+                    ["index": index, "text": token.text] as [String: Any]
+                },
+                "targetMarkdown": replacement.text,
+                "draftAlignments": replacement.alignments.map { alignment in
+                    [
+                        "tokenStart": alignment.tokenStart,
+                        "tokenEnd": alignment.tokenEnd,
+                        "targetText": alignment.targetText
+                    ] as [String: Any]
+                }
+            ]
+        }
+        let data = (try? JSONSerialization.data(
+            withJSONObject: ["translations": payload],
+            options: [.sortedKeys]
+        )) ?? Data(#"{"translations":[]}"#.utf8)
+        let json = String(data: data, encoding: .utf8) ?? #"{"translations":[]}"#
+
+        return VisionRequest(
+            systemPrompt: """
+            Return only compact valid JSON shaped as {"translations":[{"id":"r001","targetMarkdown":"verbatim supplied targetMarkdown","segments":[],"alignments":[{"tokenStart":0,"tokenEnd":4,"targetText":"complete exact corresponding target phrase"}]}]}.
+            This is a bilingual semantic-alignment audit, not translation. Copy each supplied targetMarkdown verbatim and replace draftAlignments with corrected alignments. Partition every source token from index 0 through the final token and all visible target text into ordered, consecutive semantic groups.
+
+            Before returning JSON, silently verify each group in both directions: (1) reading only its source tokens, targetText must express their complete meaning; (2) reading only targetText, it must not contain meaning belonging to a neighboring source group. Keep purpose, cause, condition, negation, degree, and modifier phrases with the clause they complete. Each targetText must be the complete exact contiguous target substring, never only a keyword. In particular, "delivering a final assessment to guide emergency intervention or hospital transfer" corresponds to the full "给出最终评估，以指导紧急干预或转院", not just "给出最终评估". Do not omit punctuation, identifiers, articles, or short words; attach them to the nearest semantic group. Prefer complete clauses over arbitrary fixed token counts; use roughly 3-12 source tokens where semantics allow. Do not add explanations.
+            """,
+            messages: [
+                VisionMessage(
+                    role: .user,
+                    content: [
+                        .image(ConversationImageAsset(image: image)),
+                        .text(json)
                     ]
                 )
             ]
@@ -1051,6 +1123,7 @@ private struct ImageTranslationReplacementDTO: Decodable {
     let kind: String?
     let type: String?
     let segments: [ImageTranslationReplacementSegmentDTO]?
+    let alignments: [ImageTranslationAlignmentDTO]?
 
     var replacement: ImageTranslationReplacement? {
         guard let id else {
@@ -1061,6 +1134,7 @@ private struct ImageTranslationReplacementDTO: Decodable {
         let trimmedText = (targetMarkdown ?? markdown ?? text ?? translation ?? content ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedSegments = (segments ?? []).compactMap(\.replacementSegment)
+        let resolvedAlignments = (alignments ?? []).compactMap(\.alignment)
         guard !trimmedID.isEmpty, !trimmedText.isEmpty || segments != nil else {
             return nil
         }
@@ -1069,7 +1143,37 @@ private struct ImageTranslationReplacementDTO: Decodable {
             id: trimmedID,
             text: trimmedText,
             kind: kind ?? type,
-            segments: resolvedSegments
+            segments: resolvedSegments,
+            alignments: resolvedAlignments
+        )
+    }
+}
+
+private struct ImageTranslationAlignmentDTO: Decodable {
+    let tokenStart: Int?
+    let tokenEnd: Int?
+    let start: Int?
+    let end: Int?
+    let targetText: String?
+    let text: String?
+
+    var alignment: ImageTranslationAlignment? {
+        guard
+            let resolvedStart = tokenStart ?? start,
+            let resolvedEnd = tokenEnd ?? end,
+            let resolvedText = targetText ?? text
+        else {
+            return nil
+        }
+
+        let trimmedText = resolvedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard resolvedStart >= 0, resolvedEnd > resolvedStart, !trimmedText.isEmpty else {
+            return nil
+        }
+        return ImageTranslationAlignment(
+            tokenStart: resolvedStart,
+            tokenEnd: resolvedEnd,
+            targetText: trimmedText
         )
     }
 }
@@ -1264,7 +1368,8 @@ private struct ImageTranslationTokenRectDTO: Decodable {
 struct ConversationContextPolicy: Equatable, Sendable {
     var maximumCompletedTurns = 12
     var maximumTextCharacters = 24_000
-    var maximumImages = 4
+    var maximumImages = AttachmentFileSupport.maximumAttachmentCount
+    var maximumAttachmentBytes = AttachmentFileSupport.maximumRequestBytes
 
     static let `default` = ConversationContextPolicy()
 }
@@ -1346,9 +1451,9 @@ enum ConversationSlashCommand: String, CaseIterable, Identifiable, Sendable {
 
 struct ConversationContextBuilder: Sendable {
     static let systemPrompt = """
-    You answer questions about screenshots. Answer the latest user question directly and use earlier turns only when they are relevant.
+    You answer questions about screenshots and attached files. Answer the latest user question directly and use earlier turns only when they are relevant.
 
-    Images belong to the user message where they appear. A newly attached image is new visual context and may differ from earlier screenshots. Do not claim that two screenshots are the same unless the user says so. When the question is ambiguous, prefer the most recently attached image.
+    Attachments belong to the user message where they appear. A newly attached image or file is new context and may differ from earlier attachments. Do not claim that two attachments are the same unless the user says so. When the question is ambiguous, prefer the most recently attached item.
     """
 
     let policy: ConversationContextPolicy
@@ -1375,6 +1480,7 @@ struct ConversationContextBuilder: Sendable {
         let latestImageID = turns[...targetIndex].reversed().lazy.flatMap(\.imageIDs).first
         selected = enforceImageBudget(
             selected,
+            images: images,
             targetID: target.id,
             fallbackImageID: latestImageID
         )
@@ -1382,7 +1488,8 @@ struct ConversationContextBuilder: Sendable {
         var messages: [VisionMessage] = []
         for turn in selected {
             var userContent: [VisionContent] = turn.imageIDs.compactMap { imageID in
-                images[imageID].map(VisionContent.image)
+                guard let attachment = images[imageID] else { return nil }
+                return attachment.isImage ? .image(attachment) : .file(attachment)
             }
             userContent.append(.text(ConversationSlashCommand.expandedPrompt(for: turn.question)))
             messages.append(VisionMessage(role: .user, content: userContent))
@@ -1414,33 +1521,49 @@ struct ConversationContextBuilder: Sendable {
 
     private func enforceImageBudget(
         _ turns: [ConversationTurn],
+        images: [UUID: ConversationImageAsset],
         targetID: UUID,
         fallbackImageID: UUID?
     ) -> [ConversationTurn] {
         var remainingImages = max(1, policy.maximumImages)
+        var remainingBytes = max(1, policy.maximumAttachmentBytes)
         var result = turns
 
         for index in result.indices.reversed() {
             let imageIDs = result[index].imageIDs
-            if imageIDs.count <= remainingImages {
-                remainingImages -= imageIDs.count
-            } else {
+            var keptImageIDs: [UUID] = []
+            for imageID in imageIDs.reversed() {
+                guard
+                    remainingImages > 0,
+                    let attachment = images[imageID],
+                    attachment.data.count <= remainingBytes
+                else {
+                    continue
+                }
+                keptImageIDs.append(imageID)
+                remainingImages -= 1
+                remainingBytes -= attachment.data.count
+            }
+            keptImageIDs.reverse()
+
+            if keptImageIDs != imageIDs {
                 result[index] = ConversationTurn(
                     id: result[index].id,
                     question: result[index].question,
-                    imageIDs: Array(imageIDs.suffix(remainingImages)),
+                    imageIDs: keptImageIDs,
                     answer: result[index].answer,
                     errorMessage: result[index].errorMessage,
                     status: result[index].status,
                     showsAssistant: result[index].showsAssistant
                 )
-                remainingImages = 0
             }
         }
 
         if !result.contains(where: { !$0.imageIDs.isEmpty }),
            let targetIndex = result.firstIndex(where: { $0.id == targetID }),
-           let fallbackImageID {
+           let fallbackImageID,
+           let fallback = images[fallbackImageID],
+           fallback.data.count <= policy.maximumAttachmentBytes {
             result[targetIndex] = ConversationTurn(
                 id: result[targetIndex].id,
                 question: result[targetIndex].question,
@@ -1469,6 +1592,17 @@ final class ConversationSession: ObservableObject {
     private let contextBuilder: ConversationContextBuilder
     private var updatedAt: Date
     private var archiveHandler: ((ConversationArchive) -> Void)?
+
+    init(contextBuilder: ConversationContextBuilder = ConversationContextBuilder()) {
+        id = UUID()
+        createdAt = Date()
+        updatedAt = createdAt
+        generatedTitle = nil
+        turns = []
+        images = [:]
+        pendingImageIDs = []
+        self.contextBuilder = contextBuilder
+    }
 
     init(
         initialImage: PickedImage,
@@ -1552,6 +1686,16 @@ final class ConversationSession: ObservableObject {
     @discardableResult
     func appendScreenshot(_ image: PickedImage) -> UUID {
         let asset = ConversationImageAsset(image: image)
+        return append(asset)
+    }
+
+    @discardableResult
+    func appendAttachment(_ attachment: PickedAttachment) -> UUID {
+        let asset = ConversationImageAsset(attachment: attachment)
+        return append(asset)
+    }
+
+    private func append(_ asset: ConversationImageAsset) -> UUID {
         images[asset.id] = asset
         pendingImageIDs.append(asset.id)
         focusRequestID += 1

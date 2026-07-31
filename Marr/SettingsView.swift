@@ -4,68 +4,9 @@ import MarrCore
 import MarrSettings
 import SwiftUI
 
-struct SettingsView: View {
-    @ObservedObject var controller: MarrController
-    @State private var selection: SettingsSection = .general
-    @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
-
-    var body: some View {
-        NavigationSplitView {
-            List(SettingsSection.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.systemImage)
-                    .tag(section)
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("Settings")
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
-        } detail: {
-            selectedDetail
-                .navigationTitle(selection.title)
-        }
-        .frame(minWidth: 760, idealWidth: 820, minHeight: 520, idealHeight: 580)
-        .tint(selectedAccentColor)
-        .accentColor(selectedAccentColor)
-    }
-
-    @ViewBuilder
-    private var selectedDetail: some View {
-        switch selection {
-        case .history:
-            HistoryView(controller: controller)
-        default:
-            Form {
-                selectedPanel
-            }
-            .formStyle(.grouped)
-        }
-    }
-
-    @ViewBuilder
-    private var selectedPanel: some View {
-        switch selection {
-        case .general:
-            GeneralSettingsPanel(controller: controller)
-        case .provider:
-            ProviderSettingsPanel(controller: controller)
-        case .appearance:
-            AppearanceSettingsPanel()
-        case .history:
-            EmptyView()
-        }
-    }
-
-    private var selectedAccentColor: Color {
-        selectedAccent.color
-    }
-
-    private var selectedAccent: MarrAccentColor {
-        MarrAccentColor.resolve(accentColor)
-    }
-}
-
 struct AnswerPanelSettingsView: View {
     @ObservedObject var controller: MarrController
-    @State private var selection = AnswerPanelSettingsSection.general
+    @State private var selection = AnswerPanelSettingsSection.preferences
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
 
     var body: some View {
@@ -112,12 +53,15 @@ struct AnswerPanelSettingsView: View {
     @ViewBuilder
     private var selectedPanel: some View {
         switch selection {
-        case .general:
-            CompactGeneralSettingsPanel(controller: controller)
+        case .preferences:
+            CompactPreferencesSettingsPanel(controller: controller)
         case .provider:
             CompactProviderSettingsPanel(controller: controller)
-        case .appearance:
-            CompactAppearanceSettingsPanel()
+        case .usage:
+            CompactUsageSettingsPanel(
+                usageStore: controller.tokenUsageStore,
+                historyStore: controller.historyStore
+            )
         }
     }
 
@@ -127,25 +71,36 @@ struct AnswerPanelSettingsView: View {
 }
 
 private enum AnswerPanelSettingsSection: String, CaseIterable, Identifiable {
-    case general
+    case preferences
     case provider
-    case appearance
+    case usage
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .general: "General"
+        case .preferences: "Preferences"
         case .provider: "AI"
-        case .appearance: "Style"
+        case .usage: "Usage"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .general: "slider.horizontal.3"
-        case .provider: "sparkles"
-        case .appearance: "paintpalette"
+        case .preferences: "gearshape.2"
+        case .provider: "cpu"
+        case .usage: "chart.bar.xaxis"
+        }
+    }
+}
+
+private struct CompactPreferencesSettingsPanel: View {
+    @ObservedObject var controller: MarrController
+
+    var body: some View {
+        VStack(spacing: 22) {
+            CompactGeneralSettingsPanel(controller: controller)
+            CompactAppearanceSettingsPanel()
         }
     }
 }
@@ -224,19 +179,6 @@ private struct CompactGeneralSettingsPanel: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-
-                CompactSettingsDivider()
-
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
-                    Label("Quit", systemImage: "power")
-                        .font(MarrTypography.body(size: 13, weight: .medium))
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -293,120 +235,203 @@ private struct CompactGeneralSettingsPanel: View {
     }
 }
 
+@MainActor
+func openMarrWelcomeGuide(controller: MarrController) {
+    MarrOnboardingPresenter.shared.show(controller: controller)
+}
+
 private struct CompactProviderSettingsPanel: View {
     @ObservedObject var controller: MarrController
     @AppStorage("gateway.preset") private var gatewayPreset = GatewayPreset.custom.rawValue
+    @State private var showsAdvanced = false
 
     var body: some View {
-        VStack(spacing: 18) {
-            CompactSettingsGroup("Model") {
-                CompactSettingsRow("Provider", systemImage: "cpu") {
-                    Picker("", selection: $controller.provider) {
-                        ForEach(InferenceProvider.allCases) { provider in
-                            Text(provider.rawValue).tag(provider)
-                        }
-                    }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(width: 154)
-                }
-
-                CompactSettingsDivider()
-
-                CompactSettingsRow("Model", systemImage: "textformat") {
-                    TextField("Model", text: $controller.model)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 8)
-                        .frame(width: 184, height: 28)
-                        .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
-                }
-
-                CompactSettingsDivider()
-
-                CompactSettingsRow("Max tokens", systemImage: "text.word.spacing") {
-                    Stepper(
-                        controller.maximumOutputTokens.formatted(),
-                        value: $controller.maximumOutputTokens,
-                        in: 256...32_768,
-                        step: 256
-                    )
-                    .font(MarrTypography.mono(size: 12))
-                    .controlSize(.small)
-                    .frame(width: 146)
-                }
-            }
+        VStack(spacing: 20) {
+            providerSelector
+            modelSection
 
             if controller.provider == .openAI {
-                CompactSettingsGroup("OpenAI Key") {
-                    CompactCredentialEditor(
-                        controller: controller,
-                        credential: .openAIAPIKey
-                    )
-                }
+                openAIConnection
             } else {
-                CompactSettingsGroup("Gateway") {
-                    CompactSettingsRow("Preset", systemImage: "switch.2") {
-                        Picker("", selection: gatewayPresetBinding) {
-                            ForEach(GatewayPreset.allCases) { preset in
-                                Text(preset.title).tag(preset.rawValue)
-                            }
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
-                        .frame(width: 154)
-                    }
-
-                    CompactSettingsDivider()
-
-                    CompactSettingsRow("URL", systemImage: "link") {
-                        TextField("Base URL", text: $controller.gatewayBaseURL)
-                            .textFieldStyle(.plain)
-                            .padding(.horizontal, 8)
-                            .frame(width: 210, height: 28)
-                            .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
-                    }
-
-                    CompactSettingsDivider()
-
-                    CompactSettingsRow("Format", systemImage: "curlybraces") {
-                        Picker("", selection: $controller.gatewayAPIFormat) {
-                            ForEach(GatewayAPIFormat.allCases) { format in
-                                Text(format.rawValue).tag(format)
-                            }
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
-                        .frame(width: 174)
-                    }
-
-                    CompactSettingsDivider()
-
-                    CompactSettingsRow("Auth", systemImage: "lock") {
-                        Picker("", selection: $controller.gatewayAuthScheme) {
-                            ForEach(GatewayAuthScheme.allCases) { scheme in
-                                Text(scheme.rawValue).tag(scheme)
-                            }
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
-                        .frame(width: 154)
-                    }
-                }
-
-                if controller.gatewayAuthScheme != .none {
-                    CompactSettingsGroup("Gateway Key") {
-                        CompactCredentialEditor(
-                            controller: controller,
-                            credential: .gatewayAPIKey
-                        )
-                    }
-                }
-
-                CompactSettingsGroup("Headers") {
-                    CompactHeadersCredentialEditor(controller: controller)
-                }
+                gatewayEndpoint
+                gatewayAuthentication
+                gatewayAdvanced
             }
         }
+    }
+
+    private var providerSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("PROVIDER")
+                .font(MarrTypography.body(size: 10.5, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .tracking(0.55)
+
+            Picker("Provider", selection: $controller.provider) {
+                Label("OpenAI", systemImage: "sparkles")
+                    .tag(InferenceProvider.openAI)
+                Label("Custom Gateway", systemImage: "point.3.connected.trianglepath.dotted")
+                    .tag(InferenceProvider.gateway)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Text(
+                controller.provider == .openAI
+                    ? "Managed OpenAI endpoint using the Responses API."
+                    : "Connect an OpenAI Responses or Anthropic Messages compatible endpoint."
+            )
+            .font(MarrTypography.body(size: 10.5))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var modelSection: some View {
+        CompactSettingsGroup("Model") {
+            CompactSettingsRow("Model ID", systemImage: "cube") {
+                TextField("Upstream model ID", text: $controller.model)
+                    .textFieldStyle(.plain)
+                    .font(MarrTypography.mono(size: 11.5))
+                    .padding(.horizontal, 8)
+                    .frame(width: 198, height: 28)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
+            }
+
+            CompactSettingsDivider()
+
+            CompactSettingsRow("Output limit", systemImage: "text.word.spacing") {
+                Stepper(
+                    controller.maximumOutputTokens.formatted(),
+                    value: $controller.maximumOutputTokens,
+                    in: 256...32_768,
+                    step: 256
+                )
+                .font(MarrTypography.mono(size: 11.5))
+                .controlSize(.small)
+                .frame(width: 150)
+            }
+        }
+    }
+
+    private var openAIConnection: some View {
+        VStack(spacing: 18) {
+            CompactSettingsGroup("Endpoint") {
+                CompactReadOnlySetting(
+                    title: "Base URL",
+                    systemImage: "link",
+                    value: "api.openai.com/v1"
+                )
+                CompactSettingsDivider()
+                CompactReadOnlySetting(
+                    title: "Protocol",
+                    systemImage: "arrow.left.arrow.right",
+                    value: "Responses API"
+                )
+            }
+
+            CompactSettingsGroup("Authentication") {
+                CompactCredentialEditor(
+                    controller: controller,
+                    credential: .openAIAPIKey
+                )
+            }
+        }
+    }
+
+    private var gatewayEndpoint: some View {
+        CompactSettingsGroup("Endpoint") {
+            CompactSettingsRow("Preset", systemImage: "switch.2") {
+                Picker("", selection: gatewayPresetBinding) {
+                    ForEach(GatewayPreset.allCases) { preset in
+                        Text(preset.title).tag(preset.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 164)
+            }
+
+            CompactSettingsDivider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                Label("Base URL", systemImage: "link")
+                    .font(MarrTypography.body(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                TextField("https://gateway.example.com/v1", text: $controller.gatewayBaseURL)
+                    .textFieldStyle(.plain)
+                    .font(MarrTypography.mono(size: 11.5))
+                    .padding(.horizontal, 9)
+                    .frame(maxWidth: .infinity, minHeight: 30)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
+
+                Text("The configured origin is used only for model requests. Marr appends the protocol endpoint when needed.")
+                    .font(MarrTypography.body(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 8)
+
+            CompactSettingsDivider()
+
+            CompactSettingsRow("API protocol", systemImage: "arrow.left.arrow.right") {
+                Picker("", selection: $controller.gatewayAPIFormat) {
+                    ForEach(GatewayAPIFormat.allCases) { format in
+                        Text(format.rawValue).tag(format)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 190)
+            }
+        }
+    }
+
+    private var gatewayAuthentication: some View {
+        CompactSettingsGroup("Authentication") {
+            CompactSettingsRow("Method", systemImage: "lock.shield") {
+                Picker("", selection: $controller.gatewayAuthScheme) {
+                    Text("Bearer token").tag(GatewayAuthScheme.bearer)
+                    Text("x-api-key").tag(GatewayAuthScheme.xAPIKey)
+                    Text("No authentication").tag(GatewayAuthScheme.none)
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 180)
+            }
+
+            if controller.gatewayAuthScheme != .none {
+                CompactSettingsDivider()
+                CompactCredentialEditor(
+                    controller: controller,
+                    credential: .gatewayAPIKey
+                )
+            } else {
+                CompactSettingsDivider()
+                Label("No credential will be sent with requests.", systemImage: "checkmark.shield")
+                    .font(MarrTypography.body(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            }
+        }
+    }
+
+    private var gatewayAdvanced: some View {
+        DisclosureGroup(isExpanded: $showsAdvanced) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Static request headers")
+                    .font(MarrTypography.body(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                CompactHeadersCredentialEditor(controller: controller)
+            }
+            .padding(.top, 9)
+        } label: {
+            Label("Advanced request options", systemImage: "slider.horizontal.3")
+                .font(MarrTypography.body(size: 12.5, weight: .medium))
+        }
+        .padding(.horizontal, 2)
     }
 
     private var gatewayPresetBinding: Binding<String> {
@@ -419,6 +444,21 @@ private struct CompactProviderSettingsPanel: View {
                 }
             }
         )
+    }
+}
+
+private struct CompactReadOnlySetting: View {
+    let title: String
+    let systemImage: String
+    let value: String
+
+    var body: some View {
+        CompactSettingsRow(title, systemImage: systemImage) {
+            Text(value)
+                .font(MarrTypography.mono(size: 10.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -467,6 +507,239 @@ private struct CompactAppearanceSettingsPanel: View {
                 }
             }
         }
+    }
+}
+
+private struct CompactUsageSettingsPanel: View {
+    @ObservedObject var usageStore: TokenUsageStore
+    @ObservedObject var historyStore: ConversationHistoryStore
+    @State private var hoveredBucketID: Date?
+
+    private let calendar = Calendar.autoupdatingCurrent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                CompactUsageMetric(value: compactTokenCount(totalTokens), title: "Total Tokens")
+                CompactUsageMetric(value: compactTokenCount(peakDailyTokens), title: "Peak Day")
+                CompactUsageMetric(value: durationLabel(longestConversationDuration), title: "Longest Chat")
+                CompactUsageMetric(value: "\(streaks.current) days", title: "Current Streak")
+                CompactUsageMetric(value: "\(streaks.longest) days", title: "Longest Streak")
+            }
+
+            CompactSettingsGroup("Token Activity") {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            LazyHGrid(
+                                rows: Array(repeating: GridItem(.fixed(7), spacing: 2), count: 7),
+                                spacing: 2
+                            ) {
+                                ForEach(dailyBuckets) { bucket in
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(activityColor(tokens: bucket.tokens, maximum: peakDailyTokens))
+                                        .frame(width: 7, height: 7)
+                                        .overlay {
+                                            if calendar.isDateInToday(bucket.start) {
+                                                RoundedRectangle(cornerRadius: 2)
+                                                    .stroke(Color.accentColor, lineWidth: 1)
+                                            }
+                                        }
+                                        .overlay(alignment: .top) {
+                                            if hoveredBucketID == bucket.id {
+                                                TokenActivityTooltip(bucket: bucket)
+                                                    .offset(x: tooltipHorizontalOffset(for: bucket), y: -36)
+                                                    .zIndex(20)
+                                            }
+                                        }
+                                        .onHover { isHovering in
+                                            hoveredBucketID = isHovering ? bucket.id : nil
+                                        }
+                                        .zIndex(hoveredBucketID == bucket.id ? 20 : 0)
+                                        .id(bucket.id)
+                                }
+                            }
+                            .padding(.top, 38)
+
+                            HStack(spacing: 2) {
+                                ForEach(monthMarkers) { marker in
+                                    Color.clear
+                                        .frame(width: 7, height: 13)
+                                        .overlay(alignment: .leading) {
+                                            if let label = marker.label {
+                                                Text(label)
+                                                    .font(MarrTypography.body(size: 9.5))
+                                                    .foregroundStyle(.secondary)
+                                                    .fixedSize()
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 5)
+                    }
+                    .scrollIndicators(.hidden)
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(calendar.startOfDay(for: Date()), anchor: .trailing)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var totalTokens: Int {
+        usageStore.events.reduce(0) { $0 + $1.totalTokens }
+    }
+
+    private var dailyTotals: [Date: Int] {
+        Dictionary(grouping: usageStore.events) { calendar.startOfDay(for: $0.date) }
+            .mapValues { $0.reduce(0) { $0 + $1.totalTokens } }
+    }
+
+    private var peakDailyTokens: Int { dailyTotals.values.max() ?? 0 }
+
+    private var longestConversationDuration: TimeInterval {
+        historyStore.conversations.map { max(0, $0.updatedAt.timeIntervalSince($0.createdAt)) }.max() ?? 0
+    }
+
+    private var streaks: (current: Int, longest: Int) {
+        let days = dailyTotals.keys.sorted()
+        guard !days.isEmpty else { return (0, 0) }
+
+        var longest = 1
+        var run = 1
+        for index in 1..<days.count {
+            if calendar.dateComponents([.day], from: days[index - 1], to: days[index]).day == 1 {
+                run += 1
+                longest = max(longest, run)
+            } else {
+                run = 1
+            }
+        }
+
+        let today = calendar.startOfDay(for: Date())
+        let gap = calendar.dateComponents([.day], from: days.last ?? today, to: today).day ?? 0
+        return (gap <= 1 ? run : 0, longest)
+    }
+
+    private var dailyBuckets: [UsageBucket] {
+        let today = calendar.startOfDay(for: Date())
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: today)?.start ?? today
+        let firstDay = calendar.date(byAdding: .weekOfYear, value: -52, to: weekStart) ?? today
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.dateFormat = "MMM d, yyyy"
+
+        return (0..<371).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: firstDay) else { return nil }
+            return UsageBucket(
+                start: date,
+                tokens: date > today ? 0 : (dailyTotals[date] ?? 0),
+                label: formatter.string(from: date)
+            )
+        }
+    }
+
+    private var monthMarkers: [UsageMonthMarker] {
+        let weekStarts = stride(from: 0, to: dailyBuckets.count, by: 7).map { dailyBuckets[$0].start }
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("MMM")
+
+        return weekStarts.enumerated().map { index, date in
+            let previousDate = index > 0 ? weekStarts[index - 1] : nil
+            let showsLabel = previousDate == nil
+                || calendar.component(.month, from: previousDate!) != calendar.component(.month, from: date)
+            return UsageMonthMarker(date: date, label: showsLabel ? formatter.string(from: date) : nil)
+        }
+    }
+
+    private func activityColor(tokens: Int, maximum: Int) -> Color {
+        guard tokens > 0, maximum > 0 else { return .primary.opacity(0.055) }
+        let ratio = sqrt(Double(tokens) / Double(maximum))
+        return Color.accentColor.opacity(0.25 + ratio * 0.75)
+    }
+
+    private func tooltipHorizontalOffset(for bucket: UsageBucket) -> CGFloat {
+        guard let firstDate = dailyBuckets.first?.start else { return 0 }
+        let dayOffset = calendar.dateComponents([.day], from: firstDate, to: bucket.start).day ?? 0
+        let week = dayOffset / 7
+        if week < 10 { return 88 }
+        if week > 42 { return -88 }
+        return 0
+    }
+
+    private func compactTokenCount(_ value: Int) -> String {
+        if value >= 1_000_000 {
+            return String(format: "%.1fM", Double(value) / 1_000_000).replacingOccurrences(of: ".0M", with: "M")
+        }
+        if value >= 1_000 {
+            return String(format: "%.1fK", Double(value) / 1_000).replacingOccurrences(of: ".0K", with: "K")
+        }
+        return value.formatted()
+    }
+
+    private func durationLabel(_ duration: TimeInterval) -> String {
+        let seconds = Int(duration.rounded())
+        if seconds >= 3_600 { return "\(seconds / 3_600)h \((seconds % 3_600) / 60)m" }
+        if seconds >= 60 { return "\(seconds / 60)m \(seconds % 60)s" }
+        return "\(seconds)s"
+    }
+}
+
+private struct CompactUsageMetric: View {
+    let value: String
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(MarrTypography.body(size: 17, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(title)
+                .font(MarrTypography.body(size: 10.5))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct UsageMonthMarker: Identifiable {
+    let date: Date
+    let label: String?
+    var id: Date { date }
+}
+
+private struct UsageBucket: Identifiable {
+    let start: Date
+    let tokens: Int
+    let label: String
+    var id: Date { start }
+}
+
+private struct TokenActivityTooltip: View {
+    let bucket: UsageBucket
+
+    var body: some View {
+        Text("\(bucket.label)  ·  \(bucket.tokens.formatted()) Tokens")
+            .font(MarrTypography.body(size: 11.5, weight: .medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .fixedSize()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(.primary.opacity(0.16), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
+            .allowsHitTesting(false)
     }
 }
 
@@ -742,160 +1015,6 @@ private struct CompactCredentialStateLabel: View {
     }
 }
 
-private enum SettingsSection: String, CaseIterable, Identifiable {
-    case general
-    case provider
-    case appearance
-    case history
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .general: "General"
-        case .provider: "AI Provider"
-        case .appearance: "Appearance"
-        case .history: "History"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .general: "gearshape"
-        case .provider: "sparkles"
-        case .appearance: "sun.max"
-        case .history: "clock.arrow.circlepath"
-        }
-    }
-}
-
-private struct GeneralSettingsPanel: View {
-    @ObservedObject var controller: MarrController
-    @State private var runningApplications = RunningApplicationOption.currentOptions
-    @AppStorage(MarrHotKeyConfiguration.keyCodeKey) private var keyCode = Int(kVK_ANSI_0)
-    @AppStorage(MarrHotKeyConfiguration.modifiersKey) private var modifiers = Int(cmdKey | shiftKey)
-    @AppStorage(MarrWindowCaptureHotKeyConfiguration.keyCodeKey) private var windowKeyCode = Int(kVK_ANSI_9)
-    @AppStorage(MarrWindowCaptureHotKeyConfiguration.modifiersKey) private var windowModifiers = Int(cmdKey | shiftKey)
-    @AppStorage(MarrHotKeyConfiguration.scopeKey) private var scope = MarrHotKeyScope.global.rawValue
-    @AppStorage(MarrHotKeyConfiguration.scopeBundleIDKey) private var scopeBundleID = ""
-    @AppStorage(MarrHotKeyConfiguration.scopeAppNameKey) private var scopeAppName = ""
-
-    var body: some View {
-        Section("Keyboard Shortcuts") {
-            HStack {
-                Text("Capture area")
-                Spacer()
-                HotKeyRecorder(
-                    keyCode: $keyCode,
-                    modifiers: $modifiers,
-                    onChange: saveShortcut
-                )
-                .frame(width: 132, height: 30)
-            }
-
-            HStack {
-                Text("Capture current window")
-                Spacer()
-                HotKeyRecorder(
-                    keyCode: $windowKeyCode,
-                    modifiers: $windowModifiers,
-                    onChange: saveWindowShortcut
-                )
-                .frame(width: 132, height: 30)
-            }
-        }
-
-        Section("Availability") {
-            Picker("Use shortcuts", selection: scopeBinding) {
-                ForEach(MarrHotKeyScope.allCases) { option in
-                    Text(option.title).tag(option.rawValue)
-                }
-            }
-
-            if MarrHotKeyScope(rawValue: scope) == .frontmostApplication {
-                Picker("Application", selection: applicationBinding) {
-                    ForEach(runningApplications) { app in
-                        Text(app.name).tag(app.bundleID)
-                    }
-                }
-                .onAppear {
-                    refreshRunningApplications()
-                }
-            }
-        }
-
-        Section("Help") {
-            Button {
-                openMarrWelcomeGuide(controller: controller)
-            } label: {
-                Label("Open Welcome Guide", systemImage: "graduationcap")
-            }
-        }
-
-        Section("Application") {
-            Button("Quit Marr", role: .destructive) {
-                NSApp.terminate(nil)
-            }
-        }
-    }
-
-    private var scopeBinding: Binding<String> {
-        Binding(
-            get: { scope },
-            set: { nextValue in
-                scope = nextValue
-                if MarrHotKeyScope(rawValue: nextValue) == .frontmostApplication, scopeBundleID.isEmpty {
-                    refreshRunningApplications()
-                    if let first = runningApplications.first {
-                        scopeBundleID = first.bundleID
-                        scopeAppName = first.name
-                    }
-                }
-                saveShortcut()
-            }
-        )
-    }
-
-    private var applicationBinding: Binding<String> {
-        Binding(
-            get: { scopeBundleID },
-            set: { nextValue in
-                scopeBundleID = nextValue
-                scopeAppName = runningApplications.first { $0.bundleID == nextValue }?.name ?? nextValue
-                saveShortcut()
-            }
-        )
-    }
-
-    private func refreshRunningApplications() {
-        runningApplications = RunningApplicationOption.currentOptions
-    }
-
-    private func saveShortcut() {
-        MarrHotKeyConfiguration(
-            keyCode: UInt32(keyCode),
-            modifiers: UInt32(modifiers),
-            scope: MarrHotKeyScope(rawValue: scope) ?? .global,
-            scopeBundleID: scopeBundleID,
-            scopeAppName: scopeAppName
-        ).save()
-        controller.reloadHotKey()
-    }
-
-    private func saveWindowShortcut() {
-        MarrWindowCaptureHotKeyConfiguration(
-            keyCode: UInt32(windowKeyCode),
-            modifiers: UInt32(windowModifiers)
-        ).save()
-        controller.reloadHotKey()
-    }
-}
-
-@MainActor
-func openMarrWelcomeGuide(controller: MarrController) {
-    MarrOnboardingPresenter.shared.show(controller: controller)
-}
-
 private struct RunningApplicationOption: Identifiable, Hashable {
     let bundleID: String
     let name: String
@@ -1006,358 +1125,6 @@ private final class HotKeyRecorderView: NSButton {
     }
 }
 
-private struct ProviderSettingsPanel: View {
-    @ObservedObject var controller: MarrController
-    @AppStorage("gateway.preset") private var gatewayPreset = GatewayPreset.custom.rawValue
-
-    var body: some View {
-        Section("Provider") {
-            Picker("Provider", selection: $controller.provider) {
-                ForEach(InferenceProvider.allCases) { provider in
-                    Text(provider.rawValue).tag(provider)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            TextField("Model", text: $controller.model)
-
-            Stepper(
-                value: $controller.maximumOutputTokens,
-                in: 256...32_768,
-                step: 256
-            ) {
-                HStack {
-                    Text("Maximum Output Tokens")
-                    Spacer()
-                    Text(controller.maximumOutputTokens.formatted())
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-        }
-
-        if controller.provider == .openAI {
-            Section("OpenAI Credentials") {
-                APIKeyCredentialEditor(
-                    controller: controller,
-                    credential: .openAIAPIKey
-                )
-            }
-        } else {
-            gatewaySection
-
-            if controller.gatewayAuthScheme != .none {
-                Section("Gateway Credentials") {
-                    APIKeyCredentialEditor(
-                        controller: controller,
-                        credential: .gatewayAPIKey
-                    )
-                }
-            }
-
-            Section("Custom Headers") {
-                CustomHeadersCredentialEditor(controller: controller)
-            }
-        }
-    }
-
-    private var gatewaySection: some View {
-        Section("Gateway") {
-            Picker("Configuration", selection: gatewayPresetBinding) {
-                ForEach(GatewayPreset.allCases) { preset in
-                    Text(preset.title).tag(preset.rawValue)
-                }
-            }
-
-            TextField("Base URL", text: $controller.gatewayBaseURL)
-
-            Picker("API Format", selection: $controller.gatewayAPIFormat) {
-                ForEach(GatewayAPIFormat.allCases) { format in
-                    Text(format.rawValue).tag(format)
-                }
-            }
-
-            Picker("Auth Scheme", selection: $controller.gatewayAuthScheme) {
-                ForEach(GatewayAuthScheme.allCases) { scheme in
-                    Text(scheme.rawValue).tag(scheme)
-                }
-            }
-        }
-    }
-
-    private var gatewayPresetBinding: Binding<String> {
-        Binding(
-            get: { gatewayPreset },
-            set: { nextValue in
-                gatewayPreset = nextValue
-                if GatewayPreset(rawValue: nextValue) == .ccSwitch {
-                    controller.useCCSwitchClaudeDesktopPreset()
-                }
-            }
-        )
-    }
-}
-
-private struct APIKeyCredentialEditor: View {
-    @ObservedObject var controller: MarrController
-    let credential: InferenceCredential
-    @State private var draft = ""
-    @State private var showsRemoveConfirmation = false
-
-    private var state: InferenceCredentialState {
-        controller.credentialState(for: credential)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SecureField(fieldPrompt, text: $draft)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(save)
-
-            credentialActions
-
-            if let message = state.message {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(state.messageIsError ? Color.red : Color.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .task {
-            await controller.refreshCredentialState(for: credential)
-        }
-        .confirmationDialog(
-            "Remove the saved API Key?",
-            isPresented: $showsRemoveConfirmation
-        ) {
-            Button("Remove API Key", role: .destructive) {
-                Task {
-                    if await controller.removeCredential(credential) {
-                        draft = ""
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Marr will no longer be able to use this provider until another key is saved.")
-        }
-    }
-
-    private var credentialActions: some View {
-        HStack(spacing: 10) {
-            CredentialStatusLabel(
-                state: state,
-                configuredText: "API Key saved securely",
-                missingText: "No API Key saved"
-            )
-
-            Spacer(minLength: 12)
-
-            if state.isConfigured == true {
-                Button {
-                    showsRemoveConfirmation = true
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-                .disabled(state.isBusy)
-                .help("Remove saved API Key")
-                .accessibilityLabel("Remove saved API Key")
-            }
-
-            Button(action: save) {
-                CredentialSaveButtonLabel(state: state)
-            }
-            .disabled(trimmedDraft.isEmpty || state.isBusy)
-        }
-    }
-
-    private var fieldPrompt: String {
-        state.isConfigured == true
-            ? "Enter a new API Key to replace the saved key"
-            : "Enter API Key"
-    }
-
-    private var trimmedDraft: String {
-        draft.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func save() {
-        guard !trimmedDraft.isEmpty, !state.isBusy else { return }
-        let value = draft
-        Task {
-            if await controller.saveAndVerifyCredential(value, for: credential) {
-                draft = ""
-            }
-        }
-    }
-}
-
-private struct CustomHeadersCredentialEditor: View {
-    @ObservedObject var controller: MarrController
-    @State private var draft = ""
-    @State private var showsRemoveConfirmation = false
-
-    private var state: InferenceCredentialState {
-        controller.credentialState(for: .customHeaders)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ZStack(alignment: .topLeading) {
-                if draft.isEmpty {
-                    Text(fieldPrompt)
-                        .font(MarrTypography.mono(size: 12))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 10)
-                        .allowsHitTesting(false)
-                }
-
-                TextEditor(text: $draft)
-                    .font(MarrTypography.mono(size: 12))
-                    .frame(minHeight: 88)
-                    .scrollContentBackground(.hidden)
-                    .padding(7)
-            }
-            .background(
-                Color(nsColor: .textBackgroundColor).opacity(0.7),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(.secondary.opacity(0.22)))
-
-            HStack(spacing: 10) {
-                CredentialStatusLabel(
-                    state: state,
-                    configuredText: "Custom headers saved securely",
-                    missingText: "No custom headers saved"
-                )
-
-                Spacer(minLength: 12)
-
-                if state.isConfigured == true {
-                    Button {
-                        showsRemoveConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(state.isBusy)
-                    .help("Remove saved custom headers")
-                    .accessibilityLabel("Remove saved custom headers")
-                }
-
-                Button(action: save) {
-                    CredentialSaveButtonLabel(state: state)
-                }
-                .disabled(trimmedDraft.isEmpty || state.isBusy)
-            }
-
-            if let message = state.message {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(state.messageIsError ? Color.red : Color.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .task {
-            await controller.refreshCredentialState(for: .customHeaders)
-        }
-        .confirmationDialog(
-            "Remove the saved custom headers?",
-            isPresented: $showsRemoveConfirmation
-        ) {
-            Button("Remove Custom Headers", role: .destructive) {
-                Task {
-                    if await controller.removeCredential(.customHeaders) {
-                        draft = ""
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-    }
-
-    private var fieldPrompt: String {
-        state.isConfigured == true
-            ? "Enter replacement custom headers"
-            : "Enter custom headers"
-    }
-
-    private var trimmedDraft: String {
-        draft.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func save() {
-        guard !trimmedDraft.isEmpty, !state.isBusy else { return }
-        let value = draft
-        Task {
-            if await controller.saveAndVerifyCredential(value, for: .customHeaders) {
-                draft = ""
-            }
-        }
-    }
-}
-
-private struct CredentialStatusLabel: View {
-    let state: InferenceCredentialState
-    let configuredText: String
-    let missingText: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if state.activity == .checking {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Checking...")
-            } else if state.isConfigured == true {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                Text(configuredText)
-            } else if state.isConfigured == false {
-                Image(systemName: "circle")
-                    .foregroundStyle(.secondary)
-                Text(missingText)
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Checking...")
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-    }
-}
-
-private struct CredentialSaveButtonLabel: View {
-    let state: InferenceCredentialState
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if state.activity == .saving || state.activity == .verifying {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: "checkmark.shield")
-            }
-            Text(title)
-        }
-        .frame(width: 118)
-    }
-
-    private var title: String {
-        switch state.activity {
-        case .saving:
-            "Saving..."
-        case .verifying:
-            "Verifying..."
-        default:
-            "Save & Verify"
-        }
-    }
-}
-
 private enum GatewayPreset: String, CaseIterable, Identifiable {
     case custom = "none"
     case ccSwitch
@@ -1368,56 +1135,6 @@ private enum GatewayPreset: String, CaseIterable, Identifiable {
         switch self {
         case .custom: "Custom"
         case .ccSwitch: "CC Switch"
-        }
-    }
-}
-
-private struct AppearanceSettingsPanel: View {
-    @AppStorage(MarrAppearanceKeys.colorScheme) private var colorScheme = "System"
-    @AppStorage(MarrAppearanceKeys.glassSurfaces) private var glassSurfaces = true
-    @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
-    @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
-
-    var body: some View {
-        Section("Appearance") {
-            Picker("Mode", selection: $colorScheme) {
-                Text("System").tag("System")
-                Text("Light").tag("Light")
-                Text("Dark").tag("Dark")
-            }
-            .pickerStyle(.segmented)
-            Toggle("Liquid Glass", isOn: $glassSurfaces)
-        }
-
-        Section("Colors") {
-            BubbleColorPicker(selection: $bubbleColor)
-            AccentColorPicker(selection: $accentColor)
-        }
-    }
-}
-
-private struct BubbleColorPicker: View {
-    @Binding var selection: String
-
-    var body: some View {
-        HStack {
-            Text("Bubble Color")
-            Spacer()
-            BubbleColorDropdown(selection: $selection)
-            .frame(width: 150, alignment: .trailing)
-        }
-    }
-}
-
-private struct AccentColorPicker: View {
-    @Binding var selection: String
-
-    var body: some View {
-        HStack {
-            Text("Accent Color")
-            Spacer()
-            AccentColorDropdown(selection: $selection)
-            .frame(width: 150, alignment: .trailing)
         }
     }
 }

@@ -60,4 +60,56 @@ struct ConversationHistoryRepositoryTests {
         #expect(!fileManager.fileExists(atPath: attachmentURL.path))
         #expect(try reloadedRepository.reload().isEmpty)
     }
+
+    @Test("Document attachment keeps its filename extension and MIME type")
+    func documentAttachmentRoundTrip() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory
+            .appendingPathComponent("MarrPersistenceTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: rootURL) }
+
+        let attachmentID = UUID()
+        let conversationID = UUID()
+        let documentData = Data("%PDF-1.7 test".utf8)
+        let archive = ConversationArchive(
+            id: conversationID,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            generatedTitle: nil,
+            turns: [
+                ConversationTurn(
+                    id: UUID(),
+                    question: "Summarize this",
+                    imageIDs: [attachmentID],
+                    answer: "Summary",
+                    errorMessage: nil,
+                    status: .completed,
+                    showsAssistant: true
+                )
+            ],
+            images: [
+                ConversationImageAsset(
+                    id: attachmentID,
+                    data: documentData,
+                    mimeType: "application/pdf",
+                    fileName: "report.pdf"
+                )
+            ],
+            pendingImageIDs: []
+        )
+
+        let repository = ConversationHistoryRepository(rootURL: rootURL)
+        _ = try repository.save(archive)
+
+        let attachmentURL = rootURL
+            .appendingPathComponent("Attachments", isDirectory: true)
+            .appendingPathComponent("\(attachmentID.uuidString).pdf")
+        #expect(try Data(contentsOf: attachmentURL) == documentData)
+
+        let reloaded = try #require(try ConversationHistoryRepository(rootURL: rootURL).reload().first)
+        let reference = try #require(reloaded.images.first)
+        #expect(reference.mimeType == "application/pdf")
+        #expect(reference.fileName == "report.pdf")
+        #expect(reference.storedFileName.hasSuffix(".pdf"))
+    }
 }

@@ -8,10 +8,10 @@ Marr is an early-stage macOS app concept for selecting any area of the screen an
 
 Marr uses a structured multimodal conversation harness rather than flattening chat history into a prompt string.
 
-- `ConversationSession` owns turns, immutable screenshot assets, pending attachments, retries, and UI-observable state.
-- `ConversationContextBuilder` compiles successful turns into role-preserving messages with text, turn, and image budgets.
-- Screenshots belong to the user turn that introduced them. Adding a screenshot never replaces an earlier asset.
-- Long conversations automatically reattach the most recent screenshot when trimming would otherwise remove all visual context.
+- `ConversationSession` owns turns, immutable screenshot/file assets, pending attachments, retries, and UI-observable state.
+- `ConversationContextBuilder` compiles successful turns into role-preserving messages with text, turn, attachment-count, and attachment-size budgets.
+- Attachments belong to the user turn that introduced them. Adding an attachment never replaces an earlier asset.
+- Long conversations automatically reattach the most recent attachment when trimming would otherwise remove all attachment context.
 - `VisionAIClient` receives a provider-neutral `VisionRequest`; `OpenAIClient` encodes it as OpenAI Responses or Anthropic Messages payloads.
 - Failed turns remain visible and can be retried with the same structured context.
 
@@ -31,10 +31,10 @@ This keeps dependency direction one-way: `Marr app → MarrNetworking / MarrPers
 
 Every conversation is saved inside the app sandbox under `Application Support/Marr`.
 
-- `marr.sqlite` stores turn text, status, timestamps, pending attachments, and image references.
-- Original PNG/JPEG bytes are stored once in `Attachments`; failed saves roll back newly created files, and deletes restore database rows if attachment staging fails.
+- `marr.sqlite` stores turn text, status, timestamps, pending attachments, and attachment references.
+- Original image, PDF, document, spreadsheet, presentation, text, and code bytes are stored once in `Attachments`; failed saves roll back newly created files, and deletes restore database rows if attachment staging fails.
 - Legacy `History/<conversation>/conversation.json` records are migrated into SQLite on load.
-- The menu-bar History entry opens a resizable window with conversation and screenshot details.
+- The menu-bar History entry opens a resizable window with conversation and attachment details.
 - Database and filesystem work runs through a serialized background repository so it does not block the main actor.
 - API keys, gateway credentials, and custom headers are stored in Keychain and are never written to history or UserDefaults.
 - Provider, endpoint, model, API format, authentication scheme, and maximum output tokens persist across launches.

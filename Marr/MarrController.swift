@@ -44,6 +44,7 @@ final class MarrController: ObservableObject {
     @Published private(set) var hotKeyConfiguration = MarrHotKeyConfiguration.current
     @Published private(set) var windowCaptureHotKeyConfiguration = MarrWindowCaptureHotKeyConfiguration.current
     let historyStore: ConversationHistoryStore
+    let tokenUsageStore: TokenUsageStore
 
     private let client: VisionAIClient
     private let settingsRepository: InferenceSettingsRepository
@@ -60,10 +61,12 @@ final class MarrController: ObservableObject {
     init(
         client: VisionAIClient,
         historyStore: ConversationHistoryStore? = nil,
+        tokenUsageStore: TokenUsageStore? = nil,
         settingsRepository: InferenceSettingsRepository = InferenceSettingsRepository()
     ) {
         self.client = client
         self.historyStore = historyStore ?? ConversationHistoryStore()
+        self.tokenUsageStore = tokenUsageStore ?? TokenUsageStore()
         self.settingsRepository = settingsRepository
 
         let settings = settingsRepository.loadConfiguration()
@@ -244,15 +247,13 @@ final class MarrController: ObservableObject {
                 self?.statusMessage = "Screenshot captured."
             }
         }
-        overlay.onTranslate = { [weak self] image, rect in
-            Task { @MainActor in
-                guard let self else {
-                    return
-                }
-
-                self.overlayController = nil
-                self.translateScreenshot(image, near: rect)
+        overlay.onTranslate = { [weak self] image, rect, frozenSnapshot in
+            guard let self else {
+                return
             }
+
+            self.overlayController = nil
+            self.translateScreenshot(image, near: rect, frozenSnapshot: frozenSnapshot)
         }
         overlay.onWindowCapture = { [weak self] candidate in
             Task { @MainActor in
@@ -399,11 +400,15 @@ final class MarrController: ObservableObject {
             customHeadersText: credentials.customHeadersText,
             maximumOutputTokens: selectedMaximumOutputTokens
         )
-        return try await client.ask(
+        let response = try await client.askWithUsage(
             request: request,
             model: trimmedModel,
             connection: requestConnection
         )
+        if let usage = response.usage {
+            tokenUsageStore.record(usage)
+        }
+        return response.text
     }
 
     func credentialState(for credential: InferenceCredential) -> InferenceCredentialState {
@@ -511,11 +516,18 @@ final class MarrController: ObservableObject {
         }
     }
 
-    private func translateScreenshot(_ image: PickedImage, near rect: CGRect) {
+    private func translateScreenshot(
+        _ image: PickedImage,
+        near rect: CGRect,
+        frozenSnapshot: ScreenCaptureSnapshot
+    ) {
         translationTask?.cancel()
         translationOverlayController?.close()
 
-        let overlay = TranslationOverlayController(anchorRect: rect)
+        let overlay = TranslationOverlayController(
+            anchorRect: rect,
+            frozenSnapshot: frozenSnapshot
+        )
         translationOverlayController = overlay
         overlay.onClose = { [weak self, weak overlay] in
             guard
@@ -573,13 +585,20 @@ final class MarrController: ObservableObject {
                     : ImageTranslationPrompt.request(for: image, regions: regions)
                 let response = try await self.submit(request: request)
                 let blocks: [ImageTranslationBlock]
+                let replacements: [ImageTranslationReplacement]
 
                 if regions.isEmpty {
                     blocks = ImageTranslationResponseParser.parse(response)
+                    replacements = []
                 } else {
                     let parsedReplacements = ImageTranslationResponseParser.parseReplacements(response)
-                    let replacements = try await self.completedTranslationReplacements(
+                    let completedReplacements = try await self.completedTranslationReplacements(
                         parsedReplacements,
+                        image: image,
+                        regions: regions
+                    )
+                    replacements = try await self.repairedTranslationAlignments(
+                        completedReplacements,
                         image: image,
                         regions: regions
                     )
@@ -591,11 +610,19 @@ final class MarrController: ObservableObject {
                 }
 
                 try Task.checkCancellation()
-                let translatedImageData = try await BackgroundOperation.run(priority: .userInitiated) {
+                let highlightPairs = ImageTranslationHighlightBuilder.pairs(
+                    regions: regions,
+                    replacements: replacements
+                )
+                let renderedTranslation = try await BackgroundOperation.run(priority: .userInitiated) {
                     try Task.checkCancellation()
-                    let data = ImageTranslationRenderer.renderData(sourceData: image.data, blocks: blocks)
+                    let result = ImageTranslationRenderer.renderDataWithHighlights(
+                        sourceData: image.data,
+                        blocks: blocks,
+                        highlightPairs: highlightPairs
+                    )
                     try Task.checkCancellation()
-                    return data
+                    return result
                 }
                 try Task.checkCancellation()
 
@@ -609,15 +636,32 @@ final class MarrController: ObservableObject {
 
                     guard
                         let originalImage = NSImage(data: image.data),
-                        let translatedImageData,
-                        let translatedImage = NSImage(data: translatedImageData)
+                        let renderedTranslation,
+                        let translatedImage = NSImage(data: renderedTranslation.data)
                     else {
                         overlay.showError("Could not render translation.")
                         self.statusMessage = "Could not render translation."
                         return
                     }
 
-                    overlay.showTranslatedImage(translatedImage, originalImage: originalImage)
+                    let exactHighlightPairs = highlightPairs.compactMap { pair in
+                        guard pair.targetText != nil else { return pair }
+                        guard let exactRects = renderedTranslation.translatedHighlightRects[pair.id],
+                              !exactRects.isEmpty
+                        else { return nil }
+                        return ImageTranslationHighlightPair(
+                            id: pair.id,
+                            sourceID: pair.sourceID,
+                            targetText: pair.targetText,
+                            sourceRects: pair.sourceRects,
+                            translatedRects: exactRects
+                        )
+                    }
+                    overlay.showTranslatedImage(
+                        translatedImage,
+                        originalImage: originalImage,
+                        highlightPairs: exactHighlightPairs
+                    )
                     self.statusMessage = blocks.isEmpty ? "No translatable text found." : "Translation ready."
                 }
             } catch is CancellationError {
@@ -655,6 +699,53 @@ final class MarrController: ObservableObject {
             replacements,
             ImageTranslationResponseParser.parseReplacements(retryResponse)
         )
+    }
+
+    private func repairedTranslationAlignments(
+        _ replacements: [ImageTranslationReplacement],
+        image: PickedImage,
+        regions: [ImageTranslationSourceRegion]
+    ) async throws -> [ImageTranslationReplacement] {
+        let replacementByID = Dictionary(
+            replacements.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let alignmentRegions = regions.filter { region in
+            guard region.translationStrategy == .block,
+                  let replacement = replacementByID[region.id]
+            else { return false }
+            return !replacement.text.isEmpty && !region.tokens.isEmpty
+        }
+        guard !alignmentRegions.isEmpty else { return replacements }
+
+        let response = try await submit(request: ImageTranslationPrompt.alignmentRepairRequest(
+            for: image,
+            regions: alignmentRegions,
+            replacements: replacements
+        ))
+        let repaired = ImageTranslationResponseParser.parseReplacements(response)
+        let repairedByID = Dictionary(
+            repaired.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return replacements.map { original in
+            guard let candidate = repairedByID[original.id],
+                  candidate.text == original.text,
+                  let region = alignmentRegions.first(where: { $0.id == original.id }),
+                  ImageTranslationHighlightBuilder.hasReliableAlignments(
+                    replacement: candidate,
+                    region: region
+                  )
+            else { return original }
+            return ImageTranslationReplacement(
+                id: original.id,
+                text: original.text,
+                kind: original.kind,
+                segments: original.segments,
+                alignments: candidate.alignments
+            )
+        }
     }
 
     private func missingTranslationRegions(
@@ -716,6 +807,21 @@ final class MarrController: ObservableObject {
     func minimizeAnswerPanel() {
         answerPanelController?.minimize()
         statusMessage = "Answer panel minimized. Press \(hotKeyConfiguration.displayString) to restore it."
+    }
+
+    func showAnswerPanelUtility(_ destination: AnswerPanelUtilityDestination) {
+        if let answerPanelController {
+            answerPanelController.show(destination)
+            return
+        }
+
+        let session = ConversationSession()
+        showAnswerPanel(
+            for: session,
+            near: defaultAnswerPanelAnchorRect(),
+            persistImmediately: false,
+            initialDestination: destination
+        )
     }
 
     func openHistoryConversation(_ conversation: ConversationHistoryRecord) {
@@ -783,7 +889,8 @@ final class MarrController: ObservableObject {
     private func showAnswerPanel(
         for session: ConversationSession,
         near rect: CGRect,
-        persistImmediately: Bool
+        persistImmediately: Bool,
+        initialDestination: AnswerPanelUtilityDestination? = nil
     ) {
         answerPanelController?.close()
         let panel = AnswerPanelController(
@@ -791,7 +898,8 @@ final class MarrController: ObservableObject {
             historyStore: historyStore,
             session: session,
             anchorRect: rect,
-            persistImmediately: persistImmediately
+            persistImmediately: persistImmediately,
+            initialDestination: initialDestination
         )
         answerPanelController = panel
         panel.show()

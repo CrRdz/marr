@@ -193,6 +193,97 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(imageCount(in: request.messages[2]), 1)
     }
 
+    func testPickedImageLoadsSupportedFileAttachment() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarrAttachment-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 2,
+            pixelsHigh: 2,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ))
+        let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try data.write(to: fileURL)
+
+        let attachment = try PickedImage.attachment(from: fileURL)
+
+        XCTAssertEqual(attachment.data, data)
+        XCTAssertEqual(attachment.mimeType, "image/png")
+        XCTAssertEqual(attachment.fileName, fileURL.lastPathComponent)
+        XCTAssertTrue(attachment.image.isValid)
+    }
+
+    func testPickedAttachmentLoadsTextAndDocumentFiles() throws {
+        let textURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarrAttachment-\(UUID().uuidString).txt")
+        let documentURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarrAttachment-\(UUID().uuidString).docx")
+        defer {
+            try? FileManager.default.removeItem(at: textURL)
+            try? FileManager.default.removeItem(at: documentURL)
+        }
+        let textData = Data("hello attachment".utf8)
+        let documentData = Data([0x50, 0x4B, 0x03, 0x04])
+        try textData.write(to: textURL)
+        try documentData.write(to: documentURL)
+
+        let textAttachment = try PickedAttachment.attachment(from: textURL)
+        let documentAttachment = try PickedAttachment.attachment(from: documentURL)
+
+        XCTAssertEqual(textAttachment.data, textData)
+        XCTAssertEqual(textAttachment.mimeType, "text/plain")
+        XCTAssertNil(textAttachment.image)
+        XCTAssertEqual(
+            documentAttachment.mimeType,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        XCTAssertEqual(documentAttachment.data, documentData)
+        XCTAssertNil(documentAttachment.image)
+    }
+
+    func testPickedAttachmentRejectsUnsupportedFileAttachment() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarrAttachment-\(UUID().uuidString).dmg")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        try Data("not supported".utf8).write(to: fileURL)
+
+        XCTAssertThrowsError(try PickedAttachment.attachment(from: fileURL)) { error in
+            guard case PickedImageAttachmentError.unsupportedFormat = error else {
+                return XCTFail("Expected an unsupported attachment error, got \(error)")
+            }
+        }
+    }
+
+    func testAttachedFileIsSentWithTheNextTurn() throws {
+        let session = ConversationSession(
+            initialImage: makeImage(name: "first.png", byte: 1),
+            initialQuestion: "Question one"
+        )
+        let firstTurnID = try XCTUnwrap(session.turns.first?.id)
+        session.complete(firstTurnID, answer: "Answer one")
+
+        let attachment = PickedAttachment(
+            data: Data("file contents".utf8),
+            mimeType: "text/plain",
+            fileName: "notes.txt",
+            image: nil
+        )
+        let attachmentID = session.appendAttachment(attachment)
+        let nextTurnID = try XCTUnwrap(session.beginTurn(question: "Summarize the file"))
+        let request = try XCTUnwrap(session.request(for: nextTurnID))
+
+        XCTAssertEqual(session.turns.last?.imageIDs, [attachmentID])
+        XCTAssertEqual(fileCount(in: request.messages.last), 1)
+    }
+
     func testContextPolicyKeepsOnlyMostRecentCompletedTurns() throws {
         let policy = ConversationContextPolicy(
             maximumCompletedTurns: 1,
@@ -726,6 +817,98 @@ final class ConversationHarnessTests: XCTestCase {
         ])
     }
 
+    func testTranslationParserReadsSemanticAlignments() throws {
+        let response = """
+        {"translations":[{"id":"r001","targetMarkdown":"高海拔卒中筛查系统","alignments":[{"tokenStart":0,"tokenEnd":2,"targetText":"高海拔卒中筛查"},{"tokenStart":2,"tokenEnd":3,"targetText":"系统"}]}]}
+        """
+
+        let replacements = ImageTranslationResponseParser.parseReplacements(response)
+
+        XCTAssertEqual(replacements, [
+            ImageTranslationReplacement(
+                id: "r001",
+                text: "高海拔卒中筛查系统",
+                alignments: [
+                    ImageTranslationAlignment(tokenStart: 0, tokenEnd: 2, targetText: "高海拔卒中筛查"),
+                    ImageTranslationAlignment(tokenStart: 2, tokenEnd: 3, targetText: "系统")
+                ]
+            )
+        ])
+    }
+
+    func testTranslationHighlightBuilderMapsSemanticGroupsAcrossImages() throws {
+        let region = ImageTranslationSourceRegion(
+            id: "r001",
+            sourceText: "high altitude system",
+            x: 0.10,
+            y: 0.20,
+            width: 0.80,
+            height: 0.10,
+            lineRects: [
+                ImageTranslationLineRect(x: 0.10, y: 0.20, width: 0.80, height: 0.04),
+                ImageTranslationLineRect(x: 0.10, y: 0.25, width: 0.80, height: 0.04)
+            ],
+            tokens: [
+                ImageTranslationSourceToken(text: "high", x: 0.10, y: 0.20, width: 0.12, height: 0.04),
+                ImageTranslationSourceToken(text: "altitude", x: 0.24, y: 0.20, width: 0.18, height: 0.04),
+                ImageTranslationSourceToken(text: "system", x: 0.44, y: 0.20, width: 0.15, height: 0.04)
+            ],
+            fontSize: 0.032
+        )
+        let replacement = ImageTranslationReplacement(
+            id: "r001",
+            text: "高海拔系统",
+            alignments: [
+                ImageTranslationAlignment(tokenStart: 0, tokenEnd: 2, targetText: "高海拔"),
+                ImageTranslationAlignment(tokenStart: 2, tokenEnd: 3, targetText: "系统")
+            ]
+        )
+
+        let pairs = ImageTranslationHighlightBuilder.pairs(
+            regions: [region],
+            replacements: [replacement]
+        )
+
+        XCTAssertEqual(pairs.count, 2)
+        XCTAssertEqual(pairs[0].sourceRects.count, 1)
+        XCTAssertFalse(pairs[0].translatedRects.isEmpty)
+        XCTAssertFalse(pairs[1].translatedRects.isEmpty)
+        XCTAssertLessThan(pairs[0].translatedRects[0].minX, pairs[1].translatedRects[0].minX)
+    }
+
+    func testTranslationHighlightBuilderRejectsKeywordOnlyClauseAlignment() throws {
+        let words = ["the", "system", "initiates", "a", "proactive", "consultation", "request"]
+        let region = ImageTranslationSourceRegion(
+            id: "r001",
+            sourceText: words.joined(separator: " "),
+            x: 0.05,
+            y: 0.20,
+            width: 0.90,
+            height: 0.08,
+            tokens: words.enumerated().map { index, word in
+                ImageTranslationSourceToken(
+                    text: word,
+                    x: 0.05 + Double(index) * 0.10,
+                    y: 0.20,
+                    width: 0.08,
+                    height: 0.04
+                )
+            }
+        )
+        let replacement = ImageTranslationReplacement(
+            id: "r001",
+            text: "系统主动发起咨询请求",
+            alignments: [
+                ImageTranslationAlignment(tokenStart: 0, tokenEnd: 7, targetText: "请求")
+            ]
+        )
+
+        XCTAssertFalse(ImageTranslationHighlightBuilder.hasReliableAlignments(
+            replacement: replacement,
+            region: region
+        ))
+    }
+
     func testTranslationParserReadsMarkdownLayoutReplacements() throws {
         let response = """
         {"translations":[{"id":"r001","targetMarkdown":"`ConversationSession` 管理轮次","kind":"list_item"}]}
@@ -791,6 +974,7 @@ final class ConversationHarnessTests: XCTestCase {
 
         XCTAssertEqual(blocks, [
             ImageTranslationBlock(
+                sourceID: "r001",
                 text: "拥有轮次",
                 x: 0.1,
                 y: 0.2,
@@ -837,6 +1021,7 @@ final class ConversationHarnessTests: XCTestCase {
 
         XCTAssertEqual(blocks, [
             ImageTranslationBlock(
+                sourceID: "r001",
                 text: "`ConversationSession` 管理轮次",
                 x: 0.1,
                 y: 0.2,
@@ -1729,19 +1914,38 @@ final class ConversationHarnessTests: XCTestCase {
         )
     }
 
-    func testCompareLayoutFitsLargeCaptureInsideVisibleScreen() throws {
-        let visibleFrame = CGRect(x: 0, y: 24, width: 900, height: 600)
-        let frame = TranslationCompareLayout.imageFrame(
-            anchorFrame: CGRect(x: -40, y: -20, width: 1400, height: 1000),
-            visibleFrame: visibleFrame
+    func testTranslationReadingOrderKeepsSentenceAtNextLineInsideParagraph() {
+        XCTAssertTrue(
+            ImageTranslationReadingOrderLayout.isTightWrappedParagraphContinuation(
+                previousRect: CGRect(x: 0.025, y: 0.280, width: 0.90, height: 0.025),
+                candidateRect: CGRect(x: 0.026, y: 0.245, width: 0.78, height: 0.025),
+                blockRect: CGRect(x: 0.025, y: 0.245, width: 0.93, height: 0.36)
+            )
         )
-
-        XCTAssertTrue(visibleFrame.insetBy(dx: 12, dy: 12).contains(frame))
-        XCTAssertEqual(frame.size, CGSize(width: 876, height: 576))
     }
 
-    func testCompareLayoutDocksOriginalToLeftWhenSpaceAllows() throws {
-        let frame = TranslationCompareLayout.dockedOriginalFrame(
+    func testTranslationReadingOrderDoesNotJoinAfterShortParagraphEnding() {
+        XCTAssertFalse(
+            ImageTranslationReadingOrderLayout.isTightWrappedParagraphContinuation(
+                previousRect: CGRect(x: 0.025, y: 0.280, width: 0.45, height: 0.025),
+                candidateRect: CGRect(x: 0.026, y: 0.245, width: 0.78, height: 0.025),
+                blockRect: CGRect(x: 0.025, y: 0.245, width: 0.93, height: 0.36)
+            )
+        )
+    }
+
+    func testTranslationReadingOrderDoesNotJoinParagraphAcrossLargeGap() {
+        XCTAssertFalse(
+            ImageTranslationReadingOrderLayout.isTightWrappedParagraphContinuation(
+                previousRect: CGRect(x: 0.025, y: 0.280, width: 0.90, height: 0.025),
+                candidateRect: CGRect(x: 0.026, y: 0.205, width: 0.78, height: 0.025),
+                blockRect: CGRect(x: 0.025, y: 0.205, width: 0.93, height: 0.40)
+            )
+        )
+    }
+
+    func testCompareLayoutPlacesOriginalToLeftWhenSpaceAllows() throws {
+        let frame = TranslationCompareLayout.originalFrame(
             anchorFrame: CGRect(x: 700, y: 200, width: 300, height: 220),
             visibleFrame: CGRect(x: 0, y: 24, width: 1200, height: 760)
         )
@@ -1749,8 +1953,8 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(frame, CGRect(x: 392, y: 200, width: 300, height: 220))
     }
 
-    func testCompareLayoutDocksOriginalToRightWhenLeftDoesNotFit() throws {
-        let frame = TranslationCompareLayout.dockedOriginalFrame(
+    func testCompareLayoutPlacesOriginalToRightWhenLeftDoesNotFit() throws {
+        let frame = TranslationCompareLayout.originalFrame(
             anchorFrame: CGRect(x: 40, y: 200, width: 300, height: 220),
             visibleFrame: CGRect(x: 0, y: 24, width: 1200, height: 760)
         )
@@ -1758,40 +1962,25 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(frame, CGRect(x: 348, y: 200, width: 300, height: 220))
     }
 
-    func testCompareLayoutFallsBackWhenNeitherSideFits() throws {
-        let frame = TranslationCompareLayout.dockedOriginalFrame(
-            anchorFrame: CGRect(x: 200, y: 150, width: 600, height: 400),
+    func testCompareLayoutUsesVerticalSpaceWhenBothSidesAreBlocked() throws {
+        let frame = TranslationCompareLayout.originalFrame(
+            anchorFrame: CGRect(x: 200, y: 100, width: 600, height: 200),
             visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 700)
         )
 
-        XCTAssertNil(frame)
+        XCTAssertEqual(frame, CGRect(x: 200, y: 308, width: 600, height: 200))
+        XCTAssertFalse(frame.intersects(CGRect(x: 200, y: 100, width: 600, height: 200)))
     }
 
-    func testImageCompareLayoutExpandsSmallCaptureForReadableColumns() throws {
-        let frame = TranslationCompareLayout.imageFrame(
-            anchorFrame: CGRect(x: 300, y: 240, width: 260, height: 180),
-            visibleFrame: CGRect(x: 0, y: 24, width: 1200, height: 760)
+    func testCompareLayoutMinimizesOverlapWhenNoClearPlacementExists() throws {
+        let anchorFrame = CGRect(x: 200, y: 150, width: 600, height: 400)
+        let frame = TranslationCompareLayout.originalFrame(
+            anchorFrame: anchorFrame,
+            visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 700)
         )
 
-        XCTAssertEqual(frame.size, CGSize(width: 760, height: 520))
-        XCTAssertTrue(CGRect(x: 12, y: 36, width: 1176, height: 736).contains(frame))
-    }
-
-    func testImageCompareLayoutUsesTwoCaptureWidthsWhenSpaceAllows() throws {
-        let frame = TranslationCompareLayout.imageFrame(
-            anchorFrame: CGRect(x: 300, y: 240, width: 500, height: 400),
-            visibleFrame: CGRect(x: 0, y: 24, width: 1400, height: 900)
-        )
-
-        XCTAssertEqual(frame.size, CGSize(width: 1001, height: 520))
-    }
-
-    func testImageCompareUsesOneCenteredDividerWithoutChangingPaneWidths() throws {
-        XCTAssertEqual(TranslationCompareLayout.dividerWidth, 1)
-        XCTAssertEqual(TranslationCompareLayout.paneWidth(containerWidth: 1000), 500)
-        XCTAssertEqual(TranslationCompareLayout.dividerX(containerWidth: 1000), 500)
-        XCTAssertEqual(TranslationCompareLayout.paneWidth(containerWidth: 1001), 500.5)
-        XCTAssertEqual(TranslationCompareLayout.dividerX(containerWidth: 1001), 500.5)
+        XCTAssertEqual(frame, CGRect(x: 200, y: 312, width: 600, height: 400))
+        XCTAssertEqual(frame.size, anchorFrame.size)
     }
 
     func testSemanticNormalizerSplitsMergedBulletItems() throws {
@@ -2307,6 +2496,87 @@ final class ConversationHarnessTests: XCTestCase {
         )
     }
 
+    func testTranslationRendererReturnsHighlightRectsFromActualGlyphLayout() throws {
+        let size = NSSize(width: 420, height: 240)
+        let source = NSImage(size: size)
+        source.lockFocus()
+        NSColor.white.setFill()
+        NSBezierPath(rect: CGRect(origin: .zero, size: size)).fill()
+        source.unlockFocus()
+        let sourceData = try XCTUnwrap(source.tiffRepresentation)
+        let block = ImageTranslationBlock(
+            sourceID: "r001",
+            text: "该系统能够同时远程监测多名用户的健康信息，同时为每位用户提供数字医生并按需监测其健康状态。",
+            x: 0.08,
+            y: 0.10,
+            width: 0.84,
+            height: 0.70,
+            lineRects: (0..<7).map { index in
+                ImageTranslationLineRect(
+                    x: 0.08,
+                    y: 0.10 + Double(index) * 0.09,
+                    width: 0.84,
+                    height: 0.075
+                )
+            },
+            textColor: "#0000ff",
+            backgroundColor: "#ffffff",
+            alignment: "left",
+            fontSize: 0.065
+        )
+        let pair = ImageTranslationHighlightPair(
+            id: "r001-a0",
+            sourceID: "r001",
+            targetText: "按需监测其健康状态",
+            sourceRects: [],
+            translatedRects: []
+        )
+
+        let result = try XCTUnwrap(ImageTranslationRenderer.renderDataWithHighlights(
+            sourceData: sourceData,
+            blocks: [block],
+            highlightPairs: [pair]
+        ))
+        let rects = try XCTUnwrap(result.translatedHighlightRects[pair.id])
+        XCTAssertFalse(rects.isEmpty)
+
+        let renderedImage = try XCTUnwrap(NSImage(data: result.data))
+        let bitmap = try XCTUnwrap(displayBitmap(for: renderedImage, size: size))
+        let overlapsRenderedText = rects.contains { rect in
+            let minimumX = max(0, Int(rect.minX * CGFloat(bitmap.pixelsWide)))
+            let maximumX = min(bitmap.pixelsWide, Int(ceil(rect.maxX * CGFloat(bitmap.pixelsWide))))
+            let minimumY = max(0, Int(rect.minY * CGFloat(bitmap.pixelsHigh)))
+            let maximumY = min(bitmap.pixelsHigh, Int(ceil(rect.maxY * CGFloat(bitmap.pixelsHigh))))
+            guard minimumX < maximumX, minimumY < maximumY else { return false }
+            for y in minimumY..<maximumY {
+                for x in minimumX..<maximumX {
+                    guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else {
+                        continue
+                    }
+                    if color.blueComponent > color.redComponent + 0.30,
+                       color.blueComponent > color.greenComponent + 0.30 {
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        var blueBounds = CGRect.null
+        for y in 0..<bitmap.pixelsHigh {
+            for x in 0..<bitmap.pixelsWide {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                      color.blueComponent > color.redComponent + 0.30,
+                      color.blueComponent > color.greenComponent + 0.30
+                else { continue }
+                blueBounds = blueBounds.union(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+        }
+        XCTAssertTrue(
+            overlapsRenderedText,
+            "Highlight rects \(rects) did not overlap rendered blue bounds \(blueBounds)"
+        )
+    }
+
     func testTranslationRendererHarmonizesNearWhiteErasePatches() throws {
         let size = NSSize(width: 200, height: 100)
         let pageColor = NSColor(calibratedWhite: 0.98, alpha: 1)
@@ -2599,6 +2869,12 @@ final class ConversationHarnessTests: XCTestCase {
         message.content.reduce(into: 0) { count, content in
             if case .image = content { count += 1 }
         }
+    }
+
+    private func fileCount(in message: VisionMessage?) -> Int {
+        message?.content.reduce(into: 0) { count, content in
+            if case .file = content { count += 1 }
+        } ?? 0
     }
 
     private func text(in message: VisionMessage) -> String? {

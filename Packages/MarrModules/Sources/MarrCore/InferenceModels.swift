@@ -12,6 +12,10 @@ public struct ConversationImageAsset: Identifiable, Equatable, Sendable {
         self.mimeType = mimeType
         self.fileName = fileName
     }
+
+    public var isImage: Bool {
+        mimeType.lowercased().hasPrefix("image/")
+    }
 }
 
 public enum ConversationTurnStatus: String, Codable, Equatable, Sendable {
@@ -58,6 +62,7 @@ public enum VisionMessageRole: String, Equatable, Sendable {
 public enum VisionContent: Equatable, Sendable {
     case text(String)
     case image(ConversationImageAsset)
+    case file(ConversationImageAsset)
 }
 
 public struct VisionMessage: Equatable, Sendable {
@@ -80,8 +85,45 @@ public struct VisionRequest: Equatable, Sendable {
     }
 }
 
+public struct InferenceTokenUsage: Codable, Equatable, Sendable {
+    public let inputTokens: Int
+    public let outputTokens: Int
+
+    public init(inputTokens: Int, outputTokens: Int) {
+        self.inputTokens = max(0, inputTokens)
+        self.outputTokens = max(0, outputTokens)
+    }
+
+    public var totalTokens: Int { inputTokens + outputTokens }
+}
+
+public struct VisionResponse: Equatable, Sendable {
+    public let text: String
+    public let usage: InferenceTokenUsage?
+
+    public init(text: String, usage: InferenceTokenUsage? = nil) {
+        self.text = text
+        self.usage = usage
+    }
+}
+
 public protocol VisionAIClient: Sendable {
     func ask(request: VisionRequest, model: String, connection: InferenceConnection) async throws -> String
+    func askWithUsage(
+        request: VisionRequest,
+        model: String,
+        connection: InferenceConnection
+    ) async throws -> VisionResponse
+}
+
+public extension VisionAIClient {
+    func askWithUsage(
+        request: VisionRequest,
+        model: String,
+        connection: InferenceConnection
+    ) async throws -> VisionResponse {
+        VisionResponse(text: try await ask(request: request, model: model, connection: connection))
+    }
 }
 
 public enum InferenceProvider: String, CaseIterable, Identifiable, Codable, Sendable {
