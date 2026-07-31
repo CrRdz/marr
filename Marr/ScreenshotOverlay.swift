@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class ScreenshotOverlayController {
     var onCapture: ((PickedImage, CGRect, CGRect, String) -> Void)?
-    var onTranslate: ((PickedImage, CGRect) -> Void)?
+    var onTranslate: ((PickedImage, CGRect, ScreenCaptureSnapshot) -> Void)?
     var onWindowCapture: ((WindowCaptureCandidate) -> Void)?
     var onCancel: (() -> Void)?
 
@@ -232,25 +232,21 @@ final class ScreenshotOverlayController {
     }
 
     private func translate(rect: CGRect, on screen: NSScreen) {
-        let screenSnapshot = snapshot(for: screen)
-        close()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + captureAfterOverlayDismissDelay) { [weak self] in
-            guard let self else {
-                return
-            }
-
-            guard let image = ScreenCapture.capture(
+        guard
+            let screenSnapshot = snapshot(for: screen),
+            let image = ScreenCapture.capture(
                 rect: rect,
                 screen: screen,
                 snapshot: screenSnapshot
-            ) else {
-                self.onCancel?()
-                return
-            }
-
-            self.onTranslate?(image, rect)
+            )
+        else {
+            close()
+            onCancel?()
+            return
         }
+
+        close()
+        onTranslate?(image, rect, screenSnapshot)
     }
 
     private func captureWindow(_ candidate: WindowCaptureCandidate) {
@@ -1021,7 +1017,7 @@ struct ScreenshotSelectionView: View {
     private func dragHint(in size: CGSize) -> some View {
         Text("Drag to take a screenshot")
             .font(.system(size: 12, weight: .regular))
-            .foregroundStyle(.black.opacity(0.92))
+            .foregroundStyle(Color.primary.opacity(0.92))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .captureLabelSurface()
@@ -1500,7 +1496,7 @@ private struct WindowCaptureSelectionView: View {
 
         return Text(text)
             .font(.system(size: labelFontSize(for: size), weight: .regular))
-            .foregroundStyle(isHovered ? selectedAccent.foregroundColor : .black.opacity(0.92))
+            .foregroundStyle(isHovered ? selectedAccent.foregroundColor : Color.primary.opacity(0.92))
             .lineLimit(isStageManager ? 5 : 2)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
@@ -1665,8 +1661,8 @@ private extension View {
 }
 
 struct ScreenCaptureSnapshot {
-    fileprivate let image: CGImage
-    fileprivate let screenFrame: CGRect
+    let image: CGImage
+    let screenFrame: CGRect
     fileprivate let pixelScaleX: CGFloat
     fileprivate let pixelScaleY: CGFloat
 

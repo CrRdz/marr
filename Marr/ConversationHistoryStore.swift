@@ -116,3 +116,64 @@ final class ConversationHistoryStore: ObservableObject {
         }
     }
 }
+
+struct TokenUsageEvent: Identifiable, Codable, Equatable, Sendable {
+    let id: UUID
+    let date: Date
+    let inputTokens: Int
+    let outputTokens: Int
+
+    var totalTokens: Int { inputTokens + outputTokens }
+}
+
+@MainActor
+final class TokenUsageStore: ObservableObject {
+    @Published private(set) var events: [TokenUsageEvent] = []
+
+    private let fileURL: URL
+
+    convenience init() {
+        let applicationSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.temporaryDirectory
+        self.init(rootURL: applicationSupport.appendingPathComponent("Marr", isDirectory: true))
+    }
+
+    init(rootURL: URL) {
+        fileURL = rootURL.appendingPathComponent("token-usage.json")
+        load()
+    }
+
+    func record(_ usage: InferenceTokenUsage, at date: Date = Date()) {
+        guard usage.totalTokens > 0 else { return }
+        events.append(TokenUsageEvent(
+            id: UUID(),
+            date: date,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens
+        ))
+        save()
+    }
+
+    private func load() {
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        events = (try? decoder.decode([TokenUsageEvent].self, from: data)) ?? []
+    }
+
+    private func save() {
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            try encoder.encode(events).write(to: fileURL, options: .atomic)
+        } catch {
+            // Usage telemetry must never interrupt an inference request.
+        }
+    }
+}

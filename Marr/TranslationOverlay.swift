@@ -6,6 +6,7 @@ import SwiftUI
 final class TranslationOverlayController {
     var onClose: (() -> Void)?
 
+    private let backdropWindow: TranslationBackdropWindow
     private let window: TranslationOverlayWindow
     private let anchorRect: CGRect
     private let model = ImageTranslationOverlayModel()
@@ -17,9 +18,34 @@ final class TranslationOverlayController {
     private var isComparing = false
     private var didClose = false
 
-    init(anchorRect: CGRect) {
+    init(anchorRect: CGRect, frozenSnapshot: ScreenCaptureSnapshot) {
         let rect = anchorRect.integral
         self.anchorRect = rect
+        let createdBackdropWindow = TranslationBackdropWindow(
+            contentRect: frozenSnapshot.screenFrame,
+            styleMask: [.borderless, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        createdBackdropWindow.title = "Marr Frozen Translation Backdrop"
+        createdBackdropWindow.isOpaque = true
+        createdBackdropWindow.backgroundColor = .black
+        createdBackdropWindow.hasShadow = false
+        createdBackdropWindow.animationBehavior = .none
+        createdBackdropWindow.isReleasedWhenClosed = false
+        createdBackdropWindow.level = .screenSaver
+        createdBackdropWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        createdBackdropWindow.ignoresMouseEvents = false
+        createdBackdropWindow.contentView = NSHostingView(
+            rootView: TranslationFrozenBackdropView(
+                image: NSImage(
+                    cgImage: frozenSnapshot.image,
+                    size: frozenSnapshot.screenFrame.size
+                )
+            )
+        )
+
+        backdropWindow = createdBackdropWindow
         let createdWindow = TranslationOverlayWindow(
             contentRect: rect,
             styleMask: [.borderless, .fullSizeContentView],
@@ -45,16 +71,23 @@ final class TranslationOverlayController {
 
     func show() {
         installEscapeMonitor()
+        backdropWindow.orderFront(nil)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func showTranslatedImage(_ image: NSImage, originalImage: NSImage) {
+    func showTranslatedImage(
+        _ image: NSImage,
+        originalImage: NSImage,
+        highlightPairs: [ImageTranslationHighlightPair] = []
+    ) {
         closeOriginalWindow()
         self.originalImage = originalImage
         translatedImage = image
         isComparing = false
-        window.ignoresMouseEvents = true
+        model.highlightPairs = highlightPairs
+        model.clearHighlight()
+        window.ignoresMouseEvents = highlightPairs.isEmpty
         window.setFrame(anchorRect, display: true)
         model.state = .result(image)
         showToolBubble()
@@ -63,7 +96,7 @@ final class TranslationOverlayController {
     func showError(_ message: String) {
         closeOriginalWindow()
         isComparing = false
-        window.ignoresMouseEvents = true
+        window.ignoresMouseEvents = model.highlightPairs.isEmpty
         closeToolBubble()
         window.setFrame(anchorRect, display: true)
         model.state = .error(message)
@@ -81,6 +114,9 @@ final class TranslationOverlayController {
         window.orderOut(nil)
         window.contentView = nil
         window.close()
+        backdropWindow.orderOut(nil)
+        backdropWindow.contentView = nil
+        backdropWindow.close()
         onClose?()
     }
 
@@ -137,7 +173,7 @@ final class TranslationOverlayController {
     private func showTranslationOnly(_ translatedImage: NSImage) {
         closeOriginalWindow()
         isComparing = false
-        window.ignoresMouseEvents = true
+        window.ignoresMouseEvents = model.highlightPairs.isEmpty
         window.setFrame(anchorRect, display: true)
         model.state = .result(translatedImage)
         updateToolBubblePosition()
@@ -146,29 +182,20 @@ final class TranslationOverlayController {
     private func showImageCompare(originalImage: NSImage, translatedImage: NSImage) {
         closeOriginalWindow()
         isComparing = true
-        if let dockedFrame = TranslationCompareLayout.dockedOriginalFrame(
+        window.ignoresMouseEvents = true
+        window.setFrame(anchorRect, display: true)
+        model.state = .result(translatedImage)
+        let originalFrame = TranslationCompareLayout.originalFrame(
             anchorFrame: anchorRect,
             visibleFrame: screenVisibleFrame()
-        ) {
-            window.ignoresMouseEvents = true
-            window.setFrame(anchorRect, display: true)
-            model.state = .result(translatedImage)
-            showOriginalWindow(image: originalImage, frame: dockedFrame)
-        } else {
-            let presentation = imageComparePresentation(
-                originalImage: originalImage,
-                translatedImage: translatedImage
-            )
-            window.ignoresMouseEvents = false
-            window.setFrame(presentation.containerFrame, display: true)
-            model.state = .compare(presentation)
-        }
+        )
+        showOriginalWindow(image: originalImage, frame: originalFrame)
         updateToolBubblePosition()
     }
 
     private func showOriginalWindow(image: NSImage, frame: CGRect) {
         closeOriginalWindow()
-        let createdWindow = TranslationOverlayWindow(
+        let createdWindow = TranslationOriginalWindow(
             contentRect: frame,
             styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
@@ -182,10 +209,12 @@ final class TranslationOverlayController {
         createdWindow.isReleasedWhenClosed = false
         createdWindow.level = .screenSaver
         createdWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        createdWindow.ignoresMouseEvents = true
-        createdWindow.contentView = NSHostingView(
-            rootView: TranslationDockedOriginalView(image: image)
-                .marrPreferredColorScheme()
+        createdWindow.ignoresMouseEvents = false
+        createdWindow.isMovableByWindowBackground = true
+        createdWindow.contentView = TranslationDraggableHostingView(
+            rootView: TranslationDockedOriginalView(image: image, model: model)
+                .marrPreferredColorScheme(),
+            selectableRects: model.highlightPairs.flatMap(\.sourceRects)
         )
 
         originalWindow = createdWindow
@@ -200,13 +229,7 @@ final class TranslationOverlayController {
     }
 
     private func toolBubbleFrame() -> CGRect {
-        let referenceFrame: CGRect
-        if isComparing, let originalWindow {
-            referenceFrame = window.frame.union(originalWindow.frame)
-        } else {
-            referenceFrame = isComparing ? window.frame : anchorRect
-        }
-        return toolBubbleFrame(near: referenceFrame)
+        toolBubbleFrame(near: anchorRect)
     }
 
     private func updateToolBubblePosition() {
@@ -220,7 +243,7 @@ final class TranslationOverlayController {
     }
 
     private func toolBubbleFrame(near frame: CGRect) -> CGRect {
-        let size = CGSize(width: 108, height: 30)
+        let size = CGSize(width: 104, height: 32)
         let visibleFrame = screenVisibleFrame()
         let x = min(max(frame.midX - size.width / 2, visibleFrame.minX + 8), visibleFrame.maxX - size.width - 8)
         let preferredY = frame.minY - size.height - 10
@@ -229,22 +252,6 @@ final class TranslationOverlayController {
             : min(frame.maxY + 10, visibleFrame.maxY - size.height - 8)
 
         return CGRect(origin: CGPoint(x: x, y: y), size: size).integral
-    }
-
-    private func imageComparePresentation(
-        originalImage: NSImage,
-        translatedImage: NSImage
-    ) -> TranslationImageComparePresentation {
-        let compareFrame = TranslationCompareLayout.imageFrame(
-            anchorFrame: anchorRect,
-            visibleFrame: screenVisibleFrame()
-        )
-
-        return TranslationImageComparePresentation(
-            originalImage: originalImage,
-            translatedImage: translatedImage,
-            containerFrame: compareFrame
-        )
     }
 
     private func screenVisibleFrame() -> CGRect {
@@ -272,13 +279,43 @@ final class TranslationOverlayController {
     }
 }
 
-private final class TranslationOverlayWindow: NSWindow {
+private class TranslationOverlayWindow: NSWindow {
     override var canBecomeKey: Bool {
         true
     }
 
     override var canBecomeMain: Bool {
         true
+    }
+}
+
+private final class TranslationBackdropWindow: NSWindow {
+    override var canBecomeKey: Bool {
+        false
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
+}
+
+private final class TranslationOriginalWindow: TranslationOverlayWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        guard let visibleFrame = screen?.visibleFrame else {
+            return frameRect
+        }
+
+        let minimumVisibleLength: CGFloat = 48
+        var constrainedFrame = frameRect
+        constrainedFrame.origin.x = min(
+            max(constrainedFrame.minX, visibleFrame.minX - constrainedFrame.width + minimumVisibleLength),
+            visibleFrame.maxX - minimumVisibleLength
+        )
+        constrainedFrame.origin.y = min(
+            max(constrainedFrame.minY, visibleFrame.minY - constrainedFrame.height + minimumVisibleLength),
+            visibleFrame.maxY - minimumVisibleLength
+        )
+        return constrainedFrame.integral
     }
 }
 
@@ -292,106 +329,165 @@ private final class TranslationToolWindow: NSWindow {
     }
 }
 
+private final class TranslationDraggableHostingView<Content: View>: NSHostingView<Content> {
+    private let selectableRects: [CGRect]
+
+    init(rootView: Content, selectableRects: [CGRect]) {
+        self.selectableRects = selectableRects
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required init(rootView: Content) {
+        fatalError("Use init(rootView:selectableRects:)")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var mouseDownCanMoveWindow: Bool {
+        if NSEvent.modifierFlags.contains(.option) {
+            return true
+        }
+        guard bounds.width > 0, bounds.height > 0, let window else {
+            return true
+        }
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let normalizedPoint = CGPoint(
+            x: point.x / bounds.width,
+            y: isFlipped ? point.y / bounds.height : 1 - point.y / bounds.height
+        )
+        return !selectableRects.contains { $0.contains(normalizedPoint) }
+    }
+}
+
 @MainActor
 private final class ImageTranslationOverlayModel: ObservableObject {
     @Published var state: ImageTranslationOverlayState = .loading
+    @Published var highlightPairs: [ImageTranslationHighlightPair] = []
+    @Published var selectedHighlightIDs: Set<String> = []
+
+    private var selectionStart: CGPoint?
+    private var selectionSide: TranslationHighlightSide?
+
+    func updateHighlightSelection(side: TranslationHighlightSide, point: CGPoint) {
+        if selectionStart == nil || selectionSide != side {
+            selectionStart = point
+            selectionSide = side
+        }
+        guard let selectionStart else { return }
+        let selectionRect = CGRect(
+            x: min(selectionStart.x, point.x),
+            y: min(selectionStart.y, point.y),
+            width: abs(point.x - selectionStart.x),
+            height: abs(point.y - selectionStart.y)
+        ).insetBy(dx: -0.004, dy: -0.004)
+        selectedHighlightIDs = Set(highlightPairs.compactMap { pair in
+            let rects = side == .source ? pair.sourceRects : pair.translatedRects
+            return rects.contains(where: { $0.intersects(selectionRect) }) ? pair.id : nil
+        })
+    }
+
+    func endHighlightSelection() {
+        selectionStart = nil
+        selectionSide = nil
+    }
+
+    func clearHighlight() {
+        selectedHighlightIDs = []
+        endHighlightSelection()
+    }
+}
+
+private enum TranslationHighlightSide {
+    case source
+    case translated
 }
 
 private enum ImageTranslationOverlayState {
     case loading
     case result(NSImage)
-    case compare(TranslationImageComparePresentation)
     case error(String)
 }
 
-private struct TranslationImageComparePresentation {
-    let originalImage: NSImage
-    let translatedImage: NSImage
-    let containerFrame: CGRect
-}
-
 enum TranslationCompareLayout {
-    static let dividerWidth: CGFloat = 1
-
-    static func paneWidth(containerWidth: CGFloat) -> CGFloat {
-        max(1, containerWidth / 2)
-    }
-
-    static func dividerX(containerWidth: CGFloat) -> CGFloat {
-        paneWidth(containerWidth: containerWidth)
-    }
-
-    static func dockedOriginalFrame(
+    static func originalFrame(
         anchorFrame: CGRect,
         visibleFrame: CGRect,
         margin: CGFloat = 12,
         gap: CGFloat = 8
-    ) -> CGRect? {
-        let availableFrame = visibleFrame.insetBy(dx: margin, dy: margin)
-        let sourceFrame = anchorFrame.integral
-        guard
-            sourceFrame.width > 0,
-            sourceFrame.height > 0,
-            sourceFrame.width <= availableFrame.width,
-            sourceFrame.height <= availableFrame.height
-        else {
-            return nil
-        }
-
-        let y = min(
-            max(sourceFrame.minY, availableFrame.minY),
-            availableFrame.maxY - sourceFrame.height
-        ).rounded()
-        let leftX = sourceFrame.minX - gap - sourceFrame.width
-        if leftX >= availableFrame.minX {
-            return CGRect(
-                x: leftX.rounded(),
-                y: y,
-                width: sourceFrame.width,
-                height: sourceFrame.height
-            )
-        }
-
-        let rightX = sourceFrame.maxX + gap
-        if rightX + sourceFrame.width <= availableFrame.maxX {
-            return CGRect(
-                x: rightX.rounded(),
-                y: y,
-                width: sourceFrame.width,
-                height: sourceFrame.height
-            )
-        }
-
-        return nil
-    }
-
-    static func imageFrame(
-        anchorFrame: CGRect,
-        visibleFrame: CGRect,
-        margin: CGFloat = 12,
-        minimumSize: CGSize = CGSize(width: 760, height: 520)
     ) -> CGRect {
         let availableFrame = visibleFrame.insetBy(dx: margin, dy: margin)
         let sourceFrame = anchorFrame.integral
-        let idealWidth = sourceFrame.width * 2 + 1
-        let idealHeight = sourceFrame.height + 45
-        let size = CGSize(
-            width: min(availableFrame.width, max(idealWidth, minimumSize.width)),
-            height: min(availableFrame.height, max(idealHeight, minimumSize.height))
-        )
-        let x = min(
-            max(sourceFrame.midX - size.width / 2, availableFrame.minX),
-            availableFrame.maxX - size.width
-        )
-        let y = min(
-            max(sourceFrame.midY - size.height / 2, availableFrame.minY),
-            availableFrame.maxY - size.height
-        )
+        guard sourceFrame.width > 0, sourceFrame.height > 0 else {
+            return sourceFrame
+        }
 
+        let candidates = [
+            CGRect(
+                x: sourceFrame.minX - gap - sourceFrame.width,
+                y: sourceFrame.minY,
+                width: sourceFrame.width,
+                height: sourceFrame.height
+            ),
+            CGRect(
+                x: sourceFrame.maxX + gap,
+                y: sourceFrame.minY,
+                width: sourceFrame.width,
+                height: sourceFrame.height
+            ),
+            CGRect(
+                x: sourceFrame.minX,
+                y: sourceFrame.maxY + gap,
+                width: sourceFrame.width,
+                height: sourceFrame.height
+            ),
+            CGRect(
+                x: sourceFrame.minX,
+                y: sourceFrame.minY - gap - sourceFrame.height,
+                width: sourceFrame.width,
+                height: sourceFrame.height
+            )
+        ]
+
+        if let nonOverlappingFrame = candidates.first(where: { candidate in
+            availableFrame.contains(candidate) && !candidate.intersects(sourceFrame)
+        }) {
+            return nonOverlappingFrame.integral
+        }
+
+        return candidates
+            .map { clampedFrame($0, to: availableFrame) }
+            .enumerated()
+            .min { lhs, rhs in
+                let lhsOverlap = overlapArea(lhs.element, sourceFrame)
+                let rhsOverlap = overlapArea(rhs.element, sourceFrame)
+                if lhsOverlap != rhsOverlap {
+                    return lhsOverlap < rhsOverlap
+                }
+                return lhs.offset < rhs.offset
+            }?
+            .element
+            .integral ?? sourceFrame
+    }
+
+    private static func clampedFrame(_ frame: CGRect, to bounds: CGRect) -> CGRect {
         return CGRect(
-            origin: CGPoint(x: x.rounded(), y: y.rounded()),
-            size: size
+            x: min(max(frame.minX, bounds.minX), bounds.maxX - frame.width),
+            y: min(max(frame.minY, bounds.minY), bounds.maxY - frame.height),
+            width: frame.width,
+            height: frame.height
         )
+    }
+
+    private static func overlapArea(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {
+        let intersection = lhs.intersection(rhs)
+        guard !intersection.isNull else {
+            return 0
+        }
+        return intersection.width * intersection.height
     }
 }
 
@@ -406,19 +502,12 @@ private struct ImageTranslationOverlayView: View {
                     loadingView
                         .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
                 case .result(let image):
-                    Image(nsImage: image)
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                        .overlay(selectionHintBorder)
-                case .compare(let presentation):
-                    TranslationImageCompareView(
-                        originalImage: presentation.originalImage,
-                        translatedImage: presentation.translatedImage
+                    TranslationInteractiveImageView(
+                        image: image,
+                        side: .translated,
+                        model: model
                     )
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .overlay(selectionHintBorder)
                 case .error(let message):
                     errorView(message)
                         .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
@@ -473,15 +562,29 @@ private struct ImageTranslationOverlayView: View {
 
 }
 
-private struct TranslationDockedOriginalView: View {
+private struct TranslationFrozenBackdropView: View {
     let image: NSImage
 
     var body: some View {
         Image(nsImage: image)
             .resizable()
             .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .accessibilityHidden(true)
+    }
+}
+
+private struct TranslationDockedOriginalView: View {
+    let image: NSImage
+    @ObservedObject var model: ImageTranslationOverlayModel
+
+    var body: some View {
+        TranslationInteractiveImageView(
+            image: image,
+            side: .source,
+            model: model
+        )
             .background(Color(nsColor: .windowBackgroundColor))
             .overlay(Rectangle().stroke(.primary.opacity(0.24), lineWidth: 1))
             .overlay(alignment: .topLeading) {
@@ -497,76 +600,76 @@ private struct TranslationDockedOriginalView: View {
     }
 }
 
-private struct TranslationImageCompareView: View {
-    let originalImage: NSImage
-    let translatedImage: NSImage
-
-    private let headerHeight: CGFloat = 44
+private struct TranslationInteractiveImageView: View {
+    let image: NSImage
+    let side: TranslationHighlightSide
+    @ObservedObject var model: ImageTranslationOverlayModel
 
     var body: some View {
         GeometryReader { geometry in
-            let paneWidth = TranslationCompareLayout.paneWidth(
-                containerWidth: geometry.size.width
-            )
+            ZStack(alignment: .topLeading) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
 
-            VStack(spacing: 0) {
-                compareHeader(paneWidth: paneWidth)
-                    .frame(height: headerHeight)
-                Divider()
-
-                ScrollView([.horizontal, .vertical]) {
-                    HStack(alignment: .top, spacing: 0) {
-                        compareImage(originalImage, width: paneWidth)
-                        compareImage(translatedImage, width: paneWidth)
+                ForEach(model.highlightPairs) { pair in
+                    let rects = side == .source ? pair.sourceRects : pair.translatedRects
+                    ForEach(Array(rects.enumerated()), id: \.offset) { _, rect in
+                        if model.selectedHighlightIDs.contains(pair.id) {
+                            highlightShape(rect, in: geometry.size)
+                        }
                     }
-                    .frame(minWidth: geometry.size.width, alignment: .topLeading)
                 }
-                .scrollIndicators(.visible)
+
+                ForEach(model.highlightPairs) { pair in
+                    let rects = side == .source ? pair.sourceRects : pair.translatedRects
+                    ForEach(Array(rects.enumerated()), id: \.offset) { _, rect in
+                        selectionTarget(rect, in: geometry.size)
+                    }
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(.primary.opacity(0.16))
-                    .frame(
-                        width: TranslationCompareLayout.dividerWidth,
-                        height: geometry.size.height
-                    )
-                    .offset(
-                        x: TranslationCompareLayout.dividerX(
-                            containerWidth: geometry.size.width
-                        ) - TranslationCompareLayout.dividerWidth / 2
-                    )
-                    .allowsHitTesting(false)
-            }
-            .overlay(Rectangle().stroke(.primary.opacity(0.18), lineWidth: 1))
+            .coordinateSpace(name: "translation-highlight-space")
         }
-        .accessibilityLabel("Original and translated screenshot comparison")
     }
 
-    private func compareHeader(paneWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            headerLabel("Original", width: paneWidth)
-            headerLabel("简体中文", width: paneWidth)
-        }
-        .background(.primary.opacity(0.035))
+    private func highlightShape(_ rect: CGRect, in size: CGSize) -> some View {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(Color.yellow.opacity(0.30))
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(Color.orange.opacity(0.55), lineWidth: 0.8)
+            )
+            .frame(width: rect.width * size.width, height: rect.height * size.height)
+            .offset(x: rect.minX * size.width, y: rect.minY * size.height)
+            .blendMode(.multiply)
+            .allowsHitTesting(false)
     }
 
-    private func headerLabel(_ title: String, width: CGFloat) -> some View {
-        Text(title)
-            .font(MarrTypography.body(size: 13, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 16)
-            .frame(width: width, alignment: .leading)
-    }
-
-    private func compareImage(_ image: NSImage, width: CGFloat) -> some View {
-        Image(nsImage: image)
-            .resizable()
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
-            .frame(width: width, alignment: .top)
-            .clipped()
+    private func selectionTarget(_ rect: CGRect, in size: CGSize) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .frame(width: max(6, rect.width * size.width), height: max(6, rect.height * size.height))
+            .offset(x: rect.minX * size.width, y: rect.minY * size.height)
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("translation-highlight-space"))
+                    .onChanged { value in
+                        guard !NSEvent.modifierFlags.contains(.option) else { return }
+                        model.updateHighlightSelection(
+                            side: side,
+                            point: CGPoint(
+                                x: value.location.x / max(size.width, 1),
+                                y: value.location.y / max(size.height, 1)
+                            )
+                        )
+                    }
+                    .onEnded { _ in
+                        model.endHighlightSelection()
+                    }
+            )
     }
 }
 
@@ -578,18 +681,38 @@ private struct TranslationToolBubbleView: View {
 
     var body: some View {
         Button(action: onCompare) {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
                 Image(systemName: isComparing ? "checkmark" : "rectangle.split.2x1")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(isHovering ? 0.94 : 0.78))
+                    .frame(width: 20, height: 20)
+                    .background(
+                        Color.primary.opacity(isHovering ? 0.12 : 0.065),
+                        in: Circle()
+                    )
                 Text(isComparing ? "Done" : "Compare")
-                    .font(MarrTypography.body(size: 13, weight: .semibold))
+                    .font(MarrTypography.body(size: 12, weight: .semibold))
             }
-            .foregroundStyle(.primary.opacity(isHovering ? 0.95 : 0.78))
-            .frame(width: 108, height: 30)
-            .contentShape(Rectangle())
+            .foregroundStyle(.primary.opacity(isHovering ? 0.92 : 0.78))
+            .frame(width: 104, height: 32)
+            .marrGlassSurface(cornerRadius: 16, isClear: true)
+            .overlay(
+                Capsule()
+                    .fill(Color.primary.opacity(isHovering ? 0.045 : 0))
+                    .allowsHitTesting(false)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(isHovering ? 0.28 : 0.20), lineWidth: 0.8)
+                    .allowsHitTesting(false)
+            )
+            .shadow(color: .black.opacity(isHovering ? 0.14 : 0.09), radius: 7, x: 0, y: 4)
+            .scaleEffect(isHovering ? 1.01 : 1)
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
         .help(isComparing ? "Return to translated image" : "Compare original and translation")
     }
 }

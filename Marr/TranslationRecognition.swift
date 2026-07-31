@@ -727,14 +727,28 @@ enum ImageTranslationTextRecognizer {
             return true
         }
 
-        if looksLikeStandaloneHeading(line.text) || endsTextBlock(previousLine.text) {
+        if looksLikeStandaloneHeading(line.text) {
             return false
         }
 
         let indentationDelta = abs(currentBox.minX - previousBox.minX)
+        let isTightWrappedParagraphContinuation = ImageTranslationReadingOrderLayout
+            .isTightWrappedParagraphContinuation(
+                previousRect: previousBox,
+                candidateRect: currentBox,
+                blockRect: block.boundingBox
+            )
+        if endsTextBlock(previousLine.text), !isTightWrappedParagraphContinuation {
+            return false
+        }
+
         return indentationDelta < 0.035
             && verticalGap < maxLineHeight * 1.25
-            && (lineSuggestsContinuation(previousLine.text) || !startsLikeNewSentence(line.text))
+            && (
+                isTightWrappedParagraphContinuation
+                    || lineSuggestsContinuation(previousLine.text)
+                    || !startsLikeNewSentence(line.text)
+            )
     }
 
     private static func expandedSourceRegions(

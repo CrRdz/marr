@@ -2,6 +2,29 @@ import AppKit
 import MarrCore
 import SwiftUI
 
+enum AnswerPanelUtilityDestination {
+    case history
+    case settings
+}
+
+@MainActor
+private final class AnswerPanelNavigation: ObservableObject {
+    struct Request: Equatable {
+        let id = UUID()
+        let destination: AnswerPanelUtilityDestination?
+    }
+
+    @Published private(set) var request: Request
+
+    init(initialDestination: AnswerPanelUtilityDestination?) {
+        request = Request(destination: initialDestination)
+    }
+
+    func show(_ destination: AnswerPanelUtilityDestination) {
+        request = Request(destination: destination)
+    }
+}
+
 @MainActor
 final class AnswerPanelController {
     private let window: AnswerPanelWindow
@@ -10,6 +33,7 @@ final class AnswerPanelController {
     private let titleCoordinator: ConversationTitleCoordinator
     private let initialFrame: CGRect
     private let presentationStartFrame: CGRect
+    private let navigation: AnswerPanelNavigation
     private(set) var isMinimized = false
     private var hasPresented = false
     private let collapsedPanelSize = AnswerPanelConversationLayout.panelSize
@@ -36,7 +60,8 @@ final class AnswerPanelController {
         historyStore: ConversationHistoryStore,
         session createdSession: ConversationSession,
         anchorRect: CGRect,
-        persistImmediately: Bool
+        persistImmediately: Bool,
+        initialDestination: AnswerPanelUtilityDestination? = nil
     ) {
         createdSession.setArchiveHandler(persistImmediately: persistImmediately) { [weak historyStore] archive in
             historyStore?.save(archive)
@@ -52,6 +77,8 @@ final class AnswerPanelController {
             session: createdSession
         )
         titleCoordinator = createdTitleCoordinator
+        let createdNavigation = AnswerPanelNavigation(initialDestination: initialDestination)
+        navigation = createdNavigation
         let panelSize = collapsedPanelSize
         let screen = NSScreen.screens.first { $0.frame.intersects(anchorRect) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
@@ -64,16 +91,6 @@ final class AnswerPanelController {
             targetFrame: targetFrame,
             anchorRect: anchorRect
         )
-        let composerRect = CGRect(
-            x: targetFrame.midX - AnswerPanelConversationLayout.composerWidth / 2,
-            y: targetFrame.minY + AnswerPanelConversationLayout.windowPadding,
-            width: AnswerPanelConversationLayout.composerWidth,
-            height: AnswerPanelConversationLayout.composerHeight
-        )
-        let usesRegularComposerGlass = screen.map {
-            BackgroundBrightnessSampler.isNearlyWhite(in: composerRect, on: $0)
-        } ?? false
-
         let createdWindow = AnswerPanelWindow(
             contentRect: startFrame,
             styleMask: [.borderless, .fullSizeContentView],
@@ -99,7 +116,7 @@ final class AnswerPanelController {
                 historyStore: historyStore,
                 requestCoordinator: createdRequestCoordinator,
                 titleCoordinator: createdTitleCoordinator,
-                usesRegularComposerGlass: usesRegularComposerGlass,
+                navigation: createdNavigation,
                 actions: AnswerPanelActions(
                     close: { [weak controller] in controller?.dismissCaptureSession() },
                     minimize: { [weak controller] in controller?.minimizeAnswerPanel() },
@@ -152,6 +169,11 @@ final class AnswerPanelController {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         session.requestFocus()
+    }
+
+    func show(_ destination: AnswerPanelUtilityDestination) {
+        navigation.show(destination)
+        restore()
     }
 
     func close() {
@@ -426,7 +448,7 @@ private struct AnswerPanelView: View {
     @ObservedObject private var historyStore: ConversationHistoryStore
     let requestCoordinator: ConversationRequestCoordinator
     let titleCoordinator: ConversationTitleCoordinator
-    let usesRegularComposerGlass: Bool
+    @ObservedObject var navigation: AnswerPanelNavigation
     let actions: AnswerPanelActions
 
     @State private var question = ""
@@ -443,6 +465,8 @@ private struct AnswerPanelView: View {
     @State private var hoveredEditTurnID: UUID?
     @State private var selectedSlashCommandIndex = 0
     @State private var dismissedSlashMenuInput: String?
+    @State private var attachmentErrorMessage: String?
+    @State private var attachmentButtonHovered = false
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
     @FocusState private var questionFocused: Bool
@@ -459,16 +483,18 @@ private struct AnswerPanelView: View {
         historyStore: ConversationHistoryStore,
         requestCoordinator: ConversationRequestCoordinator,
         titleCoordinator: ConversationTitleCoordinator,
-        usesRegularComposerGlass: Bool,
+        navigation: AnswerPanelNavigation,
         actions: AnswerPanelActions
     ) {
         self.controller = controller
         self.session = session
         self.requestCoordinator = requestCoordinator
         self.titleCoordinator = titleCoordinator
-        self.usesRegularComposerGlass = usesRegularComposerGlass
+        self.navigation = navigation
         self.actions = actions
         _historyStore = ObservedObject(wrappedValue: historyStore)
+        _showsHistoryPanel = State(initialValue: navigation.request.destination == .history)
+        _showsSettingsPanel = State(initialValue: navigation.request.destination == .settings)
     }
 
     var body: some View {
@@ -491,11 +517,29 @@ private struct AnswerPanelView: View {
                 questionFocused = true
             }
         }
+        .onChange(of: navigation.request) { _, request in
+            showUtilityDestination(request.destination)
+        }
         .onChange(of: question) { _, nextQuestion in
             selectedSlashCommandIndex = 0
             if dismissedSlashMenuInput != nextQuestion {
                 dismissedSlashMenuInput = nil
             }
+        }
+        .alert(
+            "Couldn’t Add Attachment",
+            isPresented: Binding(
+                get: { attachmentErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        attachmentErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(attachmentErrorMessage ?? "")
         }
         .onExitCommand(perform: handleEscape)
     }
@@ -566,8 +610,8 @@ private struct AnswerPanelView: View {
         VStack(spacing: 7) {
             if !showsHistoryPanel, !session.pendingImageIDs.isEmpty {
                 Label(
-                    "\(session.pendingImageIDs.count) screenshot\(session.pendingImageIDs.count == 1 ? "" : "s") attached to the next question",
-                    systemImage: "photo.on.rectangle"
+                    "\(session.pendingImageIDs.count) attachment\(session.pendingImageIDs.count == 1 ? "" : "s") ready for the next question",
+                    systemImage: "paperclip"
                 )
                 .font(MarrTypography.caption())
                 .foregroundStyle(.secondary)
@@ -839,7 +883,8 @@ private struct AnswerPanelView: View {
         .frame(minHeight: AnswerPanelConversationLayout.composerHeight)
         .marrGlassSurface(
             cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
-            isClear: !usesRegularComposerGlass
+            isClear: true,
+            tintOpacity: 0.06
         )
         .overlay(
             RoundedRectangle(
@@ -917,7 +962,7 @@ private struct AnswerPanelView: View {
         if !attachments.isEmpty {
             VStack(alignment: .trailing, spacing: 6) {
                 ForEach(attachments) { asset in
-                    if let image = NSImage(data: asset.data) {
+                    if asset.isImage, let image = NSImage(data: asset.data) {
                         let size = screenshotThumbnailSize(for: image)
                         Image(nsImage: image)
                             .resizable()
@@ -931,10 +976,50 @@ private struct AnswerPanelView: View {
                                     .allowsHitTesting(false)
                             )
                             .shadow(color: .black.opacity(0.11), radius: 6, x: 0, y: 3)
+                    } else {
+                        fileAttachmentView(asset)
                     }
                 }
             }
         }
+    }
+
+    private func fileAttachmentView(_ asset: ConversationImageAsset) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: AttachmentFileSupport.symbolName(for: asset.fileName))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(selectedAccent.color)
+                .frame(width: 30, height: 30)
+                .background(selectedAccent.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(asset.fileName)
+                    .font(MarrTypography.body(size: 12.5, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text(
+                    ByteCountFormatter.string(
+                        fromByteCount: Int64(asset.data.count),
+                        countStyle: .file
+                    )
+                )
+                .font(MarrTypography.body(size: 10.5))
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(width: 220)
+        .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.8)
+                .allowsHitTesting(false)
+        )
     }
 
     private func screenshotThumbnailSize(for image: NSImage) -> CGSize {
@@ -1021,6 +1106,62 @@ private struct AnswerPanelView: View {
 
     private var composer: some View {
         HStack(spacing: 8) {
+            attachmentButton
+            composerInput
+        }
+        .frame(width: composerWidth)
+        .overlay(alignment: .top) {
+            if showsSlashCommandMenu {
+                slashCommandMenu
+                    .offset(y: AnswerPanelConversationLayout.composerHeight + 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .zIndex(showsSlashCommandMenu ? 10 : 0)
+        .animation(.easeOut(duration: 0.16), value: showsSlashCommandMenu)
+    }
+
+    private var attachmentButton: some View {
+        Button {
+            showAttachmentPicker()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .regular))
+                .frame(
+                    width: AnswerPanelConversationLayout.composerHeight,
+                    height: AnswerPanelConversationLayout.composerHeight
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary.opacity(editingTurnID == nil ? 0.84 : 0.38))
+        .marrGlassSurface(
+            cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+            isClear: true,
+            tintOpacity: 0.06
+        )
+        .overlay(
+            Circle()
+                .fill(selectedAccent.color.opacity(attachmentButtonHovered ? 0.10 : 0))
+                .allowsHitTesting(false)
+        )
+        .overlay(
+            Circle()
+                .stroke(.white.opacity(0.20), lineWidth: 0.8)
+                .allowsHitTesting(false)
+        )
+        .shadow(color: .black.opacity(0.10), radius: 7, x: 0, y: 3)
+        .disabled(editingTurnID != nil)
+        .onHover { isHovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                attachmentButtonHovered = isHovering
+            }
+        }
+        .help(editingTurnID == nil ? "Add attachments" : "Finish editing before adding attachments")
+    }
+
+    private var composerInput: some View {
+        HStack(spacing: 8) {
             if editingTurnID != nil {
                 Image(systemName: "pencil")
                     .font(.system(size: 12, weight: .semibold))
@@ -1078,11 +1219,14 @@ private struct AnswerPanelView: View {
         .padding(.leading, 12)
         .padding(.trailing, 5)
         .padding(.vertical, 4)
-        .frame(width: composerWidth)
+        .frame(
+            width: composerWidth - AnswerPanelConversationLayout.composerHeight - 8
+        )
         .frame(minHeight: AnswerPanelConversationLayout.composerHeight)
         .marrGlassSurface(
             cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
-            isClear: !usesRegularComposerGlass
+            isClear: true,
+            tintOpacity: 0.06
         )
         .overlay(
             RoundedRectangle(
@@ -1092,15 +1236,62 @@ private struct AnswerPanelView: View {
                 .stroke(.white.opacity(0.18), lineWidth: 0.8)
         )
         .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
-        .overlay(alignment: .top) {
-            if showsSlashCommandMenu {
-                slashCommandMenu
-                    .offset(y: AnswerPanelConversationLayout.composerHeight + 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private func showAttachmentPicker() {
+        let panel = NSOpenPanel()
+        panel.title = "Add Attachments"
+        panel.message = "Choose images, PDFs, documents, spreadsheets, presentations, text, or code files."
+        panel.prompt = "Attach"
+        panel.allowedContentTypes = AttachmentFileSupport.allowedContentTypes
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canCreateDirectories = false
+
+        panel.begin { response in
+            guard response == .OK else {
+                DispatchQueue.main.async {
+                    questionFocused = true
+                }
+                return
+            }
+
+            let selectedURLs = panel.urls
+            DispatchQueue.main.async {
+                var failedFiles: [String] = []
+                let attachmentLimit = AttachmentFileSupport.maximumAttachmentCount
+                let remainingCapacity = max(0, attachmentLimit - session.pendingImageIDs.count)
+                if selectedURLs.count > remainingCapacity {
+                    failedFiles.append(
+                        "You can attach up to \(attachmentLimit) files to one question."
+                    )
+                }
+
+                var attachedBytes = session.pendingImageIDs.reduce(into: 0) { total, attachmentID in
+                    total += session.images[attachmentID]?.data.count ?? 0
+                }
+                for url in selectedURLs.prefix(remainingCapacity) {
+                    do {
+                        let attachment = try PickedAttachment.attachment(from: url)
+                        guard attachedBytes + attachment.data.count < AttachmentFileSupport.maximumRequestBytes else {
+                            failedFiles.append(
+                                "\"\(attachment.fileName)\" would make the combined attachments exceed 50 MB."
+                            )
+                            continue
+                        }
+                        session.appendAttachment(attachment)
+                        attachedBytes += attachment.data.count
+                    } catch {
+                        failedFiles.append(error.localizedDescription)
+                    }
+                }
+
+                if !failedFiles.isEmpty {
+                    attachmentErrorMessage = failedFiles.joined(separator: "\n")
+                }
+                questionFocused = true
             }
         }
-        .zIndex(showsSlashCommandMenu ? 10 : 0)
-        .animation(.easeOut(duration: 0.16), value: showsSlashCommandMenu)
     }
 
     private var slashCommandMenu: some View {
@@ -1149,7 +1340,7 @@ private struct AnswerPanelView: View {
         }
         .padding(6)
         .frame(width: composerWidth)
-        .marrGlassSurface(cornerRadius: 16, isClear: !usesRegularComposerGlass)
+        .marrGlassSurface(cornerRadius: 16, isClear: true, tintOpacity: 0.06)
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(.white.opacity(0.20), lineWidth: 0.8)
@@ -1245,6 +1436,17 @@ private struct AnswerPanelView: View {
             showsHistoryPanel = false
             historySearchText = ""
             showsSettingsPanel = true
+        }
+    }
+
+    private func showUtilityDestination(_ destination: AnswerPanelUtilityDestination?) {
+        switch destination {
+        case .history:
+            showHistorySearch()
+        case .settings:
+            showSettings()
+        case nil:
+            break
         }
     }
 

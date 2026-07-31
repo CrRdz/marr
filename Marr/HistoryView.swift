@@ -65,7 +65,7 @@ struct HistoryView: View {
                 conversationPendingDeletion = nil
             }
         } message: { conversation in
-            Text("The conversation and its \(conversation.images.count) stored screenshot\(conversation.images.count == 1 ? "" : "s") will be removed.")
+            Text("The conversation and its \(conversation.images.count) stored attachment\(conversation.images.count == 1 ? "" : "s") will be removed.")
         }
         .confirmationDialog(
             "Clear all conversation history?",
@@ -223,19 +223,20 @@ struct HistoryView: View {
                 parts.append(errorMessage)
             }
         }
+        parts.append(contentsOf: conversation.images.map(\.fileName))
         return parts.joined(separator: " ")
     }
 
     private func metadata(for conversation: ConversationHistoryRecord) -> String {
         var parts: [String] = []
         let turnCount = conversation.turns.count
-        let imageCount = conversation.images.count
+        let attachmentCount = conversation.images.count
 
         if turnCount > 0 {
             parts.append("\(turnCount) turn\(turnCount == 1 ? "" : "s")")
         }
-        if imageCount > 0 {
-            parts.append("\(imageCount) capture\(imageCount == 1 ? "" : "s")")
+        if attachmentCount > 0 {
+            parts.append("\(attachmentCount) attachment\(attachmentCount == 1 ? "" : "s")")
         }
         return parts.isEmpty ? "Untitled" : parts.joined(separator: " · ")
     }

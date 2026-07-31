@@ -77,8 +77,18 @@ enum BackgroundBrightnessSampler {
 }
 
 extension View {
-    func marrGlassSurface(cornerRadius: CGFloat, isClear: Bool = false) -> some View {
-        modifier(MarrGlassSurfaceModifier(cornerRadius: cornerRadius, isClear: isClear))
+    func marrGlassSurface(
+        cornerRadius: CGFloat,
+        isClear: Bool = false,
+        tintOpacity: Double? = nil
+    ) -> some View {
+        modifier(
+            MarrGlassSurfaceModifier(
+                cornerRadius: cornerRadius,
+                isClear: isClear,
+                tintOpacity: tintOpacity
+            )
+        )
     }
 
     func marrPreferredColorScheme() -> some View {
@@ -89,6 +99,7 @@ extension View {
 private struct MarrGlassSurfaceModifier: ViewModifier {
     let cornerRadius: CGFloat
     let isClear: Bool
+    let tintOpacity: Double?
 
     @AppStorage(MarrAppearanceKeys.glassSurfaces) private var usesGlassSurfaces = true
     @Environment(\.accessibilityReduceTransparency) private var reducesTransparency
@@ -154,17 +165,14 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
     }
 
     private var readabilityTint: Color {
-        let opacity: Double
-        if colorSchemeContrast == .increased {
-            opacity = isClear ? 0.68 : 0.58
-        } else {
-            opacity = isClear ? 0.52 : 0.44
-        }
+        let opacity = tintOpacity ?? defaultReadabilityTintOpacity
         return contrastBaseColor.opacity(opacity)
     }
 
     private var standardMaterialBacking: Color {
-        contrastBaseColor.opacity(colorSchemeContrast == .increased ? 0.52 : 0.34)
+        contrastBaseColor.opacity(
+            tintOpacity ?? (colorSchemeContrast == .increased ? 0.52 : 0.34)
+        )
     }
 
     private var contrastBaseColor: Color {
@@ -172,7 +180,16 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
     }
 
     private var frostedSurfaceTint: Color {
-        contrastBaseColor.opacity(colorSchemeContrast == .increased ? 0.62 : isClear ? 0.48 : 0.40)
+        contrastBaseColor.opacity(
+            tintOpacity ?? (colorSchemeContrast == .increased ? 0.62 : isClear ? 0.48 : 0.40)
+        )
+    }
+
+    private var defaultReadabilityTintOpacity: Double {
+        if colorSchemeContrast == .increased {
+            return isClear ? 0.68 : 0.58
+        }
+        return isClear ? 0.52 : 0.44
     }
 
     private var reducedTransparencyColor: Color {
