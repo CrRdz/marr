@@ -23,10 +23,12 @@ jobs:
         fetch-depth: 0
     - name: Prepare release metadata
       id: metadata
+      env:
+        RELEASE_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
 
-        VERSION="${{ inputs.version }}"
+        VERSION="$RELEASE_VERSION"
         VERSION="${VERSION#v}"
 
         if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -41,10 +43,13 @@ jobs:
         fi
 
         echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
     - name: Verify
       run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+    - name: Verify packages
+      run: swift test --package-path Packages/MarrModules
     - name: Build release app
-      run: xcodebuild build -project Marr.xcodeproj -scheme Marr -configuration Release -destination 'platform=macOS' -derivedDataPath build/release CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: xcodebuild build -project Marr.xcodeproj -scheme Marr -configuration Release -destination 'platform=macOS' -derivedDataPath build/release ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO MARKETING_VERSION=${{ steps.metadata.outputs.version }} CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     - name: Package DMG
       run: |
         set -euo pipefail
@@ -53,6 +58,7 @@ jobs:
         cp -R build/release/Build/Products/Release/Marr.app build/dmg/
         ln -s /Applications build/dmg/Applications
         hdiutil create -volname Marr -srcfolder build/dmg -ov -format UDZO build/artifacts/Marr.dmg
+        (cd build/artifacts && shasum -a 256 Marr.dmg > SHA256SUMS.txt)
     - name: Generate release notes
       env:
         GH_TOKEN: ${{ github.token }}
@@ -62,13 +68,15 @@ jobs:
         TAG_NAME="${{ steps.metadata.outputs.tag_name }}"
         REPO="${{ github.repository }}"
 
-        gh api "repos/${REPO}/releases/generate-notes" \
-          --method POST \
-          --field tag_name="$TAG_NAME" \
-          --field target_commitish="$GITHUB_SHA" \
-          --jq '.body' > build/release-notes.md
-
-        perl -0pi -e 's{ by @\S+ in https://github\.com/'"$REPO"'/pull/([0-9]+)}{ ([#$1](https://github.com/'"$REPO"'/pull/$1))}g; s{(?<!\]\()https://github\.com/'"$REPO"'/pull/([0-9]+)}{([#$1](https://github.com/'"$REPO"'/pull/$1))}g' build/release-notes.md
+        if [ -f "docs/releases/${TAG_NAME}.md" ]; then
+          cp "docs/releases/${TAG_NAME}.md" build/release-notes.md
+        else
+          gh api "repos/${REPO}/releases/generate-notes" \
+            --method POST \
+            --field tag_name="$TAG_NAME" \
+            --field target_commitish="$GITHUB_SHA" \
+            --jq '.body' > build/release-notes.md
+        fi
     - name: Create GitHub release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -76,7 +84,7 @@ jobs:
         set -euo pipefail
 
         TAG_NAME="${{ steps.metadata.outputs.tag_name }}"
-        gh release create "$TAG_NAME" build/artifacts/Marr.dmg \
+        gh release create "$TAG_NAME" build/artifacts/Marr.dmg build/artifacts/SHA256SUMS.txt \
           --target "$GITHUB_SHA" \
           --title "Marr ${TAG_NAME}" \
           --notes-file build/release-notes.md
