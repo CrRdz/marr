@@ -73,6 +73,24 @@ struct OpenAIClientTests {
         #expect(object["max_tokens"] as? Int == 8_192)
     }
 
+    @Test("Requests use the connection-specific timeout")
+    func configuresRequestTimeout() async throws {
+        let transport = MockTransport(
+            statusCode: 200,
+            body: #"{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}"#
+        )
+        var configured = connection(baseURL: "https://example.com")
+        configured.requestTimeout = 25
+
+        _ = try await OpenAIClient(transport: transport).ask(
+            request: sampleRequest,
+            model: "model",
+            connection: configured
+        )
+
+        #expect(try #require(await transport.lastRequest).timeoutInterval == 25)
+    }
+
     @Test("Output-limit stop reason is surfaced as an error")
     func reportsTruncatedAnthropicResponse() async throws {
         let transport = MockTransport(

@@ -133,6 +133,25 @@ public enum InferenceProvider: String, CaseIterable, Identifiable, Codable, Send
     public var id: String { rawValue }
 }
 
+public enum TranslationProvider: String, CaseIterable, Identifiable, Codable, Sendable {
+    case openAI = "OpenAI"
+    case gateway = "Gateway"
+    case deepLX = "DeepLX"
+
+    public var id: String { rawValue }
+
+    public var inferenceProvider: InferenceProvider? {
+        switch self {
+        case .openAI:
+            .openAI
+        case .gateway:
+            .gateway
+        case .deepLX:
+            nil
+        }
+    }
+}
+
 public enum GatewayAuthScheme: String, CaseIterable, Identifiable, Codable, Sendable {
     case bearer = "Bearer"
     case xAPIKey = "x-api-key"
@@ -156,6 +175,7 @@ public struct InferenceConnection: Equatable, Sendable {
     public var apiFormat: GatewayAPIFormat
     public var customHeaders: [String: String]
     public var maximumOutputTokens: Int
+    public var requestTimeout: TimeInterval
 
     public init(
         provider: InferenceProvider,
@@ -164,7 +184,8 @@ public struct InferenceConnection: Equatable, Sendable {
         authScheme: GatewayAuthScheme,
         apiFormat: GatewayAPIFormat,
         customHeaders: [String: String],
-        maximumOutputTokens: Int = 4_096
+        maximumOutputTokens: Int = 4_096,
+        requestTimeout: TimeInterval = 120
     ) {
         self.provider = provider
         self.baseURL = baseURL
@@ -173,6 +194,7 @@ public struct InferenceConnection: Equatable, Sendable {
         self.apiFormat = apiFormat
         self.customHeaders = customHeaders
         self.maximumOutputTokens = min(max(256, maximumOutputTokens), 32_768)
+        self.requestTimeout = min(max(5, requestTimeout), 300)
     }
 
     public static func openAI(apiKey: String, maximumOutputTokens: Int = 4_096) -> InferenceConnection {
@@ -183,7 +205,8 @@ public struct InferenceConnection: Equatable, Sendable {
             authScheme: .bearer,
             apiFormat: .openAIResponses,
             customHeaders: [:],
-            maximumOutputTokens: maximumOutputTokens
+            maximumOutputTokens: maximumOutputTokens,
+            requestTimeout: 120
         )
     }
 }

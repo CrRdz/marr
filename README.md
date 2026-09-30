@@ -1,52 +1,48 @@
 # Marr
 
-Ask AI anywhere on your screen.
+**Capture, ask, and work with AI — right from your Mac’s menu bar.**
 
-Marr is an early-stage macOS app concept for selecting any area of the screen and asking AI questions about it directly.
+Marr brings screenshots, conversations, and Codex tasks into a compact macOS app. Ask about what’s on your screen, translate a selected area, or continue working in a project without leaving your flow.
 
-## Conversation harness
+## Download
 
-Marr uses a structured multimodal conversation harness rather than flattening chat history into a prompt string.
+[**Download Marr for macOS**](https://github.com/CrRdz/marr/releases/latest)
 
-- `ConversationSession` owns turns, immutable screenshot/file assets, pending attachments, retries, and UI-observable state.
-- `ConversationContextBuilder` compiles successful turns into role-preserving messages with text, turn, attachment-count, and attachment-size budgets.
-- Attachments belong to the user turn that introduced them. Adding an attachment never replaces an earlier asset.
-- Long conversations automatically reattach the most recent attachment when trimming would otherwise remove all attachment context.
-- `VisionAIClient` receives a provider-neutral `VisionRequest`; `OpenAIClient` encodes it as OpenAI Responses or Anthropic Messages payloads.
-- Failed turns remain visible and can be retried with the same structured context.
+1. Open the latest release and download **Marr.dmg** under **Assets**.
+2. Open the DMG and drag **Marr** into **Applications**.
+3. Launch Marr from Applications. Its icon appears in the menu bar.
+4. Allow **Screen Recording** when prompted to enable screenshots.
 
-## Architecture
+Requires **macOS 14 or later**. Liquid Glass is available on macOS 26 or later.
 
-The app target is intentionally thin around reusable local Swift packages:
+The current download is not notarized by Apple. If macOS blocks it, and you trust this repository’s download, use **System Settings → Privacy & Security → Open Anyway** after attempting to launch it.
 
-- `MarrCore` contains provider-neutral conversation, history, and inference contracts. It has no UI, networking, database, or Keychain dependency.
-- `MarrNetworking` depends only on `MarrCore` and owns HTTP payloads, endpoint construction, provider response validation, truncation detection, and transport injection.
-- `MarrPersistence` depends only on `MarrCore` and owns SQLite records, attachment files, legacy migration, and database/filesystem rollback.
-- `MarrSettings` depends only on `MarrCore` and owns inference configuration persistence. Secrets are stored in Keychain; non-secret preferences use UserDefaults.
-- The app target owns macOS presentation and orchestration. Screenshot translation is separated into overlay, recognition, layout, and rendering files; its history adapter only publishes repository results to the UI.
+## What you can do
 
-This keeps dependency direction one-way: `Marr app → MarrNetworking / MarrPersistence / MarrSettings → MarrCore`. Feature packages never import the app target or one another, so the graph has no reverse dependency or cycle.
+- **Capture and ask:** select an area or a window and ask a question about it.
+- **Collect screenshots:** pin a capture, take another, and send them together.
+- **Conversation:** ask follow-up questions, add images or files, and revisit local history.
+- **Work:** choose a project, continue a Codex task, and review its progress and requested approvals.
+- **Choose your model:** Conversation and Work share the available Codex model list, with adjustable reasoning effort.
+- **Translate and compare:** translate screenshot text into Simplified Chinese and compare it with the original.
+- **Make it yours:** resize the window, change shortcuts, and choose your appearance and Liquid Glass preference.
 
-## Local history
+## Get started
 
-Every conversation is saved inside the app sandbox under `Application Support/Marr`.
+Sign in to Codex in the Codex/ChatGPT desktop app before using **Conversation** or **Work**. Marr uses that local connection and discovers its available models. Keep the desktop app updated to access newly available models.
 
-- `marr.sqlite` stores turn text, status, timestamps, pending attachments, and attachment references.
-- Original image, PDF, document, spreadsheet, presentation, text, and code bytes are stored once in `Attachments`; failed saves roll back newly created files, and deletes restore database rows if attachment staging fails.
-- Legacy `History/<conversation>/conversation.json` records are migrated into SQLite on load.
-- The menu-bar History entry opens a resizable window with conversation and attachment details.
-- Database and filesystem work runs through a serialized background repository so it does not block the main actor.
-- API keys, gateway credentials, and custom headers are stored in Keychain and are never written to history or UserDefaults.
-- Provider, endpoint, model, API format, authentication scheme, and maximum output tokens persist across launches.
+- Press **⌘⇧0** to capture an area, or **⌘⇧9** to capture the current window.
+- Enter a question and press **Return**.
+- Pin screenshots to collect more than one, or use **＋** to attach files.
+- Switch to **Work** and select a workspace in **Projects** for project tasks.
+- Open **Settings** to change shortcuts, appearance, your default model, or translation settings.
 
-Run the harness tests with:
+Conversation supports images, text files, and text-based PDFs. Other document formats may need exporting first. Screenshot translation uses a separately configured translation connection in **Settings → AI**.
 
-```sh
-xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' -derivedDataPath /tmp/MarrDerivedData CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
-```
+## Your data
 
-Run package-level tests with:
+Conversation history and attachments are saved locally and can be deleted in Marr. Content you submit is sent to the AI service used for that request. Work can access and modify the workspace you select, subject to its approval settings.
 
-```sh
-swift test --package-path Packages/MarrModules
-```
+## Feedback
+
+Found a bug or have an idea? [Open an issue](https://github.com/CrRdz/marr/issues).

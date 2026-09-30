@@ -20,14 +20,14 @@ struct AnswerPanelSettingsView: View {
                     } label: {
                         VStack(spacing: 5) {
                             Label(section.title, systemImage: section.systemImage)
-                                .font(MarrTypography.body(size: 12.5, weight: .semibold))
+                                .font(MarrTypography.font(.body, weight: .semibold))
                                 .frame(maxWidth: .infinity)
 
                             Capsule()
-                                .fill(selection == section ? selectedAccent.color : .clear)
+                                .fill(selection == section ? settingsTint : .clear)
                                 .frame(height: 2)
                         }
-                        .foregroundStyle(selection == section ? selectedAccent.color : .secondary)
+                        .foregroundStyle(selection == section ? Color.primary : Color.secondary)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -47,7 +47,10 @@ struct AnswerPanelSettingsView: View {
             }
             .scrollIndicators(.automatic)
         }
-        .tint(selectedAccent.color)
+        .font(MarrTypography.font(.body))
+        .tint(settingsTint)
+        .symbolRenderingMode(.monochrome)
+        .symbolVariant(.none)
     }
 
     @ViewBuilder
@@ -63,6 +66,10 @@ struct AnswerPanelSettingsView: View {
                 historyStore: controller.historyStore
             )
         }
+    }
+
+    private var settingsTint: Color {
+        selectedAccent == .system ? Color.accentColor : selectedAccent.color
     }
 
     private var selectedAccent: MarrAccentColor {
@@ -87,9 +94,9 @@ private enum AnswerPanelSettingsSection: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .preferences: "gearshape.2"
-        case .provider: "cpu"
-        case .usage: "chart.bar.xaxis"
+        case .preferences: "slider.horizontal.3"
+        case .provider: "square.stack"
+        case .usage: "chart.bar"
         }
     }
 }
@@ -169,17 +176,7 @@ private struct CompactGeneralSettingsPanel: View {
                 }
             }
 
-            CompactSettingsGroup("Marr") {
-                Button {
-                    openMarrWelcomeGuide(controller: controller)
-                } label: {
-                    Label("Welcome Guide", systemImage: "graduationcap")
-                        .font(MarrTypography.body(size: 13, weight: .medium))
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
+            CodexWorkspaceSettingsPanel(workspace: controller.codexWorkspace)
         }
     }
 
@@ -235,27 +232,135 @@ private struct CompactGeneralSettingsPanel: View {
     }
 }
 
-@MainActor
-func openMarrWelcomeGuide(controller: MarrController) {
-    MarrOnboardingPresenter.shared.show(controller: controller)
+private struct CodexWorkspaceSettingsPanel: View {
+    @ObservedObject var workspace: CodexWorkspaceController
+
+    var body: some View {
+        CompactSettingsGroup("Codex") {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    Image(systemName: "terminal")
+                        .foregroundStyle(.secondary)
+                    Text(workspace.codexCLIDisplayName)
+                        .font(MarrTypography.font(.code))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Button("Choose CLI…") {
+                        workspace.chooseCodexCLI()
+                    }
+                    .controlSize(.small)
+                }
+
+                if workspace.codexCLIURL != nil {
+                    Button("Use Automatic CLI Path") {
+                        workspace.useAutomaticCodexCLIPath()
+                    }
+                    .controlSize(.small)
+                }
+
+                if workspace.codexCLIURL != nil || workspace.usesExternalAppServer {
+                    Button("Use Desktop Codex") { workspace.useDesktopRuntime() }
+                        .disabled(workspace.isRunning)
+                        .controlSize(.small)
+                        .help(workspace.runtimeDescription)
+                }
+
+                CompactSettingsDivider()
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Label("Local app-server", systemImage: "network")
+                        .font(MarrTypography.font(.body, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    TextField(
+                        "ws://127.0.0.1:4500",
+                        text: Binding(
+                            get: { workspace.appServerURLString },
+                            set: { workspace.setAppServerURL($0) }
+                        )
+                    )
+                    .textFieldStyle(.plain)
+                    .font(MarrTypography.font(.code))
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
+
+                    Button("Start Background Service") {
+                        workspace.startAppServerInBackground()
+                    }
+                    .controlSize(.small)
+
+                    if workspace.usesExternalAppServer {
+                        Button("Use Built-in app-server") {
+                            workspace.setAppServerURL("")
+                        }
+                        .controlSize(.small)
+                    }
+                }
+
+
+            }
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+private struct CodexConversationSettings: View {
+    @ObservedObject var workspace: CodexWorkspaceController
+
+    var body: some View {
+        CompactSettingsGroup("OpenAI") {
+            CompactReadOnlySetting(title: "Account", systemImage: "person", value: "Codex login")
+            CompactSettingsRow("Default model", systemImage: "square.stack") {
+                Picker("Default model", selection: Binding(
+                    get: { workspace.selectedModel },
+                    set: { workspace.selectModel($0) }
+                )) {
+                    ForEach(workspace.availableModels) { model in
+                        Text(model.name).tag(model.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 200)
+                .disabled(workspace.isRunning)
+            }
+            HStack {
+                Spacer()
+                Button("Refresh models") { workspace.refreshModels() }
+                    .disabled(workspace.isLoadingModels || workspace.isRunning)
+            }
+            if let error = workspace.modelLoadError {
+                Text(error).font(MarrTypography.font(.secondary)).foregroundStyle(.red)
+            }
+        }
+        .onAppear { workspace.refreshModelsIfNeeded() }
+    }
 }
 
 private struct CompactProviderSettingsPanel: View {
     @ObservedObject var controller: MarrController
     @AppStorage("gateway.preset") private var gatewayPreset = GatewayPreset.custom.rawValue
     @State private var showsAdvanced = false
+    @State private var showsTranslationAdvanced = false
 
     var body: some View {
         VStack(spacing: 20) {
-            providerSelector
-            modelSection
-
-            if controller.provider == .openAI {
-                openAIConnection
-            } else {
-                gatewayEndpoint
-                gatewayAuthentication
-                gatewayAdvanced
+            CodexConversationSettings(workspace: controller.codexWorkspace)
+            translationSettings
+            DisclosureGroup("Translation fallback API") {
+                VStack(spacing: 18) {
+                    providerSelector
+                    modelSection
+                    if controller.provider == .openAI {
+                        openAIConnection
+                    } else {
+                        gatewayEndpoint
+                        gatewayAuthentication
+                        gatewayAdvanced
+                    }
+                }
+                .padding(.top, 10)
             }
         }
     }
@@ -263,37 +368,30 @@ private struct CompactProviderSettingsPanel: View {
     private var providerSelector: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("PROVIDER")
-                .font(MarrTypography.body(size: 10.5, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .font(MarrTypography.font(.secondary, weight: .semibold))
+                .foregroundStyle(.secondary)
                 .tracking(0.55)
 
             Picker("Provider", selection: $controller.provider) {
                 Label("OpenAI", systemImage: "sparkles")
                     .tag(InferenceProvider.openAI)
-                Label("Custom Gateway", systemImage: "point.3.connected.trianglepath.dotted")
+                Label("Custom Gateway", systemImage: "network")
                     .tag(InferenceProvider.gateway)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            Text(
-                controller.provider == .openAI
-                    ? "Managed OpenAI endpoint using the Responses API."
-                    : "Connect an OpenAI Responses or Anthropic Messages compatible endpoint."
-            )
-            .font(MarrTypography.body(size: 10.5))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var modelSection: some View {
         CompactSettingsGroup("Model") {
-            CompactSettingsRow("Model ID", systemImage: "cube") {
+            CompactSettingsRow("Model ID", systemImage: "square.stack") {
                 TextField("Upstream model ID", text: $controller.model)
                     .textFieldStyle(.plain)
-                    .font(MarrTypography.mono(size: 11.5))
+                    .font(MarrTypography.font(.code))
                     .padding(.horizontal, 8)
                     .frame(width: 198, height: 28)
                     .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
@@ -308,7 +406,7 @@ private struct CompactProviderSettingsPanel: View {
                     in: 256...32_768,
                     step: 256
                 )
-                .font(MarrTypography.mono(size: 11.5))
+                .font(MarrTypography.font(.code))
                 .controlSize(.small)
                 .frame(width: 150)
             }
@@ -357,22 +455,17 @@ private struct CompactProviderSettingsPanel: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Label("Base URL", systemImage: "link")
-                    .font(MarrTypography.body(size: 12.5, weight: .medium))
+                    .font(MarrTypography.font(.body, weight: .medium))
                     .foregroundStyle(.secondary)
 
                 TextField("https://gateway.example.com/v1", text: $controller.gatewayBaseURL)
                     .textFieldStyle(.plain)
-                    .font(MarrTypography.mono(size: 11.5))
+                    .font(MarrTypography.font(.code))
                     .padding(.horizontal, 9)
                     .frame(maxWidth: .infinity, minHeight: 30)
                     .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
-
-                Text("The configured origin is used only for model requests. Marr appends the protocol endpoint when needed.")
-                    .font(MarrTypography.body(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 5)
 
             CompactSettingsDivider()
 
@@ -391,7 +484,7 @@ private struct CompactProviderSettingsPanel: View {
 
     private var gatewayAuthentication: some View {
         CompactSettingsGroup("Authentication") {
-            CompactSettingsRow("Method", systemImage: "lock.shield") {
+            CompactSettingsRow("Method", systemImage: "lock") {
                 Picker("", selection: $controller.gatewayAuthScheme) {
                     Text("Bearer token").tag(GatewayAuthScheme.bearer)
                     Text("x-api-key").tag(GatewayAuthScheme.xAPIKey)
@@ -410,8 +503,8 @@ private struct CompactProviderSettingsPanel: View {
                 )
             } else {
                 CompactSettingsDivider()
-                Label("No credential will be sent with requests.", systemImage: "checkmark.shield")
-                    .font(MarrTypography.body(size: 10.5))
+                Label("No credential will be sent with requests.", systemImage: "checkmark.circle")
+                    .font(MarrTypography.font(.secondary))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
             }
@@ -422,14 +515,17 @@ private struct CompactProviderSettingsPanel: View {
         DisclosureGroup(isExpanded: $showsAdvanced) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Static request headers")
-                    .font(MarrTypography.body(size: 11, weight: .medium))
+                    .font(MarrTypography.font(.secondary, weight: .medium))
                     .foregroundStyle(.secondary)
-                CompactHeadersCredentialEditor(controller: controller)
+                CompactHeadersCredentialEditor(
+                    controller: controller,
+                    credential: .customHeaders
+                )
             }
             .padding(.top, 9)
         } label: {
             Label("Advanced request options", systemImage: "slider.horizontal.3")
-                .font(MarrTypography.body(size: 12.5, weight: .medium))
+                .font(MarrTypography.font(.body, weight: .medium))
         }
         .padding(.horizontal, 2)
     }
@@ -445,6 +541,174 @@ private struct CompactProviderSettingsPanel: View {
             }
         )
     }
+
+    private var translationSettings: some View {
+        CompactSettingsGroup("Translation") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Use a separate translation API", isOn: $controller.translationUsesDedicatedConfiguration)
+                    .font(MarrTypography.font(.body, weight: .medium))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+
+                if controller.translationUsesDedicatedConfiguration {
+                    CompactSettingsDivider()
+                    translationConfiguration
+                }
+            }
+            .padding(.vertical, 5)
+        }
+    }
+
+    @ViewBuilder
+    private var translationConfiguration: some View {
+        CompactSettingsRow("Provider", systemImage: "network") {
+            Picker("", selection: $controller.translationProvider) {
+                Text("OpenAI").tag(TranslationProvider.openAI)
+                Text("Custom Gateway").tag(TranslationProvider.gateway)
+                Text("DeepLX / DLX").tag(TranslationProvider.deepLX)
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: 168)
+        }
+
+        CompactSettingsDivider()
+
+        if controller.translationProvider == .deepLX {
+            VStack(alignment: .leading, spacing: 7) {
+                Label("Server URL", systemImage: "link")
+                    .font(MarrTypography.font(.body, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                TextField("http://127.0.0.1:1188", text: $controller.translationDeepLXServerURL)
+                    .textFieldStyle(.plain)
+                    .font(MarrTypography.font(.code))
+                    .padding(.horizontal, 9)
+                    .frame(maxWidth: .infinity, minHeight: 30)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
+            }
+            .padding(.vertical, 5)
+
+            CompactSettingsDivider()
+
+            DisclosureGroup(isExpanded: $showsTranslationAdvanced) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Optional server access token")
+                        .font(MarrTypography.font(.secondary, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    CompactCredentialEditor(
+                        controller: controller,
+                        credential: .translationDeepLXAccessToken
+                    )
+                }
+                .padding(.top, 9)
+            } label: {
+                Label("Authentication", systemImage: "lock")
+                    .font(MarrTypography.font(.body, weight: .medium))
+            }
+            .padding(.horizontal, 2)
+        } else {
+            CompactSettingsRow("Model ID", systemImage: "square.stack") {
+                TextField("Translation model ID", text: $controller.translationModel)
+                    .textFieldStyle(.plain)
+                    .font(MarrTypography.font(.code))
+                    .padding(.horizontal, 8)
+                    .frame(width: 198, height: 28)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
+            }
+
+            CompactSettingsDivider()
+
+            CompactSettingsRow("Output limit", systemImage: "text.word.spacing") {
+                Stepper(
+                    controller.translationMaximumOutputTokens.formatted(),
+                    value: $controller.translationMaximumOutputTokens,
+                    in: 256...32_768,
+                    step: 256
+                )
+                .font(MarrTypography.font(.code))
+                .controlSize(.small)
+                .frame(width: 150)
+            }
+
+            CompactSettingsDivider()
+        }
+
+        if controller.translationProvider == .openAI {
+            CompactReadOnlySetting(
+                title: "Endpoint",
+                systemImage: "link",
+                value: "api.openai.com/v1"
+            )
+            CompactSettingsDivider()
+            CompactCredentialEditor(
+                controller: controller,
+                credential: .translationOpenAIAPIKey
+            )
+        } else if controller.translationProvider == .gateway {
+            VStack(alignment: .leading, spacing: 7) {
+                Label("Base URL", systemImage: "link")
+                    .font(MarrTypography.font(.body, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                TextField("https://gateway.example.com/v1", text: $controller.translationGatewayBaseURL)
+                    .textFieldStyle(.plain)
+                    .font(MarrTypography.font(.code))
+                    .padding(.horizontal, 9)
+                    .frame(maxWidth: .infinity, minHeight: 30)
+                    .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
+
+                Picker("API protocol", selection: $controller.translationGatewayAPIFormat) {
+                    ForEach(GatewayAPIFormat.allCases) { format in
+                        Text(format.rawValue).tag(format)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+            }
+            .padding(.vertical, 4)
+
+            CompactSettingsDivider()
+
+            CompactSettingsRow("Authentication", systemImage: "lock") {
+                Picker("", selection: $controller.translationGatewayAuthScheme) {
+                    Text("Bearer token").tag(GatewayAuthScheme.bearer)
+                    Text("x-api-key").tag(GatewayAuthScheme.xAPIKey)
+                    Text("No authentication").tag(GatewayAuthScheme.none)
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 180)
+            }
+
+            if controller.translationGatewayAuthScheme != .none {
+                CompactSettingsDivider()
+                CompactCredentialEditor(
+                    controller: controller,
+                    credential: .translationGatewayAPIKey
+                )
+            }
+
+            CompactSettingsDivider()
+
+            DisclosureGroup(isExpanded: $showsTranslationAdvanced) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Static request headers")
+                        .font(MarrTypography.font(.secondary, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    CompactHeadersCredentialEditor(
+                        controller: controller,
+                        credential: .translationCustomHeaders
+                    )
+                }
+                .padding(.top, 9)
+            } label: {
+                Label("Advanced request options", systemImage: "slider.horizontal.3")
+                    .font(MarrTypography.font(.body, weight: .medium))
+            }
+            .padding(.horizontal, 2)
+        }
+    }
 }
 
 private struct CompactReadOnlySetting: View {
@@ -455,7 +719,7 @@ private struct CompactReadOnlySetting: View {
     var body: some View {
         CompactSettingsRow(title, systemImage: systemImage) {
             Text(value)
-                .font(MarrTypography.mono(size: 10.5))
+                .font(MarrTypography.font(.code))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -485,7 +749,7 @@ private struct CompactAppearanceSettingsPanel: View {
 
                 CompactSettingsDivider()
 
-                CompactSettingsRow("Glass", systemImage: "circle.hexagongrid") {
+                CompactSettingsRow("Liquid Glass", systemImage: "rectangle") {
                     Toggle("", isOn: $glassSurfaces)
                         .labelsHidden()
                         .toggleStyle(.switch)
@@ -501,7 +765,7 @@ private struct CompactAppearanceSettingsPanel: View {
 
                 CompactSettingsDivider()
 
-                CompactSettingsRow("Accent", systemImage: "paintbrush") {
+                CompactSettingsRow("Accent", systemImage: "circle") {
                     AccentColorDropdown(selection: $accentColor)
                         .frame(width: 150)
                 }
@@ -564,11 +828,11 @@ private struct CompactUsageSettingsPanel: View {
                             HStack(spacing: 2) {
                                 ForEach(monthMarkers) { marker in
                                     Color.clear
-                                        .frame(width: 7, height: 13)
+                                        .frame(width: 7, height: 16)
                                         .overlay(alignment: .leading) {
                                             if let label = marker.label {
                                                 Text(label)
-                                                    .font(MarrTypography.body(size: 9.5))
+                                                    .font(MarrTypography.font(.caption))
                                                     .foregroundStyle(.secondary)
                                                     .fixedSize()
                                             }
@@ -696,11 +960,11 @@ private struct CompactUsageMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(MarrTypography.body(size: 17, weight: .semibold))
+                .font(MarrTypography.font(.pageTitle, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(title)
-                .font(MarrTypography.body(size: 10.5))
+                .font(MarrTypography.font(.secondary))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
@@ -728,7 +992,7 @@ private struct TokenActivityTooltip: View {
 
     var body: some View {
         Text("\(bucket.label)  ·  \(bucket.tokens.formatted()) Tokens")
-            .font(MarrTypography.body(size: 11.5, weight: .medium))
+            .font(MarrTypography.font(.secondary, weight: .medium))
             .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -755,8 +1019,8 @@ private struct CompactSettingsGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
-                .font(MarrTypography.body(size: 10.5, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .font(MarrTypography.font(.secondary, weight: .semibold))
+                .foregroundStyle(.secondary)
                 .tracking(0.55)
 
             VStack(spacing: 0) {
@@ -785,12 +1049,12 @@ private struct CompactSettingsRow<Control: View>: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(.secondary)
                 .frame(width: 17)
 
             Text(title)
-                .font(MarrTypography.body(size: 13))
+                .font(MarrTypography.font(.body))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
@@ -864,7 +1128,7 @@ private struct CompactCredentialEditor: View {
 
             if let message = state.message {
                 Text(message)
-                    .font(MarrTypography.body(size: 10.5))
+                    .font(MarrTypography.font(.secondary))
                     .foregroundStyle(state.messageIsError ? Color.red : Color.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -902,17 +1166,18 @@ private struct CompactCredentialEditor: View {
 
 private struct CompactHeadersCredentialEditor: View {
     @ObservedObject var controller: MarrController
+    let credential: InferenceCredential
     @State private var draft = ""
     @State private var showsRemoveConfirmation = false
 
     private var state: InferenceCredentialState {
-        controller.credentialState(for: .customHeaders)
+        controller.credentialState(for: credential)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             TextEditor(text: $draft)
-                .font(MarrTypography.mono(size: 11.5))
+                .font(MarrTypography.font(.code))
                 .frame(minHeight: 58)
                 .scrollContentBackground(.hidden)
                 .padding(6)
@@ -920,8 +1185,8 @@ private struct CompactHeadersCredentialEditor: View {
                 .overlay(alignment: .topLeading) {
                     if draft.isEmpty {
                         Text("Header: value")
-                            .font(MarrTypography.mono(size: 11.5))
-                            .foregroundStyle(.tertiary)
+                            .font(MarrTypography.font(.code))
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 11)
                             .padding(.vertical, 12)
                             .allowsHitTesting(false)
@@ -952,19 +1217,19 @@ private struct CompactHeadersCredentialEditor: View {
 
             if let message = state.message {
                 Text(message)
-                    .font(MarrTypography.body(size: 10.5))
+                    .font(MarrTypography.font(.secondary))
                     .foregroundStyle(state.messageIsError ? Color.red : Color.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, 7)
         .task {
-            await controller.refreshCredentialState(for: .customHeaders)
+            await controller.refreshCredentialState(for: credential)
         }
         .confirmationDialog("Remove headers?", isPresented: $showsRemoveConfirmation) {
             Button("Remove", role: .destructive) {
                 Task {
-                    if await controller.removeCredential(.customHeaders) {
+                    if await controller.removeCredential(credential) {
                         draft = ""
                     }
                 }
@@ -981,7 +1246,7 @@ private struct CompactHeadersCredentialEditor: View {
         guard !trimmedDraft.isEmpty, !state.isBusy else { return }
         let value = draft
         Task {
-            if await controller.saveAndVerifyCredential(value, for: .customHeaders) {
+            if await controller.saveAndVerifyCredential(value, for: credential) {
                 draft = ""
             }
         }
@@ -995,7 +1260,7 @@ private struct CompactCredentialStateLabel: View {
         HStack(spacing: 5) {
             if state.activity == .checking {
                 ProgressView()
-                    .controlSize(.mini)
+                    .controlSize(.small)
                 Text("Checking")
             } else if state.isConfigured == true {
                 Image(systemName: "checkmark.circle.fill")
@@ -1006,11 +1271,11 @@ private struct CompactCredentialStateLabel: View {
                 Text("Not set")
             } else {
                 ProgressView()
-                    .controlSize(.mini)
+                    .controlSize(.small)
                 Text("Checking")
             }
         }
-        .font(MarrTypography.body(size: 10.5))
+        .font(MarrTypography.font(.secondary))
         .foregroundStyle(.secondary)
     }
 }
@@ -1259,7 +1524,7 @@ private struct ColorMenuOptionLabel: View {
                 .fill(color)
                 .frame(width: 10, height: 10)
             Text(title)
-                .font(MarrTypography.body(size: 13, weight: isSelected ? .semibold : .regular))
+                .font(MarrTypography.font(.body, weight: isSelected ? .semibold : .regular))
             Spacer()
         }
         .padding(.horizontal, 8)

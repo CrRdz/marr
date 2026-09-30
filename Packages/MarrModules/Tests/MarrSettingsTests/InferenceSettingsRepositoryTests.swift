@@ -30,6 +30,80 @@ struct InferenceSettingsRepositoryTests {
         #expect(values.strings.values.contains("X-Secret: value") == false)
     }
 
+    @Test("Dedicated translation configuration and credentials survive reload")
+    func persistsDedicatedTranslationConfiguration() throws {
+        let values = MemoryValues()
+        let secrets = MemorySecrets()
+        let repository = InferenceSettingsRepository(values: values, secrets: secrets)
+        let settings = InferenceSettingsSnapshot(
+            provider: .openAI,
+            openAIAPIKey: "chat-secret",
+            gatewayBaseURL: "https://chat.example/v1",
+            gatewayAPIKey: "",
+            gatewayAuthScheme: .bearer,
+            gatewayAPIFormat: .openAIResponses,
+            customHeadersText: "",
+            model: "gpt-chat",
+            maximumOutputTokens: 4_096,
+            translationUsesDedicatedConfiguration: true,
+            translationProvider: .gateway,
+            translationOpenAIAPIKey: "",
+            translationGatewayBaseURL: "https://translate.example/v1",
+            translationGatewayAPIKey: "translation-secret",
+            translationGatewayAuthScheme: .xAPIKey,
+            translationGatewayAPIFormat: .anthropicMessages,
+            translationCustomHeadersText: "X-Translation: enabled",
+            translationModel: "translation-model",
+            translationMaximumOutputTokens: 2_048
+        )
+
+        try repository.save(settings)
+
+        #expect(try repository.load() == settings)
+        #expect(values.strings.values.contains("translation-secret") == false)
+        #expect(values.strings.values.contains("X-Translation: enabled") == false)
+        #expect(repository.loadConfiguration().translationOpenAIAPIKey.isEmpty)
+        #expect(repository.loadConfiguration().translationGatewayAPIKey.isEmpty)
+        #expect(repository.loadConfiguration().translationCustomHeadersText.isEmpty)
+
+        var configuration = repository.loadConfiguration()
+        configuration.translationModel = "updated-translation-model"
+        repository.saveConfiguration(configuration)
+
+        #expect(try repository.loadSecrets().translationGatewayAPIKey == "translation-secret")
+        #expect(try repository.loadSecrets().translationCustomHeadersText == "X-Translation: enabled")
+    }
+
+    @Test("DeepLX can be selected as the dedicated translation provider")
+    func persistsDeepLXTranslationProvider() {
+        let values = MemoryValues()
+        let repository = InferenceSettingsRepository(values: values, secrets: MemorySecrets())
+        var settings = InferenceSettingsSnapshot.default
+        settings.translationUsesDedicatedConfiguration = true
+        settings.translationProvider = .deepLX
+        settings.translationDeepLXServerURL = "http://127.0.0.1:1188"
+
+        repository.saveConfiguration(settings)
+
+        let loaded = repository.loadConfiguration()
+        #expect(loaded.translationProvider == .deepLX)
+        #expect(loaded.translationDeepLXServerURL == "http://127.0.0.1:1188")
+    }
+
+    @Test("DeepLX access token is isolated from the gateway credential")
+    func isolatesDeepLXAccessToken() throws {
+        let secrets = MemorySecrets()
+        let repository = InferenceSettingsRepository(values: MemoryValues(), secrets: secrets)
+
+        try repository.setCredential("gateway-secret", for: .translationGatewayAPIKey)
+        try repository.setCredential("deeplx-secret", for: .translationDeepLXAccessToken)
+
+        #expect(try repository.credential(.translationGatewayAPIKey) == "gateway-secret")
+        #expect(try repository.credential(.translationDeepLXAccessToken) == "deeplx-secret")
+        #expect(secrets.values["translation-gateway-api-key"] == "gateway-secret")
+        #expect(secrets.values["translation-deeplx-access-token"] == "deeplx-secret")
+    }
+
     @Test("Startup configuration load does not touch secrets")
     func loadConfigurationAvoidsSecretStore() throws {
         let values = MemoryValues()

@@ -259,6 +259,21 @@ struct ImageTranslationReplacementSegment: Equatable, Sendable {
 }
 
 enum ImageTranslationPrompt {
+    static let gatewayRegionSystemPrompt = """
+    Translate locally recognized screenshot OCR into concise, fluent Simplified Chinese.
+
+    Return only compact JSON in this shape:
+    {"translations":[{"id":"r001","targetMarkdown":"complete translated block","alignments":[{"tokenStart":0,"tokenEnd":3,"targetText":"exact translated phrase"}]},{"id":"r002","segments":[{"tokenStart":2,"tokenEnd":4,"targetMarkdown":"translated label"}]}]}
+
+    Rules:
+    - Return exactly one item for every supplied id, in the same order. Never add commentary.
+    - For strategy=block, return only id, targetMarkdown, and alignments. Translate all natural-language text faithfully without summarizing. Ordinary sentence-initial capitalized words such as "Screenshots", "Long", and "Failed" are not names and must be translated. Preserve genuine names, brands, acronyms, and code identifiers; wrap only supplied codeTokens in single backticks.
+    - Block alignments must partition every supplied indexed token exactly once, from token 0 through the final token, into ordered consecutive semantic groups. They must also cover all visible targetMarkdown text in the same order. Each targetText is the complete exact contiguous translated phrase for its source token range, never just a matching keyword. Keep negation, degree, purpose, cause, condition, and modifier phrases with the clause whose meaning they complete. Prefer complete clauses over fixed-size chunks; use roughly 3-12 source tokens when semantics allow.
+    - For strategy=selective, return only id and ordered, non-overlapping segments; do not return alignments. Token indexes are zero-based; tokenStart is inclusive and tokenEnd is exclusive. Never include a token marked preserve=true.
+    - Use surrounding regions as context. Keep identifiers unchanged and use idiomatic technical Chinese.
+    - Do not return coordinates, layout, style, strategy, kind, explanations, or markdown fences.
+    """
+
     static let systemPrompt = """
     You translate visible screenshot text into Simplified Chinese for in-place image replacement.
 
@@ -312,7 +327,7 @@ enum ImageTranslationPrompt {
     - Personal names, account handles, usernames, organizations, product names, brand names, code/API identifiers, acronyms, numbers, badges, separators, and decorative glyphs must remain as original screenshot pixels. Omit them from segments instead of copying them into targetMarkdown.
     - If preserved content occurs between two translatable ranges, return two segments so the renderer can leave the original pixels between them untouched.
     - If an entire selective region should remain unchanged, return an empty segments array.
-    - Translate each returned range using the full region text and screenshot as context. Keep the translation in the same source order so it fits back into that token range.
+    - Translate each returned range using the full region text, neighboring regions, and layout metadata as context. Keep the translation in the same source order so it fits back into that token range.
     - Treat each segment targetMarkdown as input for a local Markdown/layout renderer. Do not describe layout, colors, labels, or UI behavior in text.
     - Keep or correct "kind" using one of: title, heading, paragraph, list_item, caption, code.
     - Translate faithfully enough to preserve technical meaning. Do not summarize, shorten, merge unrelated bullets, or invent context.
@@ -336,24 +351,44 @@ enum ImageTranslationPrompt {
         )
     }
 
+    static func request(regions: [ImageTranslationSourceRegion]) -> VisionRequest {
+        VisionRequest(
+            systemPrompt: gatewayRegionSystemPrompt,
+            messages: [
+                VisionMessage(
+                    role: .user,
+                    content: [.text(gatewayRegionPromptText(regions))]
+                )
+            ]
+        )
+    }
+
     static func request(for image: PickedImage, regions: [ImageTranslationSourceRegion]) -> VisionRequest {
-        let asset = ConversationImageAsset(image: image)
+        request(regions: regions, imageAsset: ConversationImageAsset(image: image))
+    }
+
+    private static func request(
+        regions: [ImageTranslationSourceRegion],
+        imageAsset: ConversationImageAsset?
+    ) -> VisionRequest {
+        var content: [VisionContent] = []
+        if let imageAsset {
+            content.append(.image(imageAsset))
+        }
+        content.append(.text(regionPromptText(regions)))
+
         return VisionRequest(
             systemPrompt: regionSystemPrompt,
             messages: [
                 VisionMessage(
                     role: .user,
-                    content: [
-                        .image(asset),
-                        .text(regionPromptText(regions))
-                    ]
+                    content: content
                 )
             ]
         )
     }
 
     static func alignmentRepairRequest(
-        for image: PickedImage,
         regions: [ImageTranslationSourceRegion],
         replacements: [ImageTranslationReplacement]
     ) -> VisionRequest {
@@ -395,10 +430,7 @@ enum ImageTranslationPrompt {
             messages: [
                 VisionMessage(
                     role: .user,
-                    content: [
-                        .image(ConversationImageAsset(image: image)),
-                        .text(json)
-                    ]
+                    content: [.text(json)]
                 )
             ]
         )
@@ -465,9 +497,46 @@ enum ImageTranslationPrompt {
         let json = String(data: data, encoding: .utf8) ?? #"{"regions":[]}"#
 
         return """
-        Translate these OCR regions into fluent, idiomatic Simplified Chinese using each region's supplied strategy. For research text, render "publications" contextually as "论文" or "出版成果"; render "owns turns" idiomatically as "管理轮次" or "负责轮次". For block regions, translate every natural-language word and return one complete coherent targetMarkdown translation with no leftover English prose; keep only genuine names, brands, acronyms, and backticked code identifiers. For selective regions, return only ordered token-range segments and exclude names, brands, products, code, symbols, separators, and numbers. Never include a token marked preserve=true in a selective segment. Do not output explanations or extra ids.
+        Translate these locally recognized OCR regions into fluent, idiomatic Simplified Chinese using the text, neighboring regions, layout metadata, and each region's supplied strategy. For research text, render "publications" contextually as "论文" or "出版成果"; render "owns turns" idiomatically as "管理轮次" or "负责轮次". For block regions, translate every natural-language word and return one complete coherent targetMarkdown translation with no leftover English prose; keep only genuine names, brands, acronyms, and backticked code identifiers. For selective regions, return only ordered token-range segments and exclude names, brands, products, code, symbols, separators, and numbers. Never include a token marked preserve=true in a selective segment. Do not output explanations or extra ids.
         \(json)
         """
+    }
+
+    private static func gatewayRegionPromptText(_ regions: [ImageTranslationSourceRegion]) -> String {
+        let payload = regions.map { region -> [String: Any] in
+            var item: [String: Any] = [
+                "id": region.id,
+                "text": region.sourceText,
+                "kind": region.kind ?? "paragraph",
+                "strategy": region.translationStrategy.rawValue
+            ]
+
+            switch region.translationStrategy {
+            case .block:
+                item["codeTokens"] = region.codeRects.map(\.text)
+                item["tokens"] = region.tokens.enumerated().map { index, token in
+                    [
+                        "index": index,
+                        "text": token.text
+                    ] as [String: Any]
+                }
+            case .selective:
+                item["tokens"] = region.tokens.enumerated().map { index, token in
+                    [
+                        "index": index,
+                        "text": token.text,
+                        "preserve": token.isProtected
+                    ] as [String: Any]
+                }
+            }
+            return item
+        }
+
+        let data = (try? JSONSerialization.data(
+            withJSONObject: ["regions": payload],
+            options: [.sortedKeys]
+        )) ?? Data(#"{"regions":[]}"#.utf8)
+        return String(data: data, encoding: .utf8) ?? #"{"regions":[]}"#
     }
 }
 
@@ -1815,5 +1884,35 @@ final class ConversationSession: ObservableObject {
             images: Array(images.values),
             pendingImageIDs: pendingImageIDs
         )
+    }
+}
+
+/// Separates the known Codex attachment envelope for display without changing stored text.
+struct UserMessagePresentation {
+    let body: String
+    let attachmentDetails: String?
+
+    init(_ source: String) {
+        let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = text.components(separatedBy: .newlines)
+        func heading(_ line: String) -> String {
+            line.trimmingCharacters(in: .whitespaces)
+                .drop(while: { $0 == "#" })
+                .trimmingCharacters(in: .whitespaces)
+        }
+        guard let first = lines.first, heading(first) == "Files mentioned by the user:",
+              let boundary = lines.indices.dropFirst().first(where: {
+                  ["My request:", "My request for Codex:"].contains(heading(lines[$0]))
+              }),
+              boundary + 1 < lines.count
+        else {
+            body = text
+            attachmentDetails = nil
+            return
+        }
+        body = lines[(boundary + 1)...].joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        attachmentDetails = lines[1..<boundary].joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

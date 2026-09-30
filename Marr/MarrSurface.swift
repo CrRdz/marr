@@ -9,10 +9,10 @@ enum MarrAppearanceKeys {
 enum MarrSurfaceMode: Equatable {
     case activeClear
     case activeRegular
-    case standardMaterial
+    case unfocused
 
     static func resolve(usesLiquidGlass: Bool, prefersClearGlass: Bool) -> Self {
-        guard usesLiquidGlass else { return .standardMaterial }
+        guard usesLiquidGlass else { return .unfocused }
         return prefersClearGlass ? .activeClear : .activeRegular
     }
 }
@@ -80,13 +80,15 @@ extension View {
     func marrGlassSurface(
         cornerRadius: CGFloat,
         isClear: Bool = false,
-        tintOpacity: Double? = nil
+        tintOpacity: Double? = nil,
+        drawsBorder: Bool = true
     ) -> some View {
         modifier(
             MarrGlassSurfaceModifier(
                 cornerRadius: cornerRadius,
                 isClear: isClear,
-                tintOpacity: tintOpacity
+                tintOpacity: tintOpacity,
+                drawsBorder: drawsBorder
             )
         )
     }
@@ -100,63 +102,34 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
     let cornerRadius: CGFloat
     let isClear: Bool
     let tintOpacity: Double?
+    let drawsBorder: Bool
 
     @AppStorage(MarrAppearanceKeys.glassSurfaces) private var usesGlassSurfaces = true
     @Environment(\.accessibilityReduceTransparency) private var reducesTransparency
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
-    @ViewBuilder
     func body(content: Content) -> some View {
+        // Keep content identity stable when appearance changes, including scroll state.
+        content
+            .background { surfaceBackground.allowsHitTesting(false) }
+            .overlay(surfaceBorder)
+    }
+
+    @ViewBuilder
+    private var surfaceBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if reducesTransparency {
-            content
-                .background(
-                    reducedTransparencyColor,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(surfaceBorder)
-        } else if surfaceMode == .standardMaterial {
-            content
-                .background(
-                    .regularMaterial,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .background(
-                    standardMaterialBacking,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(surfaceBorder)
-        } else if #available(macOS 26.0, *) {
-            switch surfaceMode {
-            case .activeClear:
-                content
-                    .glassEffect(
-                        .clear.tint(readabilityTint),
-                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    )
-                    .overlay(surfaceBorder)
-            case .activeRegular:
-                content
-                    .glassEffect(
-                        .regular.tint(readabilityTint),
-                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    )
-                    .overlay(surfaceBorder)
-            case .standardMaterial:
-                EmptyView()
+            shape.fill(reducedTransparencyColor)
+        } else if #available(macOS 26.0, *), usesGlassSurfaces {
+            if isClear {
+                shape.fill(.clear).glassEffect(.clear.tint(readabilityTint), in: shape)
+            } else {
+                shape.fill(.clear).glassEffect(.regular.tint(readabilityTint), in: shape)
             }
         } else {
-            content
-                .background(
-                    .regularMaterial,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(frostedSurfaceTint)
-                        .allowsHitTesting(false)
-                )
-                .overlay(surfaceBorder)
+            shape.fill(.regularMaterial)
+                .overlay { shape.fill(surfaceTint) }
         }
     }
 
@@ -169,18 +142,21 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
         return contrastBaseColor.opacity(opacity)
     }
 
-    private var standardMaterialBacking: Color {
-        contrastBaseColor.opacity(
-            tintOpacity ?? (colorSchemeContrast == .increased ? 0.52 : 0.34)
-        )
-    }
-
     private var contrastBaseColor: Color {
         colorScheme == .dark ? .black : .white
     }
 
-    private var frostedSurfaceTint: Color {
+    private var unfocusedGlassTint: Color {
         contrastBaseColor.opacity(
+            tintOpacity ?? (colorSchemeContrast == .increased ? 0.40 : colorScheme == .dark ? 0.22 : 0.30)
+        )
+    }
+
+    private var surfaceTint: Color {
+        if surfaceMode == .unfocused {
+            return unfocusedGlassTint
+        }
+        return contrastBaseColor.opacity(
             tintOpacity ?? (colorSchemeContrast == .increased ? 0.62 : isClear ? 0.48 : 0.40)
         )
     }
@@ -200,7 +176,14 @@ private struct MarrGlassSurfaceModifier: ViewModifier {
 
     private var surfaceBorder: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(.primary.opacity(colorSchemeContrast == .increased ? 0.30 : isClear ? 0.16 : 0.20), lineWidth: 1)
+            .stroke(
+                .primary.opacity(
+                    drawsBorder
+                        ? (colorSchemeContrast == .increased ? 0.30 : isClear ? 0.16 : 0.20)
+                        : 0
+                ),
+                lineWidth: 1
+            )
             .allowsHitTesting(false)
     }
 }

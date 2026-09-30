@@ -102,6 +102,23 @@ final class TranslationOverlayController {
         model.state = .error(message)
     }
 
+    func updateHighlightPairs(_ highlightPairs: [ImageTranslationHighlightPair]) {
+        model.highlightPairs = highlightPairs
+        model.clearHighlight()
+        window.ignoresMouseEvents = highlightPairs.isEmpty || isComparing
+    }
+
+    func updateTranslatedImage(
+        _ image: NSImage,
+        highlightPairs: [ImageTranslationHighlightPair]
+    ) {
+        translatedImage = image
+        model.highlightPairs = highlightPairs
+        model.clearHighlight()
+        window.ignoresMouseEvents = highlightPairs.isEmpty || isComparing
+        model.state = .result(image)
+    }
+
     func close() {
         guard !didClose else {
             return
@@ -197,10 +214,13 @@ final class TranslationOverlayController {
         closeOriginalWindow()
         let createdWindow = TranslationOriginalWindow(
             contentRect: frame,
-            styleMask: [.borderless, .fullSizeContentView],
+            styleMask: [.borderless, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false
         )
+        createdWindow.contentAspectRatio = frame.size
+        let minimumScale = min(1, 120 / max(frame.width, frame.height))
+        createdWindow.contentMinSize = CGSize(width: frame.width * minimumScale, height: frame.height * minimumScale)
         createdWindow.title = "Marr Original Screenshot"
         createdWindow.isOpaque = false
         createdWindow.backgroundColor = .clear
@@ -212,13 +232,30 @@ final class TranslationOverlayController {
         createdWindow.ignoresMouseEvents = false
         createdWindow.isMovableByWindowBackground = true
         createdWindow.contentView = TranslationDraggableHostingView(
-            rootView: TranslationDockedOriginalView(image: image, model: model)
+            rootView: TranslationDockedOriginalView(
+                image: image,
+                model: model,
+                onZoom: { [weak self] factor in self?.resizeOriginal(by: factor) },
+                onReset: { [weak self] in self?.resizeOriginal(by: nil) }
+            )
                 .marrPreferredColorScheme(),
             selectableRects: model.highlightPairs.flatMap(\.sourceRects)
         )
 
         originalWindow = createdWindow
         createdWindow.orderFront(nil)
+    }
+
+    private func resizeOriginal(by factor: CGFloat?) {
+        guard let originalWindow else { return }
+        let scale = factor.map { originalWindow.frame.width / anchorRect.width * $0 } ?? 1
+        let frame = TranslationCompareLayout.resizedOriginalFrame(
+            currentFrame: originalWindow.frame,
+            sourceSize: anchorRect.size,
+            scale: scale,
+            visibleFrame: screenVisibleFrame()
+        )
+        originalWindow.setFrame(frame, display: true)
     }
 
     private func closeOriginalWindow() {
@@ -359,6 +396,8 @@ private final class TranslationDraggableHostingView<Content: View>: NSHostingVie
             x: point.x / bounds.width,
             y: isFlipped ? point.y / bounds.height : 1 - point.y / bounds.height
         )
+        // Let the zoom buttons receive clicks instead of initiating window drags.
+        if normalizedPoint.y * bounds.height < 42 { return false }
         return !selectableRects.contains { $0.contains(normalizedPoint) }
     }
 }
@@ -413,6 +452,27 @@ private enum ImageTranslationOverlayState {
 }
 
 enum TranslationCompareLayout {
+    static func resizedOriginalFrame(
+        currentFrame: CGRect,
+        sourceSize: CGSize,
+        scale: CGFloat,
+        visibleFrame: CGRect
+    ) -> CGRect {
+        guard sourceSize.width > 0, sourceSize.height > 0, scale.isFinite else { return currentFrame }
+        let available = visibleFrame.insetBy(dx: 8, dy: 8)
+        guard available.width > 0, available.height > 0 else { return currentFrame }
+        let maximum = min(4, available.width / sourceSize.width, available.height / sourceSize.height)
+        let minimum = min(maximum, min(1, 120 / max(sourceSize.width, sourceSize.height)))
+        let resolved = min(maximum, max(minimum, scale))
+        let size = CGSize(width: sourceSize.width * resolved, height: sourceSize.height * resolved)
+        return CGRect(
+            x: min(max(currentFrame.midX - size.width / 2, available.minX), available.maxX - size.width),
+            y: min(max(currentFrame.midY - size.height / 2, available.minY), available.maxY - size.height),
+            width: size.width,
+            height: size.height
+        )
+    }
+
     static func originalFrame(
         anchorFrame: CGRect,
         visibleFrame: CGRect,
@@ -530,7 +590,7 @@ private struct ImageTranslationOverlayView: View {
 
     private func errorView(_ message: String) -> some View {
         Text(message)
-            .font(MarrTypography.body(size: 12.5, weight: .medium))
+            .font(MarrTypography.font(.body, weight: .medium))
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
             .lineLimit(3)
@@ -578,6 +638,8 @@ private struct TranslationFrozenBackdropView: View {
 private struct TranslationDockedOriginalView: View {
     let image: NSImage
     @ObservedObject var model: ImageTranslationOverlayModel
+    let onZoom: (CGFloat) -> Void
+    let onReset: () -> Void
 
     var body: some View {
         TranslationInteractiveImageView(
@@ -587,14 +649,32 @@ private struct TranslationDockedOriginalView: View {
         )
             .background(Color(nsColor: .windowBackgroundColor))
             .overlay(Rectangle().stroke(.primary.opacity(0.24), lineWidth: 1))
-            .overlay(alignment: .topLeading) {
+            .overlay(alignment: .bottomLeading) {
                 Text("Original")
-                    .font(MarrTypography.body(size: 11, weight: .semibold))
+                    .font(MarrTypography.font(.secondary, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4)
                     .background(.black.opacity(0.62), in: Capsule())
                     .padding(8)
+            }
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 8) {
+                    Button { onZoom(1 / 1.2) } label: { Image(systemName: "minus.magnifyingglass") }
+                        .help("Zoom out")
+                        .accessibilityLabel("Zoom out original screenshot")
+                    Button("1:1", action: onReset)
+                        .help("Restore original size (fit to screen)")
+                    Button { onZoom(1.2) } label: { Image(systemName: "plus.magnifyingglass") }
+                        .help("Zoom in")
+                        .accessibilityLabel("Zoom in original screenshot")
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(7)
+                .background(.black.opacity(0.72), in: Capsule())
+                .padding(8)
             }
             .accessibilityLabel("Original screenshot")
     }
@@ -691,7 +771,7 @@ private struct TranslationToolBubbleView: View {
                         in: Circle()
                     )
                 Text(isComparing ? "Done" : "Compare")
-                    .font(MarrTypography.body(size: 12, weight: .semibold))
+                    .font(MarrTypography.font(.secondary, weight: .semibold))
             }
             .foregroundStyle(.primary.opacity(isHovering ? 0.92 : 0.78))
             .frame(width: 104, height: 32)

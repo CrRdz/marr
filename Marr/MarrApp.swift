@@ -49,10 +49,11 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
 
     private var didBootstrapApplication = false
     private var statusItem: NSStatusItem?
+    private var pendingStatusClick: DispatchWorkItem?
 
     override init() {
         MarrTypography.registerBundledFonts()
-        controller = MarrController(client: OpenAIClient())
+        controller = MarrController(client: OpenAIClient(), usesCodexForConversation: true)
         super.init()
     }
 
@@ -61,7 +62,6 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.bootstrapApplicationIfNeeded()
         }
-        showOnboardingIfNeeded()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -98,18 +98,6 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         controller.installHotKeyIfNeeded()
     }
 
-    private func showOnboardingIfNeeded() {
-        let environment = ProcessInfo.processInfo.environment
-        let isRunningTests = environment["XCTestConfigurationFilePath"] != nil
-            || environment["XCInjectBundleInto"] != nil
-        guard !isRunningTests, MarrOnboarding.isRequired() else { return }
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            MarrOnboardingPresenter.shared.show(controller: self.controller)
-        }
-    }
-
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
@@ -139,18 +127,38 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
 
     @objc
     private func handleStatusItemClick(_ sender: Any?) {
-        guard NSApp.currentEvent?.type == .rightMouseUp else {
-            controller.startScreenCapture()
+        pendingStatusClick?.cancel()
+        if NSApp.currentEvent?.type == .rightMouseUp || (NSApp.currentEvent?.clickCount ?? 0) > 1 {
+            showStatusItemMenu()
             return
         }
-
-        showStatusItemMenu()
+        let click = DispatchWorkItem { [weak self] in
+            self?.controller.startScreenCapture()
+        }
+        pendingStatusClick = click
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: click)
     }
 
     private func showStatusItemMenu() {
         guard let button = statusItem?.button else { return }
 
         let menu = NSMenu()
+        menu.minimumWidth = 220
+        menu.autoenablesItems = false
+        menu.font = MarrTypography.menuFont
+        menu.addItem(statusMenuItem(
+            title: "New Conversation",
+            action: #selector(newConversation),
+            systemImage: "square.and.pencil"
+        ))
+        let newWorkItem = statusMenuItem(
+            title: "New Work",
+            action: #selector(newWork),
+            systemImage: "hammer"
+        )
+        newWorkItem.isEnabled = !controller.codexWorkspace.isRunning
+        menu.addItem(newWorkItem)
+        menu.addItem(.separator())
         menu.addItem(statusMenuItem(
             title: "History",
             action: #selector(showHistory),
@@ -165,12 +173,12 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(statusMenuItem(
             title: "Quit Marr",
             action: #selector(quitMarr),
-            systemImage: nil
+            systemImage: "power"
         ))
 
         menu.popUp(
             positioning: nil,
-            at: NSPoint(x: 0, y: button.bounds.height),
+            at: NSPoint(x: button.bounds.minX, y: button.isFlipped ? button.bounds.maxY + 4 : button.bounds.minY - 4),
             in: button
         )
     }
@@ -182,15 +190,8 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
     ) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
-        item.attributedTitle = NSAttributedString(
-            string: title,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 12.5, weight: .regular)
-            ]
-        )
-
         let symbolConfiguration = NSImage.SymbolConfiguration(
-            pointSize: 12,
+            pointSize: 14,
             weight: .regular
         )
         if let systemImage {
@@ -198,9 +199,19 @@ final class MarrAppDelegate: NSObject, NSApplicationDelegate {
                 systemSymbolName: systemImage,
                 accessibilityDescription: nil
             )?.withSymbolConfiguration(symbolConfiguration)
-            item.image?.size = NSSize(width: 13, height: 13)
+            item.image?.size = NSSize(width: 16, height: 16)
         }
         return item
+    }
+
+    @objc
+    private func newConversation() {
+        controller.startNewConversation()
+    }
+
+    @objc
+    private func newWork() {
+        controller.startNewConversation(work: true)
     }
 
     @objc

@@ -24,6 +24,26 @@ struct ImageTranslationHighlightPair: Identifiable, Equatable, Sendable {
 }
 
 enum ImageTranslationHighlightBuilder {
+    static func regionsNeedingAlignmentRepair(
+        regions: [ImageTranslationSourceRegion],
+        replacements: [ImageTranslationReplacement]
+    ) -> [ImageTranslationSourceRegion] {
+        let replacementByID = Dictionary(
+            replacements.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return regions.filter { region in
+            guard region.translationStrategy == .block,
+                  !region.tokens.isEmpty,
+                  let replacement = replacementByID[region.id],
+                  !replacement.text.isEmpty
+            else { return false }
+
+            return !hasReliableAlignments(replacement: replacement, region: region)
+        }
+    }
+
     static func hasReliableAlignments(
         replacement: ImageTranslationReplacement,
         region: ImageTranslationSourceRegion
