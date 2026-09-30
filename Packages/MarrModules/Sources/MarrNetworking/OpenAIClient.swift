@@ -174,7 +174,7 @@ public struct OpenAIClient: VisionAIClient {
     ) async throws -> (Data, URLResponse) {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 120
+        request.timeoutInterval = connection.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         for (name, value) in additionalHeaders {
             request.setValue(value, forHTTPHeaderField: name)
