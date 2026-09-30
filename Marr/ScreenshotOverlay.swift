@@ -3,12 +3,19 @@ import Carbon
 import SwiftUI
 
 @MainActor
+final class ScreenshotPinnedImages: ObservableObject {
+    @Published var images: [PickedImage] = []
+}
+
+@MainActor
 final class ScreenshotOverlayController {
     var onCapture: ((PickedImage, CGRect, CGRect, String) -> Void)?
+    var onCaptureBatch: (([PickedImage], CGRect, String) -> Void)?
     var onTranslate: ((PickedImage, CGRect, ScreenCaptureSnapshot) -> Void)?
     var onWindowCapture: ((WindowCaptureCandidate) -> Void)?
     var onCancel: (() -> Void)?
 
+    private let pinnedImages = ScreenshotPinnedImages()
     private var windows: [NSWindow] = []
     private var screenSnapshots: [CGDirectDisplayID: ScreenCaptureSnapshot] = [:]
     private var keyMonitor: Any?
@@ -92,7 +99,12 @@ final class ScreenshotOverlayController {
                 },
                 onWindowCapture: { [weak self] candidate in
                     self?.captureWindow(candidate)
-                }
+                },
+                onCaptureBatch: { [weak self] images, anchor, question in
+                    self?.close()
+                    self?.onCaptureBatch?(images, anchor, question)
+                },
+                pinnedImages: pinnedImages
             )
             window.contentView = NSHostingView(rootView: view.marrPreferredColorScheme())
             window.makeKeyAndOrderFront(nil)
@@ -565,7 +577,11 @@ struct ScreenshotSelectionView: View {
     let onCapture: (CGRect, CGRect, String) -> Void
     let onTranslate: (CGRect) -> Void
     let onWindowCapture: (WindowCaptureCandidate) -> Void
+    var onCaptureBatch: (([PickedImage], CGRect, String) -> Void)? = nil
 
+    @ObservedObject var pinnedImages = ScreenshotPinnedImages()
+    @State private var pinHovered = false
+    @State private var showsScreenshotTray = false
     @State private var question = ""
     @State private var selection: CGRect = .zero
     @State private var selectionOrigin: CGPoint?
@@ -596,7 +612,7 @@ struct ScreenshotSelectionView: View {
             ZStack(alignment: .topLeading) {
                 captureCanvas(in: geometry.size)
 
-                if !hasSelection, !isDrawingSelection, !windowCandidates.isEmpty {
+                if !hasSelection, !isDrawingSelection, !windowCandidates.isEmpty, pinnedImages.images.isEmpty {
                     WindowCaptureSelectionView(
                         screen: screen,
                         candidates: windowCandidates,
@@ -612,6 +628,21 @@ struct ScreenshotSelectionView: View {
                 if selection.width > 0, selection.height > 0 {
                     subtleDimmedBackdrop(in: geometry.size)
                     selectionLayer(in: geometry.size)
+                }
+                if mode == .ask, hasConfirmedSelection, !isSending, onCaptureBatch != nil {
+                    Button { pinSelection() } label: {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 15, weight: .medium))
+                            .frame(width: 30, height: 30)
+                            .background(.regularMaterial, in: Circle())
+                            .opacity(pinHovered ? 1 : 0)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { pinHovered = $0 }
+                    .help("Pin screenshot and capture another")
+                    .position(x: selection.maxX - 24, y: selection.minY + 24)
                 }
 
                 if mode == .ask, showsPromptBar {
@@ -809,45 +840,90 @@ struct ScreenshotSelectionView: View {
             )
     }
 
+    private var screenshotThumbnails: [NSImage] {
+        var images = pinnedImages.images.map(\.image)
+        if hasConfirmedSelection, let previewImage { images.append(previewImage) }
+        return images
+    }
+
+    private var screenshotThumbnailStack: some View {
+        let images = screenshotThumbnails
+        let visible = Array(images.suffix(3))
+        return Button {
+            if images.count == 1, pinnedImages.images.isEmpty {
+                showsImagePreview.toggle()
+            } else {
+                showsScreenshotTray.toggle()
+            }
+        } label: {
+            ZStack(alignment: .topLeading) {
+                ForEach(visible.indices, id: \.self) { index in
+                    let depth = visible.count - 1 - index
+                    Image(nsImage: visible[index])
+                        .resizable().scaledToFill()
+                        .frame(width: 38, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.5), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
+                        .offset(x: CGFloat(depth) * 5, y: -CGFloat(depth) * 2)
+                }
+            }
+            .frame(width: 38 + CGFloat(max(0, visible.count - 1)) * 5, height: 30, alignment: .topLeading)
+            .overlay(alignment: .bottomTrailing) {
+                if images.count > 1 {
+                    Text("\(images.count)")
+                        .font(MarrTypography.font(.badge, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.regularMaterial, in: Capsule())
+                        .offset(x: 3, y: 2)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .buttonStyle(.plain)
+        .help("\(images.count) screenshot(s) · Click to view")
+        .popover(isPresented: $showsScreenshotTray) {
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(pinnedImages.images.indices, id: \.self) { index in
+                        HStack(spacing: 10) {
+                            Image(nsImage: pinnedImages.images[index].image)
+                                .resizable().scaledToFit()
+                                .frame(width: 150, height: 90)
+                            Button {
+                                pinnedImages.images.remove(at: index)
+                                if pinnedImages.images.isEmpty { showsScreenshotTray = false }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove screenshot")
+                        }
+                    }
+                    if hasConfirmedSelection, let previewImage {
+                        Image(nsImage: previewImage)
+                            .resizable().scaledToFit()
+                            .frame(width: 150, height: 90)
+                    }
+                }
+                .padding(12)
+            }
+            .frame(width: 220, height: min(320, CGFloat(images.count) * 100 + 24))
+        }
+    }
+
     private var questionControls: some View {
         HStack(spacing: 10) {
-            if hasConfirmedSelection {
-                Button {
-                    showsImagePreview.toggle()
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Image")
-                            .font(MarrTypography.body(size: 13, weight: .semibold))
-                    }
-                    .foregroundStyle(.primary.opacity(0.90))
-                    .padding(.horizontal, 12)
-                    .frame(height: 34)
-                    .background(
-                        showsImagePreview
-                            ? bubbleTint.opacity(0.18)
-                            : Color.secondary.opacity(0.13),
-                        in: Capsule()
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                showsImagePreview ? bubbleTint.opacity(0.42) : Color.clear,
-                                lineWidth: 0.8
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(snapshot == nil)
-                .help(showsImagePreview ? "Hide screenshot preview" : "Preview screenshot")
-                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            if hasConfirmedSelection || !pinnedImages.images.isEmpty {
+                screenshotThumbnailStack
             } else if hoveredWindowCandidate != nil {
                 HStack(spacing: 7) {
                     Image(systemName: "macwindow")
                         .font(.system(size: 14, weight: .semibold))
                     Text("Window")
-                        .font(MarrTypography.body(size: 13, weight: .semibold))
+                        .font(MarrTypography.font(.body, weight: .semibold))
                         .lineLimit(1)
                 }
                 .foregroundStyle(.primary.opacity(0.90))
@@ -859,7 +935,7 @@ struct ScreenshotSelectionView: View {
 
             TextField(questionPlaceholder, text: $question, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 15))
+                .font(MarrTypography.font(.body))
                 .lineLimit(1...2)
                 .foregroundStyle(.primary)
                 .focused($questionFocused)
@@ -930,12 +1006,12 @@ struct ScreenshotSelectionView: View {
                             .background(bubbleTint.opacity(0.11), in: RoundedRectangle(cornerRadius: 7))
 
                         Text(command.invocation)
-                            .font(MarrTypography.mono(size: 12.5, weight: .semibold))
+                            .font(MarrTypography.font(.codeControl, weight: .semibold))
                             .foregroundStyle(.primary)
                             .frame(width: 82, alignment: .leading)
 
                         Text(command.summary)
-                            .font(MarrTypography.body(size: 12.5))
+                            .font(MarrTypography.font(.body))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
@@ -1016,7 +1092,7 @@ struct ScreenshotSelectionView: View {
 
     private func dragHint(in size: CGSize) -> some View {
         Text("Drag to take a screenshot")
-            .font(.system(size: 12, weight: .regular))
+            .font(MarrTypography.font(.secondary))
             .foregroundStyle(Color.primary.opacity(0.92))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
@@ -1027,7 +1103,7 @@ struct ScreenshotSelectionView: View {
 
     private func selectionOnlyConfirmationHint(in size: CGSize) -> some View {
         Text("Press Return to add screenshot")
-            .font(MarrTypography.body(size: 12, weight: .semibold))
+            .font(MarrTypography.font(.secondary, weight: .semibold))
             .foregroundStyle(.white.opacity(0.96))
             .padding(.horizontal, 12)
             .frame(height: 32)
@@ -1073,7 +1149,7 @@ struct ScreenshotSelectionView: View {
     }
 
     private var canSend: Bool {
-        hasConfirmedSelection
+        (hasConfirmedSelection || !pinnedImages.images.isEmpty)
             && !isSending
             && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -1155,6 +1231,18 @@ struct ScreenshotSelectionView: View {
         onCapture(rect, rect, "")
     }
 
+    private func pinSelection() {
+        guard hasConfirmedSelection,
+              let image = ScreenCapture.capture(rect: globalSelectionRect(), screen: screen, snapshot: snapshot)
+        else { return }
+        pinnedImages.images.append(image)
+        selection = .zero
+        selectionOrigin = nil
+        showsImagePreview = false
+        pinHovered = false
+        questionFocused = false
+    }
+
     private func sendQuestion() {
         let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !isSending, !trimmedQuestion.isEmpty else {
@@ -1173,8 +1261,21 @@ struct ScreenshotSelectionView: View {
             isSending = true
         }
 
+        var images = pinnedImages.images
+        if !images.isEmpty, hasConfirmedSelection {
+            guard let image = ScreenCapture.capture(rect: rect, screen: screen, snapshot: snapshot) else {
+                isSending = false
+                return
+            }
+            images.append(image)
+        }
+        let capturedImages = images
         let capture = DispatchWorkItem {
-            onCapture(rect, answerAnchorRect, trimmedQuestion)
+            if !capturedImages.isEmpty, let onCaptureBatch {
+                onCaptureBatch(capturedImages, answerAnchorRect, trimmedQuestion)
+            } else {
+                onCapture(rect, answerAnchorRect, trimmedQuestion)
+            }
         }
         pendingCapture = capture
         DispatchQueue.main.asyncAfter(deadline: .now() + capsuleTransitionDuration + 0.08, execute: capture)
@@ -1359,7 +1460,7 @@ struct ScreenshotSelectionView: View {
     }
 
     private var showsPromptBar: Bool {
-        cursorLocation != nil
+        !pinnedImages.images.isEmpty || cursorLocation != nil
             || hoveredWindowCandidate != nil
             || selection.width > 0
             || selection.height > 0
@@ -1574,7 +1675,7 @@ private struct WindowCaptureSelectionView: View {
     }
 
     private func labelFontSize(for size: CGSize) -> CGFloat {
-        min(size.width, size.height) < 110 ? 10 : 12
+        min(size.width, size.height) < 110 ? MarrTypography.Role.caption.size : MarrTypography.Role.secondary.size
     }
 
     private func labelHorizontalPadding(for size: CGSize) -> CGFloat {

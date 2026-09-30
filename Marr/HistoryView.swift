@@ -43,6 +43,7 @@ struct HistoryView: View {
                 }
             }
         }
+        .font(MarrTypography.font(.body))
         .formStyle(.grouped)
         .tint(selectedAccentColor)
         .accentColor(selectedAccentColor)
@@ -86,7 +87,7 @@ struct HistoryView: View {
             Spacer(minLength: 8)
 
             Text("\(store.conversations.count) saved")
-                .font(.system(size: 12, weight: .regular))
+                .font(MarrTypography.font(.secondary, weight: .regular))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
@@ -105,19 +106,19 @@ struct HistoryView: View {
     private var searchField: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 11.5, weight: .medium))
+                .font(MarrTypography.font(.secondary, weight: .medium))
                 .foregroundStyle(.secondary)
 
             TextField("Search history...", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13, weight: .regular))
+                .font(MarrTypography.font(.body, weight: .regular))
 
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11.5, weight: .semibold))
+                        .font(MarrTypography.font(.secondary, weight: .semibold))
                         .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
@@ -148,13 +149,13 @@ struct HistoryView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayTitle(for: conversation))
-                        .font(.system(size: 13.5, weight: .medium))
+                        .font(MarrTypography.font(.body, weight: .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Text(metadata(for: conversation))
-                        .font(.system(size: 11.5, weight: .regular))
+                        .font(MarrTypography.font(.secondary, weight: .regular))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -163,7 +164,7 @@ struct HistoryView: View {
                 Spacer(minLength: 12)
 
                 Text(dateLabel(for: conversation.updatedAt))
-                    .font(.system(size: 12, weight: .regular))
+                    .font(MarrTypography.font(.secondary, weight: .regular))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .layoutPriority(1)
@@ -194,10 +195,10 @@ struct HistoryView: View {
                 .foregroundStyle(.secondary)
 
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(MarrTypography.font(.title, weight: .semibold))
 
             Text(description)
-                .font(.system(size: 12, weight: .regular))
+                .font(MarrTypography.font(.secondary, weight: .regular))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, minHeight: 220, alignment: .center)

@@ -5,6 +5,7 @@ import SwiftUI
 enum AnswerPanelUtilityDestination {
     case history
     case settings
+    case work
 }
 
 @MainActor
@@ -93,7 +94,7 @@ final class AnswerPanelController {
         )
         let createdWindow = AnswerPanelWindow(
             contentRect: startFrame,
-            styleMask: [.borderless, .fullSizeContentView],
+            styleMask: [.borderless, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -102,7 +103,7 @@ final class AnswerPanelController {
         createdWindow.backgroundColor = .clear
         createdWindow.hasShadow = false
         createdWindow.isMovable = true
-        createdWindow.isMovableByWindowBackground = true
+        createdWindow.isMovableByWindowBackground = false
         createdWindow.animationBehavior = .none
         createdWindow.isReleasedWhenClosed = false
         createdWindow.level = .screenSaver
@@ -127,7 +128,7 @@ final class AnswerPanelController {
             )
             .marrPreferredColorScheme()
         )
-        createdHostingView.sizingOptions = []
+        createdHostingView.sizingOptions = [.minSize]
         createdWindow.contentView = createdHostingView
 
         window = createdWindow
@@ -135,9 +136,17 @@ final class AnswerPanelController {
         presentationStartFrame = startFrame
         createdHostingView.layoutSubtreeIfNeeded()
         createdHostingView.displayIfNeeded()
+        createdWindow.contentMinSize = AnswerPanelConversationLayout.panelSize
     }
 
-    func show() {
+    var frame: CGRect { window.frame }
+
+    func show(preservingFrame: CGRect? = nil) {
+        if let preservingFrame {
+            window.setFrame(preservingFrame, display: false)
+            window.alphaValue = 1
+            hasPresented = true
+        }
         isMinimized = false
         guard !hasPresented else {
             window.makeKeyAndOrderFront(nil)
@@ -183,7 +192,7 @@ final class AnswerPanelController {
     }
 
     func setHistoryExpanded(_: Bool) {
-        // History replaces the conversation content in-place; the panel remains fixed-size.
+        // History replaces content in-place without changing the user-selected window size.
     }
 
     func appendScreenshot(_ image: PickedImage) {
@@ -219,11 +228,11 @@ private struct AnswerPanelActions {
 
 enum AnswerPanelConversationLayout {
     static let panelSize = NSSize(width: 420, height: 596)
-    static let windowPadding: CGFloat = 12
+    static let windowPadding: CGFloat = 0
     static let surfaceWidth: CGFloat = panelSize.width - windowPadding * 2
     static let surfaceHeight: CGFloat = panelSize.height - windowPadding * 2
     static let composerWidth: CGFloat = surfaceWidth - 64
-    static let composerHeight: CGFloat = 40
+    static let composerHeight: CGFloat = 44
     static let assistantTextWidth: CGFloat = composerWidth - 8
     static let surfaceCornerRadius: CGFloat = 24
     static let bottomInset: CGFloat = 16
@@ -444,6 +453,7 @@ enum AnswerPanelConversationTitle {
 
 private struct AnswerPanelView: View {
     @ObservedObject var controller: MarrController
+    @ObservedObject private var workSession: CodexWorkspaceController
     @ObservedObject var session: ConversationSession
     @ObservedObject private var historyStore: ConversationHistoryStore
     let requestCoordinator: ConversationRequestCoordinator
@@ -458,6 +468,8 @@ private struct AnswerPanelView: View {
     @State private var editingTurnID: UUID?
     @State private var showsHistoryPanel = false
     @State private var showsSettingsPanel = false
+    @State private var usesCodex = false
+    @State private var showsCodexTaskBrowser = false
     @State private var historySearchText = ""
     @State private var panelControlsHovered = false
     @State private var conversationTitleHovered = false
@@ -467,15 +479,20 @@ private struct AnswerPanelView: View {
     @State private var dismissedSlashMenuInput: String?
     @State private var attachmentErrorMessage: String?
     @State private var attachmentButtonHovered = false
+    @Namespace private var modeSelection
+    @Environment(\.accessibilityReduceMotion) private var reducesMotion
+    @Environment(\.accessibilityReduceTransparency) private var reducesTransparency
+    @AppStorage(MarrAppearanceKeys.glassSurfaces) private var usesGlassSurfaces = true
     @AppStorage(MarrBubbleColor.storageKey) private var bubbleColor = MarrBubbleColor.system.rawValue
     @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
     @FocusState private var questionFocused: Bool
     @FocusState private var historySearchFocused: Bool
 
-    private let composerWidth = AnswerPanelConversationLayout.composerWidth
+    @State private var panelWidth = AnswerPanelConversationLayout.panelSize.width
+    @State private var showsWorkModelPicker = false
+    private var composerWidth: CGFloat { min(720, panelWidth - 64) }
     private let assistantRevealDelay = 0.30
     private let conversationHeaderHeight: CGFloat = 78
-    private let primarySurfaceHeight = AnswerPanelConversationLayout.surfaceHeight
 
     init(
         controller: MarrController,
@@ -487,6 +504,7 @@ private struct AnswerPanelView: View {
         actions: AnswerPanelActions
     ) {
         self.controller = controller
+        _workSession = ObservedObject(wrappedValue: controller.codexWorkspace)
         self.session = session
         self.requestCoordinator = requestCoordinator
         self.titleCoordinator = titleCoordinator
@@ -495,19 +513,27 @@ private struct AnswerPanelView: View {
         _historyStore = ObservedObject(wrappedValue: historyStore)
         _showsHistoryPanel = State(initialValue: navigation.request.destination == .history)
         _showsSettingsPanel = State(initialValue: navigation.request.destination == .settings)
+        _usesCodex = State(initialValue: navigation.request.destination == .work)
     }
 
     var body: some View {
-        fixedAnswerStack
-        .frame(width: AnswerPanelConversationLayout.surfaceWidth)
-        .frame(maxHeight: .infinity, alignment: .bottom)
-        .padding(AnswerPanelConversationLayout.windowPadding)
+        GeometryReader { geometry in
+            fixedAnswerStack
+                .padding(AnswerPanelConversationLayout.windowPadding)
+                .onAppear { panelWidth = geometry.size.width }
+                .onChange(of: geometry.size.width) { _, width in panelWidth = width }
+        }
+        .frame(minWidth: AnswerPanelConversationLayout.panelSize.width,
+               minHeight: AnswerPanelConversationLayout.panelSize.height)
         .onAppear {
             DispatchQueue.main.async {
                 questionFocused = true
                 submitInitialQuestion()
                 titleCoordinator.generateIfNeeded()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            workSession.refreshModelsIfNeeded()
         }
         .onChange(of: session.turns) { _, _ in
             titleCoordinator.generateIfNeeded()
@@ -541,14 +567,19 @@ private struct AnswerPanelView: View {
         } message: {
             Text(attachmentErrorMessage ?? "")
         }
+        .background(TwoFingerBackGesture(
+            isEnabled: showsSettingsPanel || showsHistoryPanel || showsCodexTaskBrowser,
+            onBack: navigateBack
+        ))
+        .font(MarrTypography.font(.body))
         .onExitCommand(perform: handleEscape)
     }
 
     private var fixedAnswerStack: some View {
         primarySurface
         .frame(
-            width: AnswerPanelConversationLayout.surfaceWidth,
-            height: AnswerPanelConversationLayout.surfaceHeight,
+            maxWidth: .infinity,
+            maxHeight: .infinity,
             alignment: .bottom
         )
         .animation(.spring(response: 0.30, dampingFraction: 0.88), value: showsHistoryPanel)
@@ -564,6 +595,9 @@ private struct AnswerPanelView: View {
                 } else if showsHistoryPanel {
                     historyHeader
                         .transition(.opacity)
+                } else if usesCodex {
+                    codexHeader
+                        .transition(.opacity)
                 } else {
                     conversationHeader
                         .transition(.opacity)
@@ -577,6 +611,14 @@ private struct AnswerPanelView: View {
                 } else if showsHistoryPanel {
                     historyContent
                         .transition(.move(edge: .trailing).combined(with: .opacity))
+                } else if usesCodex {
+                    if showsCodexTaskBrowser {
+                        codexTaskBrowser
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    } else {
+                        codexContent
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 } else {
                     conversationScroll
                         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -584,22 +626,26 @@ private struct AnswerPanelView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if !showsSettingsPanel {
+            if !showsSettingsPanel, !(usesCodex && showsCodexTaskBrowser) {
                 composerFooter
             }
         }
         .frame(
-            width: AnswerPanelConversationLayout.surfaceWidth,
-            height: primarySurfaceHeight,
+            maxWidth: .infinity,
+            maxHeight: .infinity,
             alignment: .top
         )
-        .marrGlassSurface(cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius, isClear: true)
+        .marrGlassSurface(
+            cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
+            isClear: true,
+            drawsBorder: usesGlassSurfaces
+        )
         .overlay(
             RoundedRectangle(
                 cornerRadius: AnswerPanelConversationLayout.surfaceCornerRadius,
                 style: .continuous
             )
-            .stroke(.white.opacity(0.18), lineWidth: 0.8)
+            .stroke(.white.opacity(usesGlassSurfaces ? 0.18 : 0), lineWidth: 0.8)
             .allowsHitTesting(false)
         )
         .clipped()
@@ -613,7 +659,7 @@ private struct AnswerPanelView: View {
                     "\(session.pendingImageIDs.count) attachment\(session.pendingImageIDs.count == 1 ? "" : "s") ready for the next question",
                     systemImage: "paperclip"
                 )
-                .font(MarrTypography.caption())
+                .font(MarrTypography.font(.secondary))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -623,13 +669,25 @@ private struct AnswerPanelView: View {
                 if showsHistoryPanel {
                     historySearchComposer
                 } else {
-                    composer
+                    VStack(alignment: .leading, spacing: 0) {
+                        composerModelToolbar
+                            .padding(.horizontal, 12)
+                            .padding(.top, 5)
+                            .padding(.bottom, 3)
+                        composer
+                    }
+                    .frame(width: composerWidth)
+                    .marrGlassSurface(
+                        cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+                        isClear: true,
+                        tintOpacity: 0.08
+                    )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(.top, 8)
-        .padding(.bottom, AnswerPanelConversationLayout.windowPadding)
+        .padding(.top, 10)
+        .padding(.bottom, AnswerPanelConversationLayout.bottomInset)
         .frame(maxWidth: .infinity)
         .zIndex(showsSlashCommandMenu ? 10 : 1)
     }
@@ -651,7 +709,7 @@ private struct AnswerPanelView: View {
                 .help("Back to conversation")
 
                 Text("Settings")
-                    .font(.system(size: 18, weight: .regular, design: .default))
+                    .font(MarrTypography.font(.pageTitle))
                     .foregroundStyle(.primary)
 
                 Spacer()
@@ -684,7 +742,7 @@ private struct AnswerPanelView: View {
                 .help("Back to conversation")
 
                 Text("History")
-                    .font(.system(size: 18, weight: .regular, design: .default))
+                    .font(MarrTypography.font(.pageTitle))
                     .foregroundStyle(.primary)
 
                 Spacer()
@@ -736,7 +794,21 @@ private struct AnswerPanelView: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            AnswerPanelDragRegion()
+                .frame(maxWidth: .infinity)
+                .frame(height: 30)
+                .accessibilityHidden(true)
+
+            if !showsSettingsPanel {
+                HStack(spacing: 2) {
+                    modeTab("Conversation", isWork: false)
+                    modeTab("Work", isWork: true)
+                }
+                .padding(3)
+                .background(.primary.opacity(0.045), in: Capsule())
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
+            }
 
             Button {
                 if showsSettingsPanel {
@@ -753,6 +825,52 @@ private struct AnswerPanelView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private func modeTab(_ title: String, isWork: Bool) -> some View {
+        Button {
+            withAnimation(reducesMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82)) {
+                usesCodex = isWork
+                showsHistoryPanel = false
+                showsSettingsPanel = false
+                showsCodexTaskBrowser = false
+            }
+            questionFocused = true
+        } label: {
+            Text(title)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .font(MarrTypography.font(.body, weight: usesCodex == isWork ? .semibold : .regular))
+                .foregroundStyle(usesCodex == isWork ? .primary : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background {
+                    if usesCodex == isWork {
+                        modeSelectionGlass
+                            .matchedGeometryEffect(id: "modeSelection", in: modeSelection)
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var modeSelectionGlass: some View {
+        if #available(macOS 26.0, *), usesGlassSurfaces, !reducesTransparency {
+            Capsule().fill(.clear)
+                .glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            Capsule().fill(.primary.opacity(0.10))
+        }
+    }
+
+    private func navigateBack() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            if showsSettingsPanel { hideSettings() }
+            else if showsHistoryPanel { hideHistorySearch() }
+            else if showsCodexTaskBrowser { showsCodexTaskBrowser = false }
+        }
+    }
+
     private var conversationHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             panelControls
@@ -764,6 +882,35 @@ private struct AnswerPanelView: View {
         .padding(.top, 12)
         .padding(.bottom, 8)
         .frame(height: conversationHeaderHeight, alignment: .topLeading)
+    }
+
+    private var codexHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            panelControls
+            if !showsCodexTaskBrowser {
+                conversationTitleControl
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(height: showsCodexTaskBrowser ? 48 : conversationHeaderHeight, alignment: .topLeading)
+    }
+
+    private var codexContent: some View {
+        CodexActivityTimeline(workspace: workSession)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+    }
+
+    private var codexTaskBrowser: some View {
+        CodexTaskBrowser(workspace: workSession) {
+            withAnimation(.easeOut(duration: 0.16)) {
+                showsCodexTaskBrowser = false
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 
     private var conversationScroll: some View {
@@ -819,7 +966,11 @@ private struct AnswerPanelView: View {
 
     private var conversationTitleControl: some View {
         Button {
-            showHistorySearch()
+            if usesCodex {
+                withAnimation(.easeOut(duration: 0.16)) { showsCodexTaskBrowser = true }
+            } else {
+                showHistorySearch()
+            }
         } label: {
             HStack(spacing: 7) {
                 Rectangle()
@@ -827,7 +978,7 @@ private struct AnswerPanelView: View {
                     .frame(width: 1, height: 20)
 
                 Text(conversationDisplayTitle)
-                    .font(.system(size: 16.5, weight: .regular, design: .default))
+                    .font(MarrTypography.font(.title))
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -847,18 +998,18 @@ private struct AnswerPanelView: View {
                 conversationTitleHovered = isHovering
             }
         }
-        .help("Open history")
+        .help(usesCodex ? "Open projects" : "Open history")
     }
 
     private var historySearchComposer: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MarrTypography.font(.body, weight: .semibold))
                 .foregroundStyle(selectedAccent.color.opacity(0.88))
 
             TextField("Search history...", text: $historySearchText)
                 .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 13.5, weight: .medium))
+                .font(MarrTypography.font(.body, weight: .medium))
                 .focused($historySearchFocused)
 
             if !historySearchText.isEmpty {
@@ -867,7 +1018,7 @@ private struct AnswerPanelView: View {
                     historySearchFocused = true
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MarrTypography.font(.body, weight: .semibold))
                         .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
@@ -899,7 +1050,7 @@ private struct AnswerPanelView: View {
     }
 
     private var conversationDisplayTitle: String {
-        session.displayTitle
+        usesCodex ? workSession.activeTaskTitle : session.displayTitle
     }
 
     private func turnView(_ turn: ConversationTurn, isCompact: Bool, showsUserMessage: Bool) -> some View {
@@ -910,11 +1061,10 @@ private struct AnswerPanelView: View {
                     VStack(alignment: .trailing, spacing: 8) {
                         turnScreenshotAttachments(turn)
 
-                        Text(turn.question)
-                            .font(MarrTypography.body(size: 12.5, weight: .medium))
-                            .foregroundStyle(.primary)
+                        UserMessageContent(source: turn.question)
+                            .font(MarrTypography.font(.body, weight: .medium))
                             .textSelection(.enabled)
-                            .padding(.horizontal, 11)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(bubbleTint.opacity(0.92), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .foregroundStyle(bubbleForegroundColor)
@@ -994,7 +1144,7 @@ private struct AnswerPanelView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(asset.fileName)
-                    .font(MarrTypography.body(size: 12.5, weight: .medium))
+                    .font(MarrTypography.font(.body, weight: .medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -1005,7 +1155,7 @@ private struct AnswerPanelView: View {
                         countStyle: .file
                     )
                 )
-                .font(MarrTypography.body(size: 10.5))
+                .font(MarrTypography.font(.secondary))
                 .foregroundStyle(.secondary)
             }
 
@@ -1037,7 +1187,7 @@ private struct AnswerPanelView: View {
                 Image(systemName: "pencil")
                     .font(.system(size: 11, weight: .semibold))
                 Text("Edit")
-                    .font(MarrTypography.body(size: 12, weight: .semibold))
+                    .font(MarrTypography.font(.secondary, weight: .semibold))
             }
             .foregroundStyle(.primary.opacity(0.82))
             .padding(.horizontal, 11)
@@ -1077,7 +1227,7 @@ private struct AnswerPanelView: View {
             MarkdownResponseView(source: turn.answer.isEmpty ? " " : turn.answer)
                 .textSelection(.enabled)
                 .frame(
-                    width: AnswerPanelConversationLayout.assistantTextWidth,
+                    width: composerWidth - 8,
                     alignment: .leading
                 )
                 .padding(.vertical, 4)
@@ -1087,11 +1237,11 @@ private struct AnswerPanelView: View {
     private func errorMessage(_ turn: ConversationTurn) -> some View {
         VStack(spacing: 8) {
             Text(turn.errorMessage ?? "")
-                .font(MarrTypography.body(size: 12.5, weight: .medium))
+                .font(MarrTypography.font(.body, weight: .medium))
                 .foregroundStyle(.red)
                 .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .minimumScaleFactor(0.86)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
             Button("Retry") {
                 retry(turn.id)
@@ -1104,11 +1254,109 @@ private struct AnswerPanelView: View {
         .padding(.vertical, 6)
     }
 
-    private var composer: some View {
-        HStack(spacing: 8) {
-            attachmentButton
-            composerInput
+    private func modelControlLabel(_ name: String) -> some View {
+        HStack(spacing: 5) {
+            Text(name.isEmpty ? "Choose model" : name)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
         }
+        .font(MarrTypography.font(.body, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+    }
+
+    private var composerModelToolbar: some View {
+        HStack(spacing: 8) {
+            workModelPicker
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var workModelPicker: some View {
+        Button {
+            workSession.refreshModelsIfNeeded()
+            showsWorkModelPicker = true
+        } label: {
+            modelControlLabel(workSession.selectedModelName)
+        }
+        .buttonStyle(.plain)
+        .disabled(workSession.isRunning)
+        .popover(isPresented: $showsWorkModelPicker, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                if let error = workSession.modelLoadError {
+                    Text(error).font(MarrTypography.font(.secondary)).foregroundStyle(.secondary)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(workSession.availableModels, id: \.id) { model in
+                            Button {
+                                workSession.selectModel(model.id)
+                            } label: {
+                                HStack {
+                                    Text(model.name)
+                                    Spacer()
+                                    if workSession.selectedModel == model.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 5)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(height: min(180, CGFloat(workSession.availableModels.count) * 28))
+                if !reasoningEfforts.isEmpty {
+                    Divider()
+                    HStack {
+                        Text("Reasoning")
+                        Spacer()
+                        Text((workSession.selectedReasoningEffort ?? reasoningEfforts[0]).capitalized)
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(MarrTypography.font(.secondary))
+                    if reasoningEfforts.count > 1 {
+                        Slider(value: Binding(
+                            get: { Double(reasoningEfforts.firstIndex(of: workSession.selectedReasoningEffort ?? "") ?? 0) },
+                            set: { workSession.selectReasoningEffort(reasoningEfforts[Int($0.rounded())]) }
+                        ), in: 0...Double(reasoningEfforts.count - 1), step: 1)
+                        .controlSize(.small)
+                        .accessibilityLabel("Reasoning effort")
+                        .accessibilityValue((workSession.selectedReasoningEffort ?? reasoningEfforts[0]).capitalized)
+                        HStack {
+                            Text(reasoningEfforts[0].capitalized)
+                            Spacer()
+                            Text(reasoningEfforts[reasoningEfforts.count - 1].capitalized)
+                        }
+                        .font(MarrTypography.font(.caption))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .font(MarrTypography.font(.body))
+            .padding(10)
+            .frame(width: 230)
+        }
+        .onAppear { workSession.refreshModelsIfNeeded() }
+        .help("Model for the next message")
+    }
+
+    private var reasoningEfforts: [String] {
+        let order = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+        return workSession.availableReasoningEfforts.sorted {
+            (order.firstIndex(of: $0) ?? order.count) < (order.firstIndex(of: $1) ?? order.count)
+        }
+    }
+
+    private var composer: some View {
+        composerInput
         .frame(width: composerWidth)
         .overlay(alignment: .top) {
             if showsSlashCommandMenu {
@@ -1126,31 +1374,14 @@ private struct AnswerPanelView: View {
             showAttachmentPicker()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 17, weight: .regular))
-                .frame(
-                    width: AnswerPanelConversationLayout.composerHeight,
-                    height: AnswerPanelConversationLayout.composerHeight
-                )
+                .font(.system(size: 18, weight: .regular))
+                .frame(width: 28, height: 28)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary.opacity(editingTurnID == nil ? 0.84 : 0.38))
-        .marrGlassSurface(
-            cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
-            isClear: true,
-            tintOpacity: 0.06
-        )
-        .overlay(
-            Circle()
-                .fill(selectedAccent.color.opacity(attachmentButtonHovered ? 0.10 : 0))
-                .allowsHitTesting(false)
-        )
-        .overlay(
-            Circle()
-                .stroke(.white.opacity(0.20), lineWidth: 0.8)
-                .allowsHitTesting(false)
-        )
-        .shadow(color: .black.opacity(0.10), radius: 7, x: 0, y: 3)
+        .background(.primary.opacity(attachmentButtonHovered ? 0.14 : 0.07), in: Circle())
+        .clipShape(Circle())
         .disabled(editingTurnID != nil)
         .onHover { isHovering in
             withAnimation(.easeOut(duration: 0.12)) {
@@ -1162,6 +1393,7 @@ private struct AnswerPanelView: View {
 
     private var composerInput: some View {
         HStack(spacing: 8) {
+            attachmentButton
             if editingTurnID != nil {
                 Image(systemName: "pencil")
                     .font(.system(size: 12, weight: .semibold))
@@ -1169,9 +1401,15 @@ private struct AnswerPanelView: View {
                     .frame(width: 14)
             }
 
-            TextField(editingTurnID == nil ? "Ask a follow-up" : "Edit latest message", text: $question, axis: .vertical)
+            TextField(
+                editingTurnID == nil
+                    ? (usesCodex ? "Ask Codex" : "Ask a follow-up")
+                    : "Edit latest message",
+                text: $question,
+                axis: .vertical
+            )
                 .textFieldStyle(.plain)
-                .font(MarrTypography.body(size: 13.5))
+                .font(MarrTypography.font(.body))
                 .lineLimit(1...2)
                 .foregroundStyle(.primary)
                 .focused($questionFocused)
@@ -1204,6 +1442,7 @@ private struct AnswerPanelView: View {
                 .help("Cancel editing")
             }
 
+
             Button {
                 sendCurrentQuestion()
             } label: {
@@ -1216,26 +1455,27 @@ private struct AnswerPanelView: View {
             .disabled(!canSend)
             .help("Send")
         }
-        .padding(.leading, 12)
+        .padding(.leading, 7)
         .padding(.trailing, 5)
         .padding(.vertical, 4)
-        .frame(
-            width: composerWidth - AnswerPanelConversationLayout.composerHeight - 8
-        )
+        .frame(width: composerWidth)
         .frame(minHeight: AnswerPanelConversationLayout.composerHeight)
-        .marrGlassSurface(
-            cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
-            isClear: true,
-            tintOpacity: 0.06
-        )
-        .overlay(
-            RoundedRectangle(
-                cornerRadius: AnswerPanelConversationLayout.composerHeight / 2,
+        .background {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 0,
+                bottomLeadingRadius: AnswerPanelConversationLayout.composerHeight / 2,
+                bottomTrailingRadius: AnswerPanelConversationLayout.composerHeight / 2,
+                topTrailingRadius: 0,
                 style: .continuous
             )
-                .stroke(.white.opacity(0.18), lineWidth: 0.8)
-        )
-        .shadow(color: .white.opacity(0.10), radius: 1, x: 0, y: -1)
+            .fill(LinearGradient(
+                colors: [.clear, .primary.opacity(0.035)],
+                startPoint: .top,
+                endPoint: .bottom
+            ))
+            .allowsHitTesting(false)
+        }
+
     }
 
     private func showAttachmentPicker() {
@@ -1248,7 +1488,7 @@ private struct AnswerPanelView: View {
         panel.canChooseDirectories = false
         panel.canCreateDirectories = false
 
-        panel.begin { response in
+        let completion: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK else {
                 DispatchQueue.main.async {
                     questionFocused = true
@@ -1292,6 +1532,13 @@ private struct AnswerPanelView: View {
                 questionFocused = true
             }
         }
+        let parent = (NSApp.keyWindow as? AnswerPanelWindow)
+            ?? NSApp.orderedWindows.first { $0 is AnswerPanelWindow && $0.isVisible }
+        panel.level = NSWindow.Level(rawValue: (parent?.level ?? .screenSaver).rawValue + 1)
+        panel.isMovable = true
+        panel.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        panel.begin(completionHandler: completion)
+        panel.makeKeyAndOrderFront(nil)
     }
 
     private var slashCommandMenu: some View {
@@ -1302,18 +1549,18 @@ private struct AnswerPanelView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: command.symbol)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MarrTypography.font(.body, weight: .semibold))
                             .foregroundStyle(selectedAccent.color)
                             .frame(width: 26, height: 26)
                             .background(selectedAccent.color.opacity(0.11), in: RoundedRectangle(cornerRadius: 7))
 
                         Text(command.invocation)
-                            .font(MarrTypography.mono(size: 12.5, weight: .semibold))
+                            .font(MarrTypography.font(.codeControl, weight: .semibold))
                             .foregroundStyle(.primary)
                             .frame(width: 82, alignment: .leading)
 
                         Text(command.summary)
-                            .font(MarrTypography.body(size: 12.5))
+                            .font(MarrTypography.font(.body))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
@@ -1384,7 +1631,8 @@ private struct AnswerPanelView: View {
     }
 
     private var canSend: Bool {
-        !session.hasLoadingTurn && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        (usesCodex ? workSession.canSubmit : !session.hasLoadingTurn)
+            && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var bubbleTint: Color {
@@ -1445,6 +1693,12 @@ private struct AnswerPanelView: View {
             showHistorySearch()
         case .settings:
             showSettings()
+        case .work:
+            showsHistoryPanel = false
+            showsSettingsPanel = false
+            usesCodex = true
+            showsCodexTaskBrowser = false
+            questionFocused = true
         case nil:
             break
         }
@@ -1478,6 +1732,10 @@ private struct AnswerPanelView: View {
     }
 
     private func sendCurrentQuestion() {
+        if usesCodex {
+            sendToCodex()
+            return
+        }
         let current = question
         if let editingTurnID {
             reviseAndResend(current, turnID: editingTurnID)
@@ -1501,6 +1759,13 @@ private struct AnswerPanelView: View {
             }
         }
         submit(turnID)
+    }
+
+    private func sendToCodex() {
+        let request = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !request.isEmpty, workSession.canSubmit else { return }
+        question = ""
+        controller.submitToCodex(request, images: Array(session.images.values))
     }
 
     private func beginEditing(_ turn: ConversationTurn) {
@@ -1560,6 +1825,790 @@ private struct AnswerPanelView: View {
     }
 }
 
+private struct CodexTaskBrowser: View {
+    @ObservedObject var workspace: CodexWorkspaceController
+    let onSelectTask: () -> Void
+    @State private var expandedProjectIDs: Set<UUID> = []
+    @State private var collapsedProjectIDs: Set<UUID> = []
+    @State private var hoveredProjectID: UUID?
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Button(action: onSelectTask) {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Back to Work")
+                    Text("Projects")
+                        .font(MarrTypography.font(.pageTitle))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    Button {
+                        workspace.loadAllTaskHistory()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(workspace.isRunning || workspace.isLoadingTaskHistory || workspace.isLoadingProjects)
+                    .help("Refresh projects")
+                    .accessibilityLabel("Refresh projects")
+                    Button {
+                        if workspace.chooseWorkspace() {
+                            onSelectTask()
+                        }
+                    } label: {
+                        Label("New workspace", systemImage: "plus")
+                            .font(MarrTypography.font(.secondary, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if workspace.isLoadingTaskHistory || workspace.isLoadingProjects {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Refreshing…")
+                            .font(MarrTypography.font(.secondary))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if workspace.savedWorkspaces.isEmpty {
+                    ContentUnavailableView(
+                        "No projects",
+                        systemImage: "folder",
+                        description: Text("Add a project to start."))
+                } else {
+                    ForEach(workspace.savedWorkspaces) { project in
+                        projectSection(project)
+                    }
+                }
+            }
+            .padding(.top, 0)
+            .padding(.bottom, 12)
+        }
+        .scrollIndicators(.automatic)
+    }
+
+    private func projectSection(_ project: CodexSavedWorkspace) -> some View {
+        let tasks = workspace.savedTasks.filter { $0.workspaceID == project.id }
+        let isCollapsed = collapsedProjectIDs.contains(project.id)
+        let isExpanded = expandedProjectIDs.contains(project.id)
+        let visibleTasks = isExpanded ? tasks : Array(tasks.prefix(5))
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        if isCollapsed {
+                            collapsedProjectIDs.remove(project.id)
+                        } else {
+                            collapsedProjectIDs.insert(project.id)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 13, weight: .medium))
+                        Text(project.name)
+                            .font(MarrTypography.font(.body, weight: .medium))
+                    }
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                HStack(spacing: 3) {
+                    Menu {
+                        Button("Refresh", systemImage: "arrow.clockwise") {
+                            workspace.loadTaskHistory(for: project)
+                        }
+                        .disabled(workspace.isRunning || workspace.isLoadingTaskHistory)
+                        Button(project.isPinned ? "Unpin project" : "Pin project") {
+                            workspace.toggleWorkspacePinned(project)
+                        }
+                        Button("Show in Finder") {
+                            workspace.showWorkspaceInFinder(project)
+                        }
+                        Button("Archive chats") {
+                            workspace.archiveChats(in: project)
+                        }
+                        Divider()
+                        Button("Remove", role: .destructive) {
+                            workspace.removeWorkspace(project)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .frame(width: 22, height: 22)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .foregroundStyle(.secondary)
+
+                    Button {
+                        workspace.selectWorkspace(project)
+                        onSelectTask()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .disabled(workspace.isRunning)
+                    .help("New chat in \(project.name)")
+                }
+                .opacity(hoveredProjectID == project.id ? 1 : 0)
+                .allowsHitTesting(hoveredProjectID == project.id)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                hoveredProjectID == project.id ? Color.primary.opacity(0.08) : .clear,
+                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+            )
+            .onHover { isHovered in
+                hoveredProjectID = isHovered ? project.id : nil
+            }
+
+            if !isCollapsed, tasks.isEmpty {
+                Text("No chats")
+                    .font(MarrTypography.font(.secondary))
+                    .foregroundStyle(.tertiary)
+                    .padding(.leading, 26)
+            } else if !isCollapsed {
+                ForEach(visibleTasks) { task in
+                    taskRow(task)
+                }
+                if tasks.count > 5 {
+                    Button(isExpanded ? "Show less" : "Show \(tasks.count - 5) more") {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            if isExpanded {
+                                expandedProjectIDs.remove(project.id)
+                            } else {
+                                expandedProjectIDs.insert(project.id)
+                            }
+                        }
+                    }
+                    .font(MarrTypography.font(.secondary, weight: .medium))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 26)
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    private func taskRow(_ task: CodexSavedTask) -> some View {
+        let isSelected = workspace.workbench.selectedTaskID == task.id
+        return Button {
+            workspace.selectTask(task)
+            onSelectTask()
+        } label: {
+            HStack(spacing: 8) {
+                Text(task.title)
+                    .font(MarrTypography.font(.body, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+                if task.state == .running {
+                    Circle()
+                        .fill(.blue)
+                        .frame(width: 9, height: 9)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                isSelected ? Color.primary.opacity(0.09) : .clear,
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 26)
+    }
+}
+
+private struct CodexActivityTimeline: View {
+    @ObservedObject var workspace: CodexWorkspaceController
+    @State private var expandedActivityIDs: Set<UUID> = []
+    @State private var expandedTurnIDs: Set<UUID> = []
+    @State private var expandedFileChangeTurnIDs: Set<UUID> = []
+    @State private var reviewedFileChangeTurnIDs: Set<UUID> = []
+    @State private var revertedFileChangeTurnIDs: Set<UUID> = []
+    @AppStorage(MarrAccentColor.storageKey) private var accentColor = MarrAccentColor.system.rawValue
+
+    private struct TurnGroup: Identifiable {
+        let id: UUID
+        let userMessage: CodexActivity
+        let activities: [CodexActivity]
+    }
+
+    private struct FileChangeSummary: Identifiable {
+        let path: String
+        let additions: Int
+        let deletions: Int
+
+        var id: String { path }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if workspace.isRemoteTaskActive {
+                Text("Running in Codex").font(MarrTypography.font(.secondary)).foregroundStyle(.secondary)
+            }
+            if let approval = workspace.approvalRequest {
+                approvalCard(approval)
+            }
+
+            if turnGroups.isEmpty, !workspace.isRunning {
+                ContentUnavailableView(
+                    "Ready",
+                    systemImage: "hammer",
+                    description: Text("What would you like to do?"))
+                    .font(MarrTypography.font(.secondary))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        if turnGroups.isEmpty, workspace.isRunning {
+                            workingMessage
+                        }
+
+                        ForEach(turnGroups) { turn in
+                            VStack(alignment: .leading, spacing: 9) {
+                                userMessageBubble(turn.userMessage.detail)
+                                processingDisclosure(for: turn)
+
+                                if expandedTurnIDs.contains(turn.id) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        ForEach(thinkingMessages(in: turn)) { message in
+                                            thinkingMessage(message)
+                                        }
+
+                                        ForEach(nonFileTraceActivities(in: turn)) { activity in
+                                            activityRow(activity)
+                                        }
+
+                                        fileChangeSummary(for: turn)
+                                    }
+                                    .transition(.opacity)
+                                }
+
+                                if finalAgentMessage(in: turn) != nil || workspace.isRunning {
+                                    Rectangle()
+                                        .fill(.separator.opacity(0.55))
+                                        .frame(height: 1)
+                                        .padding(.top, 2)
+                                }
+
+                                if let finalMessage = finalAgentMessage(in: turn) {
+                                    agentMessage(finalMessage)
+                                    fileChangeReviewCard(for: turn)
+                                }
+
+                                if finalAgentMessage(in: turn) == nil,
+                                   workspace.isRunning,
+                                   turn.id == turnGroups.last?.id,
+                                   !workspace.latestAgentMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    MarkdownResponseView(source: workspace.latestAgentMessage)
+                                        .textSelection(.enabled)
+                                        .padding(.horizontal, 2)
+                                }
+
+                                ForEach(errorActivities(in: turn)) { activity in
+                                    errorCard(activity)
+                                }
+                            }
+                        }
+
+                        ForEach(unassignedErrors) { activity in
+                            errorCard(activity)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .scrollIndicators(.automatic)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var turnGroups: [TurnGroup] {
+        var groups: [TurnGroup] = []
+        var pendingActivities: [CodexActivity] = []
+        var currentUserMessage: CodexActivity?
+        var currentActivities: [CodexActivity] = []
+
+        for activity in workspace.activities {
+            if activity.kind == .user,
+               !activity.detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let currentUserMessage {
+                    groups.append(TurnGroup(
+                        id: currentUserMessage.id,
+                        userMessage: currentUserMessage,
+                        activities: currentActivities
+                    ))
+                }
+                currentUserMessage = activity
+                currentActivities = pendingActivities + [activity]
+                pendingActivities = []
+            } else if currentUserMessage != nil {
+                currentActivities.append(activity)
+            } else {
+                pendingActivities.append(activity)
+            }
+        }
+
+        if let currentUserMessage {
+            groups.append(TurnGroup(
+                id: currentUserMessage.id,
+                userMessage: currentUserMessage,
+                activities: currentActivities
+            ))
+        }
+        return groups
+    }
+
+    private func agentMessages(in turn: TurnGroup) -> [CodexActivity] {
+        turn.activities.filter {
+            $0.kind == .message && !$0.detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    /// Codex streams progress/commentary messages before its final answer. The final
+    /// message is the last agent message in a turn; earlier messages belong to the
+    /// turn's collapsible thinking trace.
+    private func finalAgentMessage(in turn: TurnGroup) -> CodexActivity? {
+        agentMessages(in: turn).last
+    }
+
+    private func traceActivities(in turn: TurnGroup) -> [CodexActivity] {
+        let finalMessageID = finalAgentMessage(in: turn)?.id
+        return turn.activities.filter { activity in
+            activity.id != finalMessageID &&
+                activity.kind != .user &&
+                activity.kind != .error &&
+                activity.title != "Codex task completed"
+        }
+    }
+
+    private func thinkingMessages(in turn: TurnGroup) -> [CodexActivity] {
+        traceActivities(in: turn).filter { $0.kind == .message }
+    }
+
+    private func nonFileTraceActivities(in turn: TurnGroup) -> [CodexActivity] {
+        traceActivities(in: turn).filter {
+            $0.kind != .message && $0.kind != .fileChange
+        }
+    }
+
+    private func fileChanges(in turn: TurnGroup) -> [FileChangeSummary] {
+        let activities = traceActivities(in: turn).filter { $0.kind == .fileChange }
+        guard !activities.isEmpty else { return [] }
+
+        // A diff-updated event contains the complete latest diff, so prefer it over
+        // individual file-change events to avoid counting the same edit twice.
+        let sources = activities.last(where: { $0.title == "Workspace diff updated" }).map { [$0] } ?? activities
+        var totals: [String: (additions: Int, deletions: Int)] = [:]
+
+        for activity in sources {
+            var currentPath: String?
+            for rawLine in activity.detail.components(separatedBy: .newlines) {
+                if rawLine.hasPrefix("diff --git ") {
+                    let fragments = rawLine.split(separator: " ")
+                    if fragments.count >= 4 {
+                        currentPath = String(fragments[3]).replacingOccurrences(of: "b/", with: "", options: [.anchored])
+                    }
+                    continue
+                }
+                if rawLine.hasPrefix("+++ b/") {
+                    currentPath = String(rawLine.dropFirst(6))
+                    continue
+                }
+                if currentPath == nil,
+                   !rawLine.hasPrefix("+") && !rawLine.hasPrefix("-"),
+                   (rawLine.contains("/") || rawLine.contains(".")),
+                   !rawLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    currentPath = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                guard let currentPath else { continue }
+                let previous = totals[currentPath, default: (0, 0)]
+                if rawLine.hasPrefix("+") && !rawLine.hasPrefix("+++") {
+                    totals[currentPath] = (previous.additions + 1, previous.deletions)
+                } else if rawLine.hasPrefix("-") && !rawLine.hasPrefix("---") {
+                    totals[currentPath] = (previous.additions, previous.deletions + 1)
+                } else if totals[currentPath] == nil {
+                    totals[currentPath] = previous
+                }
+            }
+        }
+
+        return totals
+            .map { FileChangeSummary(path: $0.key, additions: $0.value.additions, deletions: $0.value.deletions) }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    private func reversibleDiff(in turn: TurnGroup) -> String? {
+        traceActivities(in: turn)
+            .last(where: { $0.kind == .fileChange && $0.detail.contains("diff --git ") })?
+            .detail
+    }
+
+    private func errorActivities(in turn: TurnGroup) -> [CodexActivity] {
+        turn.activities.filter { $0.kind == .error }
+    }
+
+    private var unassignedErrors: [CodexActivity] {
+        let assignedErrorIDs = Set(turnGroups.flatMap { errorActivities(in: $0).map(\.id) })
+        return workspace.activities.filter { $0.kind == .error && !assignedErrorIDs.contains($0.id) }
+    }
+
+    private var workingMessage: some View {
+        HStack(spacing: 9) {
+            ProgressView().controlSize(.small)
+            Text("Codex is inspecting the workspace and preparing a response…")
+                .font(MarrTypography.font(.secondary))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func userMessageBubble(_ text: String) -> some View {
+        HStack {
+            Spacer(minLength: 48)
+            UserMessageContent(source: text)
+                .font(MarrTypography.font(.body))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(selectedAccent.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private func processingDisclosure(for turn: TurnGroup) -> some View {
+        let trace = traceActivities(in: turn)
+        if let processingSeconds = turn.activities.compactMap(\.processingSeconds).last {
+            if trace.isEmpty {
+                Text("Processed \(formattedDuration(processingSeconds))")
+                    .font(MarrTypography.font(.secondary, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 2)
+            } else {
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        if expandedTurnIDs.contains(turn.id) {
+                            expandedTurnIDs.remove(turn.id)
+                        } else {
+                            expandedTurnIDs.insert(turn.id)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Processed \(formattedDuration(processingSeconds))")
+                            .font(MarrTypography.font(.secondary, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .rotationEffect(.degrees(expandedTurnIDs.contains(turn.id) ? 90 : 0))
+                    }
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        } else if workspace.isRunning, turn.id == turnGroups.last?.id {
+            HStack(spacing: 7) {
+                ProgressView().controlSize(.mini)
+                Text("Thinking…")
+                    .font(MarrTypography.font(.secondary, weight: .medium))
+                Spacer(minLength: 0)
+                Button("Stop") { workspace.interrupt() }
+                    .controlSize(.mini)
+            }
+            .foregroundStyle(.secondary)
+            .padding(.leading, 2)
+        }
+    }
+
+    private func agentMessage(_ message: CodexActivity) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MarkdownResponseView(source: message.detail)
+                .textSelection(.enabled)
+                .padding(.horizontal, 2)
+        }
+    }
+
+    private func thinkingMessage(_ message: CodexActivity) -> some View {
+        MarkdownResponseView(source: message.detail)
+            .textSelection(.enabled)
+            .padding(.horizontal, 2)
+            .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func fileChangeSummary(for turn: TurnGroup) -> some View {
+        let files = fileChanges(in: turn)
+        if !files.isEmpty {
+            let isExpanded = expandedFileChangeTurnIDs.contains(turn.id)
+            let additions = files.reduce(0) { $0 + $1.additions }
+            let deletions = files.reduce(0) { $0 + $1.deletions }
+            VStack(alignment: .leading, spacing: 5) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        if isExpanded {
+                            expandedFileChangeTurnIDs.remove(turn.id)
+                        } else {
+                            expandedFileChangeTurnIDs.insert(turn.id)
+                        }
+                    }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 14)
+                        Text("Edited \(files.count) file\(files.count == 1 ? "" : "s")")
+                            .font(MarrTypography.font(.secondary, weight: .medium))
+                        Text("+\(additions)")
+                            .font(MarrTypography.font(.code, weight: .medium))
+                            .foregroundStyle(.green)
+                        Text("-\(deletions)")
+                            .font(MarrTypography.font(.code, weight: .medium))
+                            .foregroundStyle(.red)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(files) { file in
+                            HStack(spacing: 7) {
+                                Text(file.path)
+                                    .font(MarrTypography.font(.code))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 0)
+                                Text("+\(file.additions)")
+                                    .foregroundStyle(.green)
+                                Text("-\(file.deletions)")
+                                    .foregroundStyle(.red)
+                            }
+                            .font(MarrTypography.font(.code, weight: .medium))
+                        }
+                    }
+                    .padding(.leading, 21)
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+        }
+    }
+
+    @ViewBuilder
+    private func fileChangeReviewCard(for turn: TurnGroup) -> some View {
+        let files = fileChanges(in: turn)
+        if !files.isEmpty {
+            let isReviewed = reviewedFileChangeTurnIDs.contains(turn.id)
+            let isReverted = revertedFileChangeTurnIDs.contains(turn.id)
+            let additions = files.reduce(0) { $0 + $1.additions }
+            let deletions = files.reduce(0) { $0 + $1.deletions }
+            let reversibleDiff = reversibleDiff(in: turn)
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 11) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 46, height: 46)
+                        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Edited \(files.count) file\(files.count == 1 ? "" : "s")")
+                            .font(MarrTypography.font(.body, weight: .semibold))
+                        HStack(spacing: 6) {
+                            Text("+\(additions)").foregroundStyle(.green)
+                            Text("-\(deletions)").foregroundStyle(.red)
+                        }
+                        .font(MarrTypography.font(.code, weight: .medium))
+                    }
+                    Spacer(minLength: 0)
+                    Button("Undo") {
+                        guard let reversibleDiff,
+                              workspace.revertCodexChanges(diff: reversibleDiff)
+                        else { return }
+                        revertedFileChangeTurnIDs.insert(turn.id)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(isReverted || reversibleDiff == nil ? .tertiary : .primary)
+                    .disabled(isReverted || reversibleDiff == nil)
+
+                    Button("Review") {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            if isReviewed {
+                                reviewedFileChangeTurnIDs.remove(turn.id)
+                            } else {
+                                reviewedFileChangeTurnIDs.insert(turn.id)
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                if isReviewed {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(files) { file in
+                            HStack(spacing: 7) {
+                                Text(file.path)
+                                    .font(MarrTypography.font(.code))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 0)
+                                Text("+\(file.additions)").foregroundStyle(.green)
+                                Text("-\(file.deletions)").foregroundStyle(.red)
+                            }
+                            .font(MarrTypography.font(.code, weight: .medium))
+                        }
+                    }
+                    .padding(.leading, 57)
+                }
+            }
+            .padding(12)
+            .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(.separator.opacity(0.58), lineWidth: 1)
+            )
+        }
+    }
+
+    private func formattedDuration(_ totalSeconds: Int) -> String {
+        if totalSeconds < 60 { return "\(totalSeconds)s" }
+        return "\(totalSeconds / 60)m \(totalSeconds % 60)s"
+    }
+
+    private func approvalCard(_ approval: CodexApprovalRequest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(approval.kind.title, systemImage: "hand.raised.fill")
+                .font(MarrTypography.font(.secondary, weight: .semibold))
+                .foregroundStyle(.orange)
+            if let reason = approval.reason, !reason.isEmpty {
+                Text(reason)
+                    .font(MarrTypography.font(.secondary))
+                    .foregroundStyle(.secondary)
+            }
+            if let preview = approval.preview, !preview.isEmpty {
+                Text(preview)
+                    .font(MarrTypography.font(.code))
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+            }
+            HStack {
+                Button("Decline") { workspace.respondToApproval(accept: false) }
+                    .controlSize(.small)
+                Button("Allow") { workspace.respondToApproval(accept: true) }
+                    .controlSize(.small)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.11), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func errorCard(_ activity: CodexActivity) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(activity.title, systemImage: "exclamationmark.triangle.fill")
+                .font(MarrTypography.font(.secondary, weight: .semibold))
+                .foregroundStyle(.red)
+            if !activity.detail.isEmpty {
+                Text(activity.detail)
+                    .font(MarrTypography.font(.secondary))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(10)
+        .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+    }
+
+    private func activityRow(_ activity: CodexActivity) -> some View {
+        let isExpanded = expandedActivityIDs.contains(activity.id)
+        return VStack(alignment: .leading, spacing: 5) {
+            Button {
+                if isExpanded {
+                    expandedActivityIDs.remove(activity.id)
+                } else {
+                    expandedActivityIDs.insert(activity.id)
+                }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Image(systemName: activity.kind.symbolName)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(color(for: activity.kind))
+                        .frame(width: 14)
+                    Text(activity.kind == .message ? "Progress update" : activity.title)
+                        .font(MarrTypography.font(.code, weight: .semibold))
+                        .lineLimit(isExpanded ? nil : 1)
+                    Spacer(minLength: 0)
+                    if !activity.isComplete {
+                        ProgressView().controlSize(.mini)
+                    } else if !activity.detail.isEmpty {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded, !activity.detail.isEmpty {
+                Group {
+                    if activity.kind == .plan {
+                        MarkdownResponseView(source: activity.detail)
+                            .font(MarrTypography.font(.secondary))
+                    } else {
+                        Text(activity.detail)
+                            .font(MarrTypography.font(.code))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 21)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+    }
+
+    private func color(for kind: CodexActivity.Kind) -> Color {
+        switch kind {
+        case .status: .blue
+        case .plan: .purple
+        case .command: .blue
+        case .fileChange: .green
+        case .user: selectedAccent.color
+        case .message: .primary
+        case .error: .red
+        }
+    }
+
+    private var selectedAccent: MarrAccentColor {
+        MarrAccentColor.resolve(accentColor)
+    }
+}
+
 private struct AnswerPanelHistoryView: View {
     @ObservedObject var store: ConversationHistoryStore
     let currentConversationID: UUID
@@ -1597,7 +2646,7 @@ private struct AnswerPanelHistoryView: View {
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.secondary)
             Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No history yet" : "No matches")
-                .font(MarrTypography.body(size: 13, weight: .semibold))
+                .font(MarrTypography.font(.body, weight: .semibold))
                 .foregroundStyle(.primary.opacity(0.86))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -1612,7 +2661,7 @@ private struct AnswerPanelHistoryView: View {
         } label: {
             HStack(spacing: 12) {
                 Text(AnswerPanelConversationTitle.make(from: conversation.title))
-                    .font(MarrTypography.body(size: 14, weight: isCurrent ? .semibold : .medium))
+                    .font(MarrTypography.font(.body, weight: isCurrent ? .semibold : .medium))
                     .foregroundStyle(.primary.opacity(isCurrent ? 0.96 : 0.82))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -1620,7 +2669,7 @@ private struct AnswerPanelHistoryView: View {
                 Spacer(minLength: 12)
 
                 Text(dateLabel(for: conversation.updatedAt))
-                    .font(MarrTypography.body(size: 12.5, weight: .medium))
+                    .font(MarrTypography.font(.body, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -1751,20 +2800,44 @@ private struct PanelUtilityButtonLabel: View {
     }
 }
 
+private struct UserMessageContent: View {
+    let source: String
+
+    var body: some View {
+        let presentation = UserMessagePresentation(source)
+        VStack(alignment: .leading, spacing: 6) {
+            if let details = presentation.attachmentDetails, !details.isEmpty {
+                DisclosureGroup {
+                    Text(verbatim: details)
+                        .font(MarrTypography.font(.code))
+                        .textSelection(.enabled)
+                } label: {
+                    Label("Attachments", systemImage: "paperclip")
+                        .font(MarrTypography.font(.secondary))
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            MarkdownResponseView(source: presentation.body, compact: true)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 private struct MarkdownResponseView: View {
     let source: String
+    var compact = false
 
     private var blocks: [MarkdownBlock] {
         MarkdownBlockParser.parse(source)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: compact ? 5 : 9) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 blockView(block)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: compact ? nil : .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -1773,26 +2846,26 @@ private struct MarkdownResponseView: View {
         switch block {
         case let .heading(level, content):
             Text(inlineMarkdown(content))
-                .font(MarrTypography.display(size: headingSize(level), weight: .semibold))
+                .font(.system(size: compact ? 13 : headingSize(level), weight: .semibold))
                 .lineSpacing(2)
                 .padding(.top, level == 1 ? 2 : 0)
 
         case let .paragraph(content):
             Text(inlineMarkdown(content))
-                .font(MarrTypography.body(size: 13))
-                .lineSpacing(3)
+                .font(MarrTypography.font(.body))
+                .lineSpacing(compact ? 1 : 3)
 
         case let .unorderedList(items):
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("•")
-                            .font(MarrTypography.body(size: 13, weight: .semibold))
+                            .font(MarrTypography.font(.body))
                             .foregroundStyle(.secondary)
                         Text(inlineMarkdown(item))
-                            .font(MarrTypography.body(size: 13))
-                            .lineSpacing(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .font(MarrTypography.font(.body))
+                            .lineSpacing(compact ? 1 : 3)
+                            .frame(maxWidth: compact ? nil : .infinity, alignment: .leading)
                     }
                 }
             }
@@ -1802,13 +2875,13 @@ private struct MarkdownResponseView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("\(index + 1).")
-                            .font(MarrTypography.mono(size: 12, weight: .semibold))
+                            .font(MarrTypography.font(.body))
                             .foregroundStyle(.secondary)
                             .frame(minWidth: 17, alignment: .trailing)
                         Text(inlineMarkdown(item))
-                            .font(MarrTypography.body(size: 13))
-                            .lineSpacing(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .font(MarrTypography.font(.body))
+                            .lineSpacing(compact ? 1 : 3)
+                            .frame(maxWidth: compact ? nil : .infinity, alignment: .leading)
                     }
                 }
             }
@@ -1819,21 +2892,54 @@ private struct MarkdownResponseView: View {
                     .fill(.secondary.opacity(0.45))
                     .frame(width: 3)
                 Text(inlineMarkdown(content))
-                    .font(MarrTypography.body(size: 13))
-                    .italic()
+                    .font(MarrTypography.font(.body))
                     .foregroundStyle(.secondary)
-                    .lineSpacing(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineSpacing(compact ? 1 : 3)
+                    .frame(maxWidth: compact ? nil : .infinity, alignment: .leading)
             }
 
         case let .code(content):
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(verbatim: content)
-                    .font(MarrTypography.mono(size: 12))
-                    .lineSpacing(3)
+                    .font(MarrTypography.font(.code))
+                    .lineSpacing(compact ? 1 : 3)
                     .padding(10)
             }
             .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+        case let .table(headers, rows):
+            ScrollView(.horizontal, showsIndicators: false) {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
+                    GridRow {
+                        ForEach(headers.indices, id: \.self) { index in
+                            Text(inlineMarkdown(headers[index]))
+                                .font(MarrTypography.font(.body, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 7)
+                        }
+                    }
+                    .background(.primary.opacity(0.055))
+
+                    ForEach(rows.indices, id: \.self) { rowIndex in
+                        let row = rows[rowIndex]
+                        GridRow {
+                            ForEach(headers.indices, id: \.self) { columnIndex in
+                                Text(inlineMarkdown(columnIndex < row.count ? row[columnIndex] : ""))
+                                    .font(MarrTypography.font(.body))
+                                    .padding(.vertical, 7)
+                            }
+                        }
+                        .background(rowIndex.isMultiple(of: 2) ? Color.primary.opacity(0.018) : .clear)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .frame(minWidth: 260, alignment: .leading)
+            }
+            .background(.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(.separator.opacity(0.6), lineWidth: 1)
+            )
 
         case .divider:
             Rectangle()
@@ -1867,6 +2973,7 @@ private enum MarkdownBlock {
     case orderedList([String])
     case quote(String)
     case code(String)
+    case table(headers: [String], rows: [[String]])
     case divider
 }
 
@@ -1900,6 +3007,19 @@ private enum MarkdownBlockParser {
             if let heading = heading(from: trimmed) {
                 blocks.append(.heading(level: heading.level, content: heading.content))
                 index += 1
+                continue
+            }
+
+            if index + 1 < lines.count,
+               let headers = tableCells(from: lines[index]),
+               isTableDivider(lines[index + 1]) {
+                index += 2
+                var rows: [[String]] = []
+                while index < lines.count, let row = tableCells(from: lines[index]) {
+                    rows.append(row)
+                    index += 1
+                }
+                blocks.append(.table(headers: headers, rows: rows))
                 continue
             }
 
@@ -1960,6 +3080,7 @@ private enum MarkdownBlockParser {
             || heading(from: line) != nil
             || unorderedItem(from: line) != nil
             || orderedItem(from: line) != nil
+            || tableCells(from: line) != nil
             || isDivider(line)
     }
 
@@ -1990,6 +3111,25 @@ private enum MarkdownBlockParser {
         let compact = line.replacingOccurrences(of: " ", with: "")
         guard compact.count >= 3, let marker = compact.first else { return false }
         return ["-", "*", "_"].contains(String(marker)) && compact.allSatisfy { $0 == marker }
+    }
+
+    private static func tableCells(from line: String) -> [String]? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.contains("|") else { return nil }
+        let withoutOuterPipes = trimmed
+            .trimmingCharacters(in: CharacterSet(charactersIn: "|"))
+        let cells = withoutOuterPipes
+            .split(separator: "|", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        return cells.count >= 2 ? cells : nil
+    }
+
+    private static func isTableDivider(_ line: String) -> Bool {
+        guard let cells = tableCells(from: line) else { return false }
+        return cells.allSatisfy { cell in
+            let marker = cell.replacingOccurrences(of: ":", with: "")
+            return marker.count >= 3 && marker.allSatisfy { $0 == "-" }
+        }
     }
 }
 
@@ -2028,5 +3168,71 @@ private extension View {
             .foregroundStyle(isEnabled ? foregroundColor : .white)
             .background(isEnabled ? color : Color.secondary.opacity(0.46), in: Circle())
             .shadow(color: .black.opacity(isEnabled ? 0.18 : 0.06), radius: 8, x: 0, y: 4)
+    }
+}
+
+/// Observes trackpad navigation without replacing vertical scrolling or mouse dragging.
+private struct TwoFingerBackGesture: NSViewRepresentable {
+    let isEnabled: Bool
+    let onBack: () -> Void
+
+    func makeNSView(context: Context) -> BackGestureView { BackGestureView() }
+
+    func updateNSView(_ view: BackGestureView, context: Context) {
+        view.isEnabled = isEnabled
+        view.onBack = onBack
+    }
+
+    final class BackGestureView: NSView {
+        var isEnabled = false
+        var onBack: (() -> Void)?
+        private var monitor: Any?
+        private var horizontal: CGFloat = 0
+        private var vertical: CGFloat = 0
+        private var didNavigate = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                guard let self, self.isEnabled, event.window === self.window,
+                      event.hasPreciseScrollingDeltas,
+                      self.bounds.contains(self.convert(event.locationInWindow, from: nil))
+                else { return event }
+                if event.phase.contains(.began) {
+                    self.horizontal = 0
+                    self.vertical = 0
+                    self.didNavigate = false
+                }
+                guard !event.phase.isEmpty, !self.didNavigate else { return event }
+                self.horizontal += event.scrollingDeltaX
+                self.vertical += event.scrollingDeltaY
+                if self.horizontal > 70 && self.horizontal > abs(self.vertical) * 2 {
+                    self.didNavigate = true
+                    self.onBack?()
+                    return nil
+                }
+                return event
+            }
+        }
+
+        deinit {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
+    }
+}
+
+/// Only the empty header area moves the window; selectable content keeps mouse drags.
+private struct AnswerPanelDragRegion: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragView { DragView() }
+    func updateNSView(_ nsView: DragView, context: Context) {}
+
+    final class DragView: NSView {
+        override var mouseDownCanMoveWindow: Bool { false }
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
     }
 }

@@ -2,103 +2,41 @@ import AppKit
 import CoreText
 import SwiftUI
 
+/// Shared type scale for app chrome. Screenshot translation keeps its source typography.
 enum MarrTypography {
-    static let displayCandidates = [
-        "LXGWWenKai-Regular",
-        "LXGW WenKai",
-        "SmileySans-Oblique",
-        "Smiley Sans"
-    ]
+    enum Role {
+        case hero, brand, pageTitle, title, body, secondary, caption, badge, code, codeControl
 
-    static let bodyCandidates = [
-        "HarmonyOS Sans SC",
-        "HarmonyOS_Sans_SC",
-        "NotoSansCJKsc-Regular",
-        "Noto Sans CJK SC",
-        "Noto Sans SC"
-    ]
+        var size: CGFloat {
+            switch self {
+            case .hero: return 24
+            case .brand: return 20
+            case .pageTitle: return 16
+            case .title: return 14
+            case .body, .codeControl: return 13
+            case .secondary, .code: return 12
+            case .caption: return 11
+            case .badge: return 10
+            }
+        }
+    }
 
-    static let latinCandidates = [
-        "IBMPlexSans",
-        "IBMPlexSans-SmBld",
-        "IBM Plex Sans",
-        "IBM Plex Sans Text"
-    ]
+    static func font(_ role: Role, weight: Font.Weight = .regular) -> Font {
+        .system(
+            size: role.size,
+            weight: weight,
+            design: role == .code || role == .codeControl ? .monospaced : .default
+        )
+    }
 
-    static let monoCandidates = [
-        "IBMPlexMono",
-        "IBMPlexMono-SmBld",
-        "IBM Plex Mono",
-        "SF Mono"
-    ]
+    static var menuFont: NSFont { .menuFont(ofSize: Role.body.size) }
 
     static func registerBundledFonts() {
         let fontURLs = ["ttf", "otf"].flatMap {
             Bundle.main.urls(forResourcesWithExtension: $0, subdirectory: "Fonts") ?? []
         }
-
         for url in fontURLs {
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
-    }
-
-    static func display(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        preferredFont(candidates: displayCandidates, size: size, fallbackWeight: weight)
-    }
-
-    static func body(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        let candidates = boldish(weight) ? [
-            "HarmonyOS Sans SC",
-            "HarmonyOS_Sans_SC",
-            "NotoSansCJKsc-Medium",
-            "Noto Sans CJK SC",
-            "Noto Sans SC"
-        ] : bodyCandidates
-        return preferredFont(candidates: candidates, size: size, fallbackWeight: weight)
-    }
-
-    static func latin(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        let candidates = boldish(weight) ? [
-            "IBMPlexSans-SmBld",
-            "IBM Plex Sans",
-            "IBMPlexSans",
-            "IBM Plex Sans Text"
-        ] : latinCandidates
-        return preferredFont(candidates: candidates, size: size, fallbackWeight: weight)
-    }
-
-    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        let candidates = boldish(weight) ? [
-            "IBMPlexMono-SmBld",
-            "IBM Plex Mono",
-            "IBMPlexMono",
-            "SF Mono"
-        ] : monoCandidates
-        return preferredFont(candidates: candidates, size: size, fallbackWeight: weight, design: .monospaced)
-    }
-
-    static func caption(weight: Font.Weight = .regular) -> Font {
-        body(size: 12, weight: weight)
-    }
-
-    static func caption2(weight: Font.Weight = .regular) -> Font {
-        body(size: 11, weight: weight)
-    }
-
-    private static func preferredFont(
-        candidates: [String],
-        size: CGFloat,
-        fallbackWeight: Font.Weight,
-        design: Font.Design = .default
-    ) -> Font {
-        for candidate in candidates where NSFont(name: candidate, size: size) != nil {
-            return .custom(candidate, size: size).weight(fallbackWeight)
-        }
-
-        return .system(size: size, weight: fallbackWeight, design: design)
-    }
-
-    private static func boldish(_ weight: Font.Weight) -> Bool {
-        weight == .medium || weight == .semibold || weight == .bold || weight == .heavy || weight == .black
     }
 }

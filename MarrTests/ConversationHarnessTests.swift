@@ -8,6 +8,200 @@ import XCTest
 
 @MainActor
 final class ConversationHarnessTests: XCTestCase {
+    func testParallelAlignmentDoesNotOverwriteCompletedTranslations() {
+        let original = ImageTranslationReplacement(id: "r1", text: "原译文")
+        let repaired = ImageTranslationReplacement(
+            id: "r1", text: "原译文",
+            alignments: [ImageTranslationAlignment(tokenStart: 0, tokenEnd: 2, targetText: "原译文")]
+        )
+        let completed = ImageTranslationReplacement(id: "r1", text: "补全译文")
+        let added = ImageTranslationReplacement(id: "r2", text: "新增译文")
+        XCTAssertEqual(MarrController.reusingTranslationAlignments(
+            original: [original], aligned: [repaired], completed: [original, added]
+        ), [repaired, added])
+        XCTAssertEqual(MarrController.reusingTranslationAlignments(
+            original: [original], aligned: [repaired], completed: [completed, added]
+        ), [completed, added])
+    }
+
+    func testDeepLXSelectiveRangesKeepProtectedTokensAndPunctuationBoundaries() {
+        let words: [(String, Bool)] = [
+            ("Alice", true), ("writes", false), ("well", false),
+            ("API", true), ("!", false), ("42", true), ("Learn", false)
+        ]
+        let region = ImageTranslationSourceRegion(
+            id: "r001", sourceText: "Alice writes well API ! 42 Learn",
+            x: 0, y: 0, width: 1, height: 0.1,
+            tokens: words.map { text, protected in
+                ImageTranslationSourceToken(
+                    text: text, x: 0, y: 0, width: 0.1, height: 0.1,
+                    isProtected: protected
+                )
+            },
+            translationStrategy: .selective
+        )
+        XCTAssertEqual(MarrController.deepLXSelectiveRanges(for: region), [1..<3, 6..<7])
+    }
+
+    func testCodexModelsUseServerIdentifiersAndKeepFullCatalog() {
+        let models = CodexModelOption.parse([
+            ["id": "display-id", "model": "actual-model", "displayName": "Model A"],
+            ["id": "legacy-model", "hidden": true],
+            ["model": "actual-model", "displayName": "Duplicate"],
+            ["id": "", "displayName": "Invalid"],
+            ["id": "new-model", "displayName": "  "]
+        ])
+        XCTAssertEqual(models.map(\.id), ["actual-model", "legacy-model", "new-model"])
+        XCTAssertEqual(models.map(\.name), ["Model A", "legacy-model", "new-model"])
+    }
+
+    func testProjectHistoryRefreshUpdatesExistingTaskWithoutDuplicatesOrSelectionChanges() {
+        let suite = "MarrTests.Refresh.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CodexWorkbenchStore(defaults: defaults)
+        let workspace = store.upsertWorkspace(url: URL(fileURLWithPath: "/tmp/project"), bookmark: Data())
+        let date = Date()
+        let first = store.upsertRemoteTask(
+            workspaceID: workspace.id, threadID: "remote", title: "Before", state: .running,
+            statusMessage: "Running", createdAt: date, updatedAt: date
+        )
+        let selected = store.selectedTaskID
+        let refreshed = store.upsertRemoteTask(
+            workspaceID: workspace.id, threadID: "remote", title: "After", state: .completed,
+            statusMessage: "Done", createdAt: date, updatedAt: date.addingTimeInterval(1)
+        )
+        XCTAssertEqual(first.id, refreshed.id)
+        XCTAssertEqual(store.tasks.count, 1)
+        XCTAssertEqual(store.tasks.first?.title, "After")
+        XCTAssertEqual(store.tasks.first?.state, .completed)
+        XCTAssertEqual(store.selectedTaskID, selected)
+    }
+
+    func testAutomaticCodexRuntimePrefersDesktopAndHonorsExplicitOverride() {
+        let automatic = CodexRuntime.executableURLs(preferred: nil).map(\.path)
+        XCTAssertLessThan(automatic.firstIndex(of: "/Applications/ChatGPT.app/Contents/Resources/codex")!,
+                          automatic.firstIndex(of: "/opt/homebrew/bin/codex")!)
+        let explicit = URL(fileURLWithPath: "/opt/homebrew/bin/codex")
+        let paths = CodexRuntime.executableURLs(preferred: explicit).map(\.path)
+        XCTAssertEqual(paths.first, explicit.path)
+        XCTAssertEqual(paths.filter { $0 == explicit.path }.count, 1)
+    }
+
+    func testCodexReasoningOptionsComeFromSelectedModelCatalog() {
+        let models = CodexModelOption.parse([
+            ["model": "desktop-model", "displayName": "Desktop Model",
+             "supportedReasoningEfforts": [["reasoningEffort": "low"], ["reasoningEffort": "xhigh"]],
+             "defaultReasoningEffort": "xhigh"]
+        ])
+        XCTAssertEqual(models.first?.reasoningEfforts, ["low", "xhigh"])
+        XCTAssertEqual(models.first?.defaultReasoningEffort, "xhigh")
+    }
+
+    func testCachedCodexHistoryRetainsTurnGroupingAndTiming() {
+        let suite = "MarrTests.TurnMetadata.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CodexWorkbenchStore(defaults: defaults)
+        let workspace = store.upsertWorkspace(url: URL(fileURLWithPath: "/tmp/project"), bookmark: Data())
+        let task = store.createTask(workspaceID: workspace.id, prompt: "Hello")
+        store.updateTask(id: task.id, activities: [CodexActivity(
+            kind: .message, title: "Codex", detail: "Done", processingSeconds: 12, turnID: "turn-1"
+        )])
+        let restored = CodexWorkbenchStore(defaults: defaults)
+        XCTAssertEqual(restored.tasks.first?.activities.first?.turnID, "turn-1")
+        XCTAssertEqual(restored.tasks.first?.activities.first?.processingSeconds, 12)
+    }
+
+    func testProjectCatalogImportPreservesSelectionAndBookmarks() {
+        let suite = "MarrTests.Catalog.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CodexWorkbenchStore(defaults: defaults)
+        let original = store.upsertWorkspace(url: URL(fileURLWithPath: "/tmp/local"), bookmark: Data([1, 2]))
+        let projects: [[String: Any]] = [
+            ["name": "Renamed", "roots": [["path": "/tmp/local"]]],
+            ["name": "Remote", "roots": [["path": "/tmp/remote"]]],
+            ["name": "Invalid", "roots": [["path": "relative"]]]
+        ]
+        store.importProjects(projects)
+        store.importProjects(projects)
+        XCTAssertEqual(store.workspaces.count, 2)
+        XCTAssertEqual(store.selectedWorkspaceID, original.id)
+        XCTAssertEqual(store.selectedWorkspace?.bookmark, Data([1, 2]))
+        XCTAssertEqual(store.selectedWorkspace?.name, "Renamed")
+    }
+
+    func testCodexRuntimeDiscoversCurrentDesktopBundleLayout() {
+        XCTAssertTrue(CodexRuntime.automaticPaths.contains("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"))
+        let preferred = URL(fileURLWithPath: "/tmp/custom-codex")
+        XCTAssertEqual(CodexRuntime.executableURLs(preferred: preferred).first, preferred)
+    }
+
+    func testCodexConversationIncludesHistoryAndImageInputs() throws {
+        let image = ConversationImageAsset(image: makeImage(name: "capture.png", byte: 1))
+        let request = VisionRequest(systemPrompt: "Explain screenshots", messages: [
+            VisionMessage(role: .user, content: [.text("First question"), .image(image)]),
+            VisionMessage(role: .assistant, content: [.text("First answer")]),
+            VisionMessage(role: .user, content: [.text("Follow up")])
+        ])
+        let input = try CodexConversationClient.input(for: request)
+        XCTAssertEqual(input.filter { $0["type"] as? String == "image" }.count, 1)
+        XCTAssertTrue(input.contains { $0["text"] as? String == "First answer" })
+        XCTAssertEqual(input.last?["text"] as? String, "Follow up")
+    }
+
+    func testLiveCodexConversationThroughDesktopLogin() async throws {
+        guard ProcessInfo.processInfo.arguments.contains("--live-codex-conversation") else {
+            throw XCTSkip("Opt-in live inference check")
+        }
+        let controller = MarrController(client: OpenAIClient(), usesCodexForConversation: true)
+        let workspace = controller.codexWorkspace
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        for x in 0..<4 { for y in 0..<4 { bitmap.setColor(.red, atX: x, y: y) } }
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let image = ConversationImageAsset(data: png, mimeType: "image/png", fileName: "smoke.png")
+        let request = VisionRequest(systemPrompt: "Answer concisely.", messages: [
+            VisionMessage(role: .user, content: [.text("Reply with exactly MARR_OK."), .image(image)])
+        ])
+        let response = try await controller.submit(request: request)
+        XCTAssertTrue(response.contains("MARR_OK"), response)
+        print("LIVE_CONVERSATION_OK")
+        print("LIVE_CONVERSATION_MODELS=\(workspace.availableModels.map(\.id))")
+    }
+
+    func testLiveCodexSyncThroughSandboxedAppHelper() async throws {
+        guard ProcessInfo.processInfo.arguments.contains("--live-codex-sync") else {
+            throw XCTSkip("Opt-in local app-server integration check")
+        }
+        let controller = CodexWorkspaceController()
+        controller.useDesktopRuntime()
+        for _ in 0..<100 {
+            if !controller.isLoadingModels { break }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertNil(controller.modelLoadError, controller.statusMessage)
+        XCTAssertFalse(controller.availableModels.isEmpty, controller.statusMessage)
+        guard !controller.availableModels.isEmpty else { return }
+        controller.loadAllTaskHistory()
+        for _ in 0..<200 {
+            if !controller.isLoadingProjects && !controller.isLoadingTaskHistory { break }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertFalse(controller.isLoadingProjects, controller.statusMessage)
+        XCTAssertFalse(controller.isLoadingTaskHistory, controller.statusMessage)
+        XCTAssertNotNil(controller.lastProjectSyncAt, controller.statusMessage)
+        let repositoryPath = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().path
+        XCTAssertTrue(controller.savedWorkspaces.contains { $0.path == repositoryPath })
+        XCTAssertTrue(controller.savedTasks.contains { task in
+            controller.savedWorkspaces.contains { $0.id == task.workspaceID && $0.path == repositoryPath }
+        })
+        print("LIVE_SYNC_MODELS=\(controller.availableModels.map(\.id))")
+        print("LIVE_SYNC_PROJECTS=\(controller.savedWorkspaces.count)")
+    }
+
     func testHotKeyActivationGateIgnoresRepeatedPressUntilRelease() {
         var gate = HotKeyActivationGate()
 
@@ -172,6 +366,30 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(text(in: request.messages[1]), "A settings window.")
     }
 
+    func testUserMessagePresentationSeparatesCodexEnvelopeWithoutLosingMarkdown() {
+        let source = "# Files mentioned by the user:\n\n## shot.png: /tmp/shot.png\n\n## My request for Codex:\n1. **Keep bold**\n2. `Keep code`"
+        let message = UserMessagePresentation(source)
+        XCTAssertEqual(message.body, "1. **Keep bold**\n2. `Keep code`")
+        XCTAssertEqual(message.attachmentDetails, "## shot.png: /tmp/shot.png")
+        let plain = "# My request:\nA normal heading and /tmp/example path"
+        XCTAssertEqual(UserMessagePresentation(plain).body, plain)
+        XCTAssertNil(UserMessagePresentation(plain).attachmentDetails)
+        let incomplete = "# Files mentioned by the user:\n## shot.png: /tmp/shot.png"
+        XCTAssertEqual(UserMessagePresentation(incomplete).body, incomplete)
+    }
+
+    func testPinnedScreenshotsAreIncludedTogetherInFirstRequest() throws {
+        let session = ConversationSession()
+        let first = session.appendScreenshot(makeImage(name: "pinned-one.png", byte: 1))
+        let second = session.appendScreenshot(makeImage(name: "pinned-two.png", byte: 2))
+        let current = session.appendScreenshot(makeImage(name: "current.png", byte: 3))
+        let turn = try XCTUnwrap(session.beginTurn(question: "Compare all three screenshots."))
+        let request = try XCTUnwrap(session.request(for: turn))
+        XCTAssertEqual(session.turns.first?.imageIDs, [first, second, current])
+        XCTAssertEqual(imageCount(in: request.messages[0]), 3)
+        XCTAssertTrue(session.pendingImageIDs.isEmpty)
+    }
+
     func testNewScreenshotBelongsToNextTurnWithoutReplacingHistory() throws {
         let session = ConversationSession(
             initialImage: makeImage(name: "first.png", byte: 1),
@@ -331,14 +549,14 @@ final class ConversationHarnessTests: XCTestCase {
         try assertAnswerPanelDeliversWheelEvents(usesGlassSurfaces: false)
     }
 
-    func testDisabledGlassSelectsStandardMaterialMode() {
+    func testDisabledGlassSelectsUnfocusedMode() {
         XCTAssertEqual(
             MarrSurfaceMode.resolve(usesLiquidGlass: false, prefersClearGlass: true),
-            .standardMaterial
+            .unfocused
         )
         XCTAssertEqual(
             MarrSurfaceMode.resolve(usesLiquidGlass: false, prefersClearGlass: false),
-            .standardMaterial
+            .unfocused
         )
         XCTAssertEqual(
             MarrSurfaceMode.resolve(usesLiquidGlass: true, prefersClearGlass: true),
@@ -372,7 +590,7 @@ final class ConversationHarnessTests: XCTestCase {
             AnswerPanelConversationLayout.composerWidth,
             AnswerPanelConversationLayout.surfaceWidth - 64
         )
-        XCTAssertEqual(AnswerPanelConversationLayout.composerHeight, 40)
+        XCTAssertEqual(AnswerPanelConversationLayout.composerHeight, 44)
         XCTAssertEqual(
             AnswerPanelConversationLayout.assistantTextWidth,
             AnswerPanelConversationLayout.composerWidth - 8
@@ -463,7 +681,7 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(window.frame.width, 420, accuracy: 1)
         XCTAssertEqual(window.frame.height, 596, accuracy: 1)
         XCTAssertTrue(window.isMovable)
-        XCTAssertTrue(window.isMovableByWindowBackground)
+        XCTAssertFalse(window.isMovableByWindowBackground, "Answer text drags must select text rather than move the window")
 
         panel.setHistoryExpanded(true)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
@@ -474,6 +692,19 @@ final class ConversationHarnessTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
         XCTAssertEqual(window.frame.height, 596, accuracy: 1)
         XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
+
+        XCTAssertTrue(window.styleMask.contains(.resizable))
+        XCTAssertEqual(window.contentMinSize, NSSize(width: 420, height: 596))
+        XCTAssertEqual(AnswerPanelConversationLayout.windowPadding, 0)
+        XCTAssertEqual(AnswerPanelConversationLayout.surfaceWidth, 420)
+        XCTAssertEqual(AnswerPanelConversationLayout.surfaceHeight, 596)
+        window.setContentSize(NSSize(width: 680, height: 760))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        XCTAssertEqual(window.contentView?.bounds.width ?? 0, 680, accuracy: 1)
+        XCTAssertEqual(window.contentView?.bounds.height ?? 0, 760, accuracy: 1)
+        panel.setHistoryExpanded(true)
+        XCTAssertEqual(window.frame.width, 680, accuracy: 1)
+        XCTAssertEqual(window.frame.height, 760, accuracy: 1)
     }
 
     private func assertAnswerPanelDeliversWheelEvents(usesGlassSurfaces: Bool) throws {
@@ -727,46 +958,65 @@ final class ConversationHarnessTests: XCTestCase {
     }
 
     func testTranslationRegionPromptRequiresTokenRangeReplacements() throws {
-        let request = ImageTranslationPrompt.request(
-            for: makeImage(name: "lines.png", byte: 10),
-            regions: [
-                ImageTranslationSourceRegion(
-                    id: "r001",
-                    sourceText: "ConversationSession owns turns, immutable screenshot assets",
+        let region = ImageTranslationSourceRegion(
+            id: "r001",
+            sourceText: "ConversationSession owns turns, immutable screenshot assets",
+            x: 0.08,
+            y: 0.16,
+            width: 0.7,
+            height: 0.04,
+            lineRects: [
+                ImageTranslationLineRect(x: 0.08, y: 0.16, width: 0.7, height: 0.04)
+            ],
+            textRects: [
+                ImageTranslationLineRect(x: 0.08, y: 0.16, width: 0.36, height: 0.04)
+            ],
+            tokens: [
+                ImageTranslationSourceToken(
+                    text: "ConversationSession",
                     x: 0.08,
                     y: 0.16,
-                    width: 0.7,
+                    width: 0.2,
                     height: 0.04,
-                    lineRects: [
-                        ImageTranslationLineRect(x: 0.08, y: 0.16, width: 0.7, height: 0.04)
-                    ],
-                    textRects: [
-                        ImageTranslationLineRect(x: 0.08, y: 0.16, width: 0.36, height: 0.04)
-                    ],
-                    tokens: [
-                        ImageTranslationSourceToken(
-                            text: "ConversationSession",
-                            x: 0.08,
-                            y: 0.16,
-                            width: 0.2,
-                            height: 0.04,
-                            isProtected: true
-                        ),
-                        ImageTranslationSourceToken(
-                            text: "owns",
-                            x: 0.29,
-                            y: 0.16,
-                            width: 0.07,
-                            height: 0.04
-                        )
-                    ],
-                    codeRects: [
-                        ImageTranslationTokenRect(text: "ConversationSession", x: 0.08, y: 0.16, width: 0.2, height: 0.04)
-                    ]
+                    isProtected: true
+                ),
+                ImageTranslationSourceToken(
+                    text: "owns",
+                    x: 0.29,
+                    y: 0.16,
+                    width: 0.07,
+                    height: 0.04
                 )
+            ],
+            codeRects: [
+                ImageTranslationTokenRect(text: "ConversationSession", x: 0.08, y: 0.16, width: 0.2, height: 0.04)
             ]
         )
-        let userText = try XCTUnwrap(text(in: request.messages[0]))
+        let request = ImageTranslationPrompt.request(regions: [region])
+        let gatewayText = try XCTUnwrap(text(in: request.messages[0]))
+
+        XCTAssertFalse(request.messages[0].content.contains { content in
+            if case .image = content { return true }
+            return false
+        })
+        XCTAssertTrue(request.systemPrompt.contains("targetMarkdown, and alignments"))
+        XCTAssertTrue(request.systemPrompt.contains("partition every supplied indexed token exactly once"))
+        XCTAssertTrue(request.systemPrompt.contains("never just a matching keyword"))
+        XCTAssertTrue(request.systemPrompt.contains("Do not return coordinates"))
+        XCTAssertTrue(request.systemPrompt.contains(#""alignments":[{"#))
+        XCTAssertFalse(gatewayText.contains(#""bbox""#))
+        XCTAssertTrue(gatewayText.contains(#""codeTokens":["ConversationSession"]"#))
+        XCTAssertTrue(gatewayText.contains(#""tokens":[{"index":0,"text":"ConversationSession"},{"index":1,"text":"owns"}]"#))
+
+        let visualRequest = ImageTranslationPrompt.request(
+            for: makeImage(name: "lines.png", byte: 10),
+            regions: [region]
+        )
+        let userText = try XCTUnwrap(text(in: visualRequest.messages[0]))
+        XCTAssertTrue(visualRequest.messages[0].content.contains { content in
+            if case .image = content { return true }
+            return false
+        })
 
         let requiredSystemFragments = [
             "tokenStart is inclusive",
@@ -907,6 +1157,39 @@ final class ConversationHarnessTests: XCTestCase {
             replacement: replacement,
             region: region
         ))
+    }
+
+    func testTranslationAlignmentRepairSkipsAlreadyReliableRegions() throws {
+        let region = ImageTranslationSourceRegion(
+            id: "r001",
+            sourceText: "high altitude system",
+            x: 0.1,
+            y: 0.2,
+            width: 0.8,
+            height: 0.1,
+            tokens: [
+                ImageTranslationSourceToken(text: "high", x: 0.1, y: 0.2, width: 0.1, height: 0.04),
+                ImageTranslationSourceToken(text: "altitude", x: 0.21, y: 0.2, width: 0.15, height: 0.04),
+                ImageTranslationSourceToken(text: "system", x: 0.37, y: 0.2, width: 0.12, height: 0.04)
+            ]
+        )
+        let reliable = ImageTranslationReplacement(
+            id: "r001",
+            text: "高海拔系统",
+            alignments: [
+                ImageTranslationAlignment(tokenStart: 0, tokenEnd: 2, targetText: "高海拔"),
+                ImageTranslationAlignment(tokenStart: 2, tokenEnd: 3, targetText: "系统")
+            ]
+        )
+
+        XCTAssertTrue(ImageTranslationHighlightBuilder.regionsNeedingAlignmentRepair(
+            regions: [region],
+            replacements: [reliable]
+        ).isEmpty)
+        XCTAssertEqual(ImageTranslationHighlightBuilder.regionsNeedingAlignmentRepair(
+            regions: [region],
+            replacements: [ImageTranslationReplacement(id: "r001", text: "高海拔系统")]
+        ).map(\.id), ["r001"])
     }
 
     func testTranslationParserReadsMarkdownLayoutReplacements() throws {
@@ -1383,7 +1666,6 @@ final class ConversationHarnessTests: XCTestCase {
     }
 
     func testBlockPromptDoesNotProtectOrdinarySentenceInitialCapitalizedWord() throws {
-        let image = makeImage(name: "prompt.png", byte: 1)
         let region = ImageTranslationSourceRegion(
             id: "r001",
             sourceText: "Screenshots belong to the user turn.",
@@ -1404,7 +1686,7 @@ final class ConversationHarnessTests: XCTestCase {
             translationStrategy: .block
         )
 
-        let request = ImageTranslationPrompt.request(for: image, regions: [region])
+        let request = ImageTranslationPrompt.request(regions: [region])
         let promptText = request.messages
             .flatMap(\.content)
             .compactMap { content -> String? in
@@ -1416,7 +1698,7 @@ final class ConversationHarnessTests: XCTestCase {
             .joined(separator: "\n")
 
         XCTAssertTrue(request.systemPrompt.contains("Screenshots"))
-        XCTAssertTrue(promptText.contains("\"preserve\":false"))
+        XCTAssertFalse(promptText.contains("\"preserve\":true"))
     }
 
     func testTranslationMergeRejectsSegmentThatTouchesProtectedToken() throws {
@@ -1942,6 +2224,31 @@ final class ConversationHarnessTests: XCTestCase {
                 blockRect: CGRect(x: 0.025, y: 0.205, width: 0.93, height: 0.40)
             )
         )
+    }
+
+    func testCompareImageResizePreservesAspectRatioAndFitsScreen() {
+        let bounds = CGRect(x: 0, y: 0, width: 1200, height: 800)
+        let current = CGRect(x: 900, y: 600, width: 240, height: 120)
+        for scale: CGFloat in [0.01, 0.5, 1, 2, 10] {
+            let frame = TranslationCompareLayout.resizedOriginalFrame(
+                currentFrame: current, sourceSize: CGSize(width: 400, height: 200),
+                scale: scale, visibleFrame: bounds
+            )
+            XCTAssertEqual(frame.width / frame.height, 2, accuracy: 0.0001)
+            XCTAssertTrue(bounds.insetBy(dx: 8, dy: 8).contains(frame))
+            XCTAssertGreaterThanOrEqual(frame.width, 120)
+        }
+    }
+
+    func testCompareImageResizeRestoresSourceSize() {
+        let frame = TranslationCompareLayout.resizedOriginalFrame(
+            currentFrame: CGRect(x: 200, y: 200, width: 800, height: 400),
+            sourceSize: CGSize(width: 400, height: 200), scale: 1,
+            visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        )
+        XCTAssertEqual(frame.size, CGSize(width: 400, height: 200))
+        XCTAssertEqual(frame.midX, 600)
+        XCTAssertEqual(frame.midY, 400)
     }
 
     func testCompareLayoutPlacesOriginalToLeftWhenSpaceAllows() throws {
