@@ -1,0 +1,16 @@
+# Local visual QA captures and superseded rendering experiments.
+/*.png
+/archive/
+/scripts/build_native.py
+/scripts/render_native.swift
+/scripts/render_demos.py
+/dist/app.js
+/dist/embed-demo.js
+/dist/assets/*.mp4
+/dist/assets/*.vtt
+/dist/assets/*-poster.jpg
+/dist/assets/app-*.png
+/dist/assets/native-panel.png
+/dist/assets/native-annotations.png
+/dist/assets/native-tools.png
+/dist/assets/native-ask-panel.png
