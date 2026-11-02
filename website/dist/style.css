@@ -165,3 +165,31 @@ body{overflow-x:clip}
  .interlude-sticky{height:auto;min-height:0;padding:90px 24px}
  .chapter-actions .follow-scroll{display:none}
 }
+
+/* November preview: native companion and clearly scoped upcoming features. */
+.release-note{display:inline-flex;gap:12px;align-items:center;margin-top:18px;min-height:36px;font-size:12px;color:var(--link)}
+.updates{padding:92px var(--gutter);background:#f5f5f7;scroll-margin-top:60px}
+.updates-heading,.companion-feature,.update-grid{max-width:1120px;margin-inline:auto}
+.updates-heading{display:flex;align-items:baseline;justify-content:space-between;gap:20px;margin-bottom:38px}
+.updates-heading .eyebrow,.update-date{font-size:11px;letter-spacing:1.1px;color:#626269;margin:0}
+.companion-feature{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:40px}
+.preview-label{display:inline-block;font-size:11px;color:#466076;background:#e6edf3;padding:7px 11px;border-radius:20px}
+.companion-copy h2{font-size:clamp(38px,4.5vw,62px);line-height:1.16;letter-spacing:-.045em;margin:23px 0}
+.companion-copy>p{max-width:400px;font-size:17px;line-height:1.8;color:#626269}
+.companion-copy .preview-disclaimer{font-size:12px;line-height:1.7;margin-top:24px}
+.companion-copy .text-link{font-size:13px}
+.companion-demo{text-align:center;min-width:0}
+.companion-stage{position:relative;width:100%;aspect-ratio:4/3;max-height:360px}
+.companion-stage canvas{width:100%;height:100%;display:block;opacity:0}
+.companion-fallback{position:absolute;inset:0;width:80%;height:100%;margin:auto;object-fit:contain}
+.companion-demo.is-ready canvas{opacity:1}.companion-demo.is-ready .companion-fallback{visibility:hidden}
+#companion-caption{font-size:13px;line-height:1.6;color:#626269;min-height:21px;margin:0 0 18px}
+.companion-tools{display:flex;justify-content:center;flex-wrap:wrap;gap:5px}
+.companion-tools button{border:1px solid transparent;border-radius:24px;background:transparent;color:#626269;font-size:12px;padding:10px 14px;min-height:44px}
+.companion-tools button:hover{background:#e8e8ed;color:#1d1d1f}.companion-tools button[aria-pressed=true]{background:white;border-color:#dedee3;color:#1d1d1f;box-shadow:0 2px 6px #00000006}
+.motion-toggle{border:0;background:none;color:#626269;text-decoration:underline;text-underline-offset:3px;font-size:11px;min-height:44px;margin-top:8px}.motion-toggle[hidden]{display:none}
+.update-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px;margin-top:72px;border-top:1px solid #dcdce1;padding-top:34px}
+.update-index{font-size:10px;letter-spacing:1.1px;color:#626269}.update-grid h3{font-size:25px;line-height:1.4;letter-spacing:-.6px;margin:18px 0 15px}.update-grid p{font-size:14px;line-height:1.85;color:#626269;margin:0}
+.closing .demo-disclosure{max-width:580px;margin:32px auto 0;font-size:11px;line-height:1.8;color:#626269}
+@media(max-width:700px){.updates{padding:60px 24px}.updates-heading{align-items:flex-start;gap:12px}.updates-heading .eyebrow,.update-date{font-size:9px;letter-spacing:.5px}.companion-feature{grid-template-columns:1fr;gap:16px}.companion-copy h2{font-size:43px}.companion-copy>p{font-size:16px}.companion-stage{max-width:380px;margin:auto}.companion-tools button{padding-inline:12px}.update-grid{grid-template-columns:1fr;gap:28px;margin-top:36px;padding-top:28px}.update-grid article+article{border-top:1px solid #dedee3;padding-top:28px}.update-grid h3{font-size:24px}.update-grid h3 br{display:none}.nav nav>a[href="#highlights"]{display:none}}
+@media(max-width:700px){.nav nav>a[href="#updates"]{display:inline-flex}.nav nav>a[href="#translate"]{display:none}}
