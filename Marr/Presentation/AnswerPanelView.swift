@@ -1338,6 +1338,7 @@ struct AnswerPanelView: View {
         .help("Model for the next message: \(modelControlSummary)")
         .accessibilityLabel("Model for the next message")
         .accessibilityValue(modelControlSummary)
+        .accessibilityIdentifier("marr.composer.model.work")
     }
 
     private var reasoningEfforts: [String] {

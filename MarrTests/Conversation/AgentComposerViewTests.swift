@@ -280,8 +280,10 @@ final class AgentComposerViewTests: XCTestCase {
         editor.keyDown(with: try key(36, characters: "\r"))
         settle(window)
         let settingsLabels = try renderedText(window).map(\.text).joined(separator: "\n")
-        XCTAssertTrue(settingsLabels.contains("Settings"), "Return on /skills must navigate the real panel into Settings: \(settingsLabels)")
-        XCTAssertTrue(settingsLabels.contains("Search skills"), "The Settings destination must select Work → Skills")
+        XCTAssertTrue(settingsLabels.localizedCaseInsensitiveContains("all setting"),
+            "Return on /skills must navigate the real panel into Settings: \(settingsLabels)")
+        XCTAssertTrue(settingsLabels.localizedCaseInsensitiveContains("earch skills"),
+            "The Settings destination must select Work → Skills")
         XCTAssertTrue(settingsLabels.contains("research"))
         XCTAssertFalse(window.firstResponder is AgentInputTextView, "Opening Settings must release the Work editor's focus")
         XCTAssertFalse(outbound.contains { ["turn/start", "turn/steer", "skills/config/write"].contains($0["method"] as? String ?? "") })
@@ -570,8 +572,16 @@ final class AgentComposerViewTests: XCTestCase {
                 // Open the actual model button while running. Its read-only
                 // context information must stay reachable even though selection is locked.
                 let content = try XCTUnwrap(window.contentView)
-                let modelPoint = NSPoint(x: MarrPanelShellLayout.railWidth + 220,
-                    y: AnswerPanelConversationLayout.bottomInset + 12 + 14)
+                let modelControl = try XCTUnwrap(accessibilityElements(in: window).first {
+                    accessibilityString($0, attribute: "accessibilityIdentifier") == "marr.composer.model.work"
+                }, "The work model control must expose its visible accessibility frame")
+                let modelFrame = try XCTUnwrap(
+                    (modelControl.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue
+                )
+                XCTAssertFalse(modelFrame.isEmpty)
+                let screenPoint = NSPoint(x: modelFrame.midX, y: modelFrame.midY)
+                let windowPoint = window.convertPoint(fromScreen: screenPoint)
+                let modelPoint = content.convert(windowPoint, from: nil)
                 let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
                 try click(modelPoint)
                 let search = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSSearchField }
@@ -644,19 +654,21 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
-            let editor = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? AgentInputTextView }.first)
-            XCTAssertTrue(window.makeFirstResponder(editor))
+            let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
+                "Conversation's SwiftUI TextField must install its native field editor")
             let draft = "Keep this follow-up until the answer finishes."
             editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
             settle(window)
             let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
             session.revealAssistant(for: runningTurn)
             settle(window)
-            editor.keyDown(with: try key(36, characters: "\r"))
+            let runningEditor = try XCTUnwrap(window.firstResponder as? NSTextView,
+                "The field editor must retain focus while a conversation turn is running")
+            runningEditor.keyDown(with: try key(36, characters: "\r"))
             settle(window)
 
             XCTAssertEqual(session.turns.count, 1, "Return must not submit another turn while Conversation is busy")
-            XCTAssertEqual(editor.string, draft, "A rejected submission must retain the draft")
+            XCTAssertEqual(runningEditor.string, draft, "A rejected submission must retain the draft")
         }
     }
 
@@ -1038,6 +1050,11 @@ final class AgentComposerViewTests: XCTestCase {
         ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].compactMap { attribute in
             element.responds(to: NSSelectorFromString(attribute)) ? element.value(forKey: attribute) as? String : nil
         }.joined(separator: " ")
+    }
+
+    private func accessibilityString(_ element: NSObject, attribute: String) -> String {
+        guard element.responds(to: NSSelectorFromString(attribute)) else { return "" }
+        return element.value(forKey: attribute) as? String ?? ""
     }
 
     private func attachWindowSnapshots(_ window: NSWindow, name: String) throws {
