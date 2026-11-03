@@ -28,6 +28,7 @@ struct AnswerPanelView: View {
     @State var showsSettingsPanel = false
     @State var showsAccountMenu = false
     @State var settingsReturnSection: MarrPanelSection?
+    @State var directSettingsCapability: CodexCapabilitySection?
     @StateObject var settingsNavigation = MarrSettingsNavigation()
     @State var usesCodex = false
     @State private var localWorkMode = false
@@ -682,8 +683,35 @@ struct AnswerPanelView: View {
     }
 
     private var settingsContent: some View {
-        AnswerPanelSettingsView(controller: controller, navigation: settingsNavigation)
-            .foregroundStyle(MarrPanelColors.primary(for: colorScheme))
+        Group {
+            if let directSettingsCapability {
+                VStack(alignment: .leading, spacing: MarrSettingsLayout.sectionSpacing) {
+                    HStack {
+                        Text("Settings").marrTextStyle(.pageTitle)
+                        Spacer()
+                        Button("All settings") {
+                            self.directSettingsCapability = nil
+                            settingsNavigation.open(.work)
+                        }
+                    }
+                    CompactSettingsDivider()
+                    ScrollView {
+                        CodexCapabilitiesView(workspace: workSession, section: Binding(
+                            get: { self.directSettingsCapability ?? .skills },
+                            set: { section in
+                                self.directSettingsCapability = section
+                                settingsNavigation.capabilitySection = section
+                            }
+                        ), embedded: true)
+                    }
+                    .scrollIndicators(.automatic)
+                }
+                .padding(MarrSettingsLayout.contentPadding)
+            } else {
+                AnswerPanelSettingsView(controller: controller, navigation: settingsNavigation)
+            }
+        }
+        .foregroundStyle(MarrPanelColors.primary(for: colorScheme))
     }
 
     private var historySidebar: some View {
@@ -2174,6 +2202,7 @@ struct AnswerPanelView: View {
             guard command.name == "mcp" || noArguments() else { return false }
             let section: CodexCapabilitySection = command.name == "skills" ? .skills
                 : command.name == "plugins" ? .plugins : command.name == "apps" ? .apps : .mcp
+            directSettingsCapability = section
             settingsNavigation.openCapabilities(section)
             showSettings()
             return true

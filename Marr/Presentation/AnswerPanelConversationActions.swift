@@ -82,6 +82,7 @@ extension AnswerPanelView {
 
     func hideSettings() {
         settingsNavigation.query = ""
+        directSettingsCapability = nil
         withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
             showsSettingsPanel = false
             if let section = settingsReturnSection { navigation.section = section }
