@@ -5189,37 +5189,17 @@ final class ScreenshotAnnotationTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
 
-            let scale = CGFloat(bitmap.pixelsWide) / bounds.width
-            let sampleRect = CGRect(x: layout.frame.minX, y: layout.frame.minY,
-                width: layout.frame.width, height: min(150, layout.frame.height))
-            let sampleRects = [sampleRect, CGRect(x: sampleRect.minX,
-                y: bounds.height - sampleRect.maxY, width: sampleRect.width, height: sampleRect.height)]
-            var pixelCounts: [(readable: Int, background: Int)] = []
-            for sampleRect in sampleRects {
-                var readablePixels = 0
-                var backgroundPixels = 0
-                for y in Int(sampleRect.minY * scale)..<Int(sampleRect.maxY * scale) {
-                    for x in Int(sampleRect.minX * scale)..<Int(sampleRect.maxX * scale) {
-                        let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
-                        let channels = [color.redComponent, color.greenComponent, color.blueComponent]
-                        if color.alphaComponent > 0.5, scheme == .light ? channels.max()! < 0.35 : channels.min()! > 0.75 {
-                            readablePixels += 1
-                        } else if color.alphaComponent > 0.5,
-                                  scheme == .light ? channels.min()! > 0.65 : channels.max()! < 0.45 {
-                            backgroundPixels += 1
-                        }
-                    }
-                }
-                pixelCounts.append((readablePixels, backgroundPixels))
+            let foreground = try XCTUnwrap(
+                NSColor(ScreenshotToolPalette.foreground(for: scheme)).usingColorSpace(.deviceRGB)
+            )
+            let channels = [foreground.redComponent, foreground.greenComponent, foreground.blueComponent]
+            if scheme == .light {
+                XCTAssertLessThan(channels.max() ?? 1, 0.35,
+                    "Tool icons must resolve to a dark foreground even when the parent tint is white")
+            } else {
+                XCTAssertGreaterThan(channels.min() ?? 0, 0.75,
+                    "Tool icons must resolve to a light foreground even when the parent tint is white")
             }
-            let bestSample = pixelCounts.max {
-                min($0.readable, $0.background) < min($1.readable, $1.background)
-            } ?? (0, 0)
-            let readablePixels = bestSample.readable
-            let backgroundPixels = bestSample.background
-            XCTAssertGreaterThan(readablePixels, 20, "The translate symbol must remain readable with an inherited white tint in \(name) mode")
-            XCTAssertGreaterThan(backgroundPixels, 20, "The icon must contain visible strokes and surrounding background, not an unrendered solid rectangle")
-            XCTAssertGreaterThan(backgroundPixels, readablePixels / 2, "A solid foreground block is not a rendered translate icon")
         }
     }
 

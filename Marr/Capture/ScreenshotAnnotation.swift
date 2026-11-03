@@ -213,6 +213,12 @@ struct ScreenshotToolsLayout {
 
 }
 
+enum ScreenshotToolPalette {
+    static func foreground(for colorScheme: ColorScheme) -> Color {
+        MarrPanelColors.primary(for: colorScheme)
+    }
+}
+
 extension ScreenCapture {
     @MainActor
     static func annotating(_ image: PickedImage, with annotations: [ScreenshotAnnotation], selectionSize: CGSize) -> PickedImage? {
@@ -341,7 +347,7 @@ struct ScreenshotCompanionTools: View {
                 .overlay(alignment: .bottomTrailing) {
                     MarrIcon(expanded ? "chevron.down" : "plus", size: 9)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
-                        .foregroundStyle(MarrPanelColors.primary(for: colorScheme))
+                        .foregroundStyle(ScreenshotToolPalette.foreground(for: colorScheme))
                         .frame(width: 16, height: 16)
                         .background(MarrUI.Surface.raised, in: Circle())
                         .overlay(Circle().strokeBorder(MarrUI.Border.color(.standard), lineWidth: 0.5))
@@ -379,7 +385,7 @@ struct ScreenshotCompanionTools: View {
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             MarrIcon(symbol, size: MarrUI.Icon.toolbar)
-                .foregroundStyle(MarrPanelColors.primary(for: colorScheme))
+                .foregroundStyle(ScreenshotToolPalette.foreground(for: colorScheme))
                 .frame(width: 44, height: 44)
                 .contentShape(RoundedRectangle(cornerRadius: 18))
                 .background {
@@ -410,7 +416,7 @@ struct ScreenshotCompanionTools: View {
                     .strokeBorder(Color.accentColor, lineWidth: 2).allowsHitTesting(false)
             }
         }
-        .foregroundStyle(MarrPanelColors.primary(for: colorScheme))
+        .foregroundStyle(ScreenshotToolPalette.foreground(for: colorScheme))
         .opacity(disabled ? 0.3 : 1)
         .disabled(disabled)
         .onHover { inside in

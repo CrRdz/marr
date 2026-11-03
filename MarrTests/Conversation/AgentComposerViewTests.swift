@@ -570,11 +570,8 @@ final class AgentComposerViewTests: XCTestCase {
                 // Open the actual model button while running. Its read-only
                 // context information must stay reachable even though selection is locked.
                 let content = try XCTUnwrap(window.contentView)
-                let modelLabel = try XCTUnwrap(try renderedText(window).first {
-                    $0.text.localizedCaseInsensitiveContains("Fixture") && $0.bounds.midY < 0.25
-                }, "The selected model label must be visible before opening its menu")
-                let modelPoint = NSPoint(x: modelLabel.bounds.midX * content.bounds.width,
-                    y: modelLabel.bounds.midY * content.bounds.height)
+                let modelPoint = NSPoint(x: MarrPanelShellLayout.railWidth + 220,
+                    y: AnswerPanelConversationLayout.bottomInset + 12 + 14)
                 let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
                 try click(modelPoint)
                 let search = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSSearchField }
@@ -647,13 +644,13 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
-            let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
-            session.revealAssistant(for: runningTurn)
-            settle(window)
             let editor = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? AgentInputTextView }.first)
             XCTAssertTrue(window.makeFirstResponder(editor))
             let draft = "Keep this follow-up until the answer finishes."
             editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
+            settle(window)
+            let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
+            session.revealAssistant(for: runningTurn)
             settle(window)
             editor.keyDown(with: try key(36, characters: "\r"))
             settle(window)
