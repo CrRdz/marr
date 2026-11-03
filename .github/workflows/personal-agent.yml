@@ -1,0 +1,29 @@
+name: Personal Agent service
+on:
+  pull_request:
+    paths:
+      - 'services/personal-agent/**'
+      - '.github/workflows/personal-agent.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/personal-agent/**'
+      - '.github/workflows/personal-agent.yml'
+jobs:
+  service:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Service and protocol tests (no model calls)
+        run: python3 -m unittest discover -s services/personal-agent/tests -v
+      - name: Validate Compose and build runtime image
+        working-directory: services/personal-agent
+        run: |
+          docker compose --env-file .env.example config --quiet
+          docker build -t marr-agent-smoke .
+          docker run --rm --entrypoint codex marr-agent-smoke --version
