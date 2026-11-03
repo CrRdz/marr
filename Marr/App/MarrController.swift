@@ -34,10 +34,10 @@ struct InferenceCredentialState: Equatable {
 
 @MainActor
 final class MarrController: ObservableObject {
-    @Published private(set) var aiConnections = AIConnectionRegistry(connections: [],
+    @Published var aiConnections = AIConnectionRegistry(connections: [],
         conversation: .init(connectionID: "", modelID: ""))
     private var applyingAIConnection = false
-    @Published private(set) var gatewayPreset: GatewayPreset = .custom
+    @Published var gatewayPreset: GatewayPreset = .custom
     @Published private(set) var prefersAPIConversation = false
     var supportsRuntimeConversation: Bool { defaultsToCodexForConversation && codexWorkspace.codexSyncEnabled }
     var gatewayKeyCredential: InferenceCredential {
@@ -71,17 +71,17 @@ final class MarrController: ObservableObject {
     @Published var translationMaximumOutputTokens = 4_096 { didSet { scheduleInferenceSettingsSave() } }
     @Published var translationCodexModel = "" { didSet { scheduleInferenceSettingsSave(immediately: true) } }
     @Published var translationCodexReasoningEffort = "" { didSet { scheduleInferenceSettingsSave(immediately: true) } }
-    @Published private(set) var chatGPTProfiles: [ChatGPTProfile] = []
-    @Published private(set) var chatGPTActiveProfileID: String?
-    @Published private(set) var chatGPTModels: [ChatGPTModel] = []
-    @Published private(set) var chatGPTBusy = false
-    @Published private(set) var chatGPTModelsLoading = false
-    @Published private(set) var chatGPTModelError: String?
-    @Published private(set) var chatGPTStatus = ""
+    @Published var chatGPTProfiles: [ChatGPTProfile] = []
+    @Published var chatGPTActiveProfileID: String?
+    @Published var chatGPTModels: [ChatGPTModel] = []
+    @Published var chatGPTBusy = false
+    @Published var chatGPTModelsLoading = false
+    @Published var chatGPTModelError: String?
+    @Published var chatGPTStatus = ""
     @Published var showsChatGPTWelcome = false
-    private var chatGPTTask: Task<Void, Never>?
-    private var chatGPTRefreshTask: Task<Void, Never>?
-    private var chatGPTRefreshID: UUID?
+    var chatGPTTask: Task<Void, Never>?
+    var chatGPTRefreshTask: Task<Void, Never>?
+    var chatGPTRefreshID: UUID?
     @Published private(set) var activeInferenceRequests = 0
     @Published var statusMessage: String?
     @Published private(set) var loadingHistoryConversationID: UUID?
@@ -95,12 +95,12 @@ final class MarrController: ObservableObject {
     private let defaultsToCodexForConversation: Bool
     var usesCodexForConversation: Bool { supportsRuntimeConversation && !prefersAPIConversation && provider != .chatGPT }
     private let client: VisionAIClient
-    private let chatGPTSession: ChatGPTSession
+    let chatGPTSession: ChatGPTSession
     private let deepLXClient: DeepLXTranslationClient
     private let codexTranslationResponder: (@MainActor @Sendable (VisionRequest, String, String?) async throws -> String)?
     private let codexTranslationModelCatalog: (@MainActor @Sendable () async throws -> [CodexModelOption])?
     private let translationCache = TranslationResponseCache()
-    private let settingsRepository: InferenceSettingsRepository
+    let settingsRepository: InferenceSettingsRepository
     private var settingsSaveTask: Task<Void, Never>?
     private var translationTask: Task<Void, Never>?
     private var historyLoadTask: Task<Void, Never>?
@@ -1690,7 +1690,7 @@ final class MarrController: ObservableObject {
         return headers
     }
 
-    private func scheduleInferenceSettingsSave(immediately: Bool = false) {
+    func scheduleInferenceSettingsSave(immediately: Bool = false) {
         guard !applyingAIConnection else { return }
         if !aiConnections.conversation.connectionID.isEmpty {
             aiConnections.conversation.modelID = model
@@ -1764,7 +1764,7 @@ enum ResolvedTranslationConfiguration: Sendable {
     case deepLX(serverURL: String, accessToken: String)
 }
 
-private struct InferenceRequestConfiguration: Sendable {
+struct InferenceRequestConfiguration: Sendable {
     let provider: InferenceProvider
     let gatewayBaseURL: String
     let gatewayAuthScheme: GatewayAuthScheme
@@ -1805,191 +1805,6 @@ struct UserFacingError: LocalizedError {
 
     var errorDescription: String? {
         message
-    }
-}
-
-
-extension MarrController {
-    /// Saved non-secret connection metadata; displaying the menu never reads credentials.
-    var configuredGatewayProfiles: [(preset: GatewayPreset, profile: ProviderConnectionProfile)] {
-        GatewayPreset.allCases.compactMap { preset in
-            if provider == .gateway, preset == gatewayPreset {
-                return (preset, .init(baseURL: gatewayBaseURL, authScheme: gatewayAuthScheme,
-                    apiFormat: gatewayAPIFormat, model: model))
-            }
-            guard let profile = settingsRepository.providerProfile(preset) else { return nil }
-            return (preset, profile)
-        }
-    }
-
-    var activeChatGPTProfile: ChatGPTProfile? {
-        chatGPTProfiles.first { $0.id == chatGPTActiveProfileID }
-    }
-
-    var selectedChatGPTModel: ChatGPTModel? {
-        chatGPTModels.first { $0.slug == model }
-    }
-
-    func selectChatGPTModel(_ slug: String) {
-        guard chatGPTModels.contains(where: { $0.slug == slug }) else { return }
-        guard model != slug else { return }
-        model = slug
-        if !chatGPTReasoningEffort.isEmpty, let selectedChatGPTModel,
-           !selectedChatGPTModel.reasoningEfforts.contains(chatGPTReasoningEffort) {
-            chatGPTReasoningEffort = ""
-        }
-        if chatGPTFastMode, selectedChatGPTModel?.supportsFastMode != true { chatGPTFastMode = false }
-        scheduleInferenceSettingsSave(immediately: true)
-    }
-
-    func refreshChatGPTAccount(forceRefresh: Bool = false) {
-        guard !chatGPTBusy, chatGPTRefreshTask == nil else { return }
-        let requestID = UUID()
-        chatGPTRefreshID = requestID
-        chatGPTModelsLoading = true
-        chatGPTModelError = nil
-        chatGPTRefreshTask = Task {
-            defer {
-                if chatGPTRefreshID == requestID {
-                    chatGPTModelsLoading = false
-                    chatGPTRefreshTask = nil
-                    chatGPTRefreshID = nil
-                }
-            }
-            do { try await loadChatGPTAccount(forceRefresh: forceRefresh) }
-            catch is CancellationError { }
-            catch {
-                guard !Task.isCancelled, chatGPTRefreshID == requestID else { return }
-                chatGPTModelError = error.localizedDescription
-                let profiles = try? await self.chatGPTSession.profiles()
-                guard !Task.isCancelled, chatGPTRefreshID == requestID else { return }
-                if let profiles { chatGPTProfiles = profiles }
-                if activeChatGPTProfile?.canUsePlan != true { chatGPTModels = [] }
-            }
-        }
-    }
-
-    func signInWithChatGPT(newAccount: Bool = false, requestConsent: Bool = false) {
-        guard canChangeChatGPTAccount() else { return }
-        runChatGPTAction {
-            _ = try await self.chatGPTSession.signIn(
-                profileID: newAccount ? nil : self.chatGPTActiveProfileID,
-                requestConsent: requestConsent,
-                openBrowser: { NSWorkspace.shared.open($0) })
-            try await self.loadChatGPTAccount()
-            if self.activeChatGPTProfile?.canUsePlan == true {
-                if !UserDefaults.standard.bool(forKey: "chatgpt.plan.welcomeShown") {
-                    self.showsChatGPTWelcome = true
-                    UserDefaults.standard.set(true, forKey: "chatgpt.plan.welcomeShown")
-                }
-            }
-        }
-    }
-
-    func selectChatGPTProfile(_ id: String) {
-        guard canChangeChatGPTAccount() else { return }
-        runChatGPTAction {
-            try await self.chatGPTSession.selectProfile(id)
-            try await self.loadChatGPTAccount()
-        }
-    }
-
-    func reconnectChatGPTProfile(_ id: String, requestConsent: Bool = false) {
-        guard canChangeChatGPTAccount() else { return }
-        runChatGPTAction {
-            _ = try await self.chatGPTSession.signIn(profileID: id, requestConsent: requestConsent, openBrowser: { NSWorkspace.shared.open($0) })
-            try await self.loadChatGPTAccount()
-        }
-    }
-
-    func signOutOfChatGPT(profileID: String? = nil) {
-        guard canChangeChatGPTAccount() else { return }
-        guard let id = profileID ?? chatGPTActiveProfileID else { return }
-        runChatGPTAction {
-            let revoked = try await self.chatGPTSession.signOut(profileID: id)
-            try await self.loadChatGPTAccount()
-            self.chatGPTStatus = revoked ? "Signed out of ChatGPT."
-                : "Signed out locally. Remote revocation was not confirmed; disconnect Marr in ChatGPT settings."
-        }
-    }
-
-    func cancelChatGPTSignIn() {
-        chatGPTTask?.cancel()
-        cancelChatGPTRefresh()
-    }
-
-    private func cancelChatGPTRefresh() {
-        chatGPTRefreshTask?.cancel()
-        chatGPTRefreshTask = nil
-        chatGPTRefreshID = nil
-        chatGPTModelsLoading = false
-    }
-
-    private func canChangeChatGPTAccount() -> Bool {
-        guard activeInferenceRequests == 0 else {
-            chatGPTStatus = "Wait for the active Conversation or translation request to finish before changing accounts."
-            return false
-        }
-        return true
-    }
-
-    private func runChatGPTAction(_ action: @escaping @MainActor () async throws -> Void) {
-        guard !chatGPTBusy else { return }
-        cancelChatGPTRefresh()
-        chatGPTBusy = true
-        chatGPTStatus = ""
-        chatGPTModelError = nil
-        chatGPTTask = Task {
-            defer { chatGPTBusy = false; chatGPTTask = nil }
-            do { try await action() }
-            catch is CancellationError { chatGPTStatus = "ChatGPT sign-in cancelled." }
-            catch {
-                chatGPTStatus = error.localizedDescription
-                // Include registrations retained after a failed code exchange so users can retry them.
-                chatGPTProfiles = (try? await self.chatGPTSession.profiles()) ?? chatGPTProfiles
-                synchronizeChatGPTConnections(chatGPTProfiles, activeID: chatGPTActiveProfileID)
-            }
-        }
-    }
-
-    private func loadChatGPTAccount(forceRefresh: Bool = false) async throws {
-        let profiles = try await self.chatGPTSession.profiles()
-        let profileID = try await self.chatGPTSession.activeProfileID()
-        try Task.checkCancellation()
-        if profileID != chatGPTActiveProfileID { chatGPTModels = [] }
-        chatGPTProfiles = profiles
-        chatGPTActiveProfileID = profileID
-        synchronizeChatGPTConnections(profiles, activeID: profileID)
-        let catalogProfile = provider == .chatGPT
-            ? profiles.first { $0.id == defaultAIConnection?.chatGPTProfileID } ?? activeChatGPTProfile
-            : activeChatGPTProfile
-        if let profile = catalogProfile, profile.canUsePlan {
-            if let cached = try await self.chatGPTSession.cachedModels(profileID: profile.id) {
-                try Task.checkCancellation()
-                chatGPTModels = cached
-            }
-            let models = try await self.chatGPTSession.models(profileID: profile.id, forceRefresh: forceRefresh)
-            try Task.checkCancellation()
-            guard !Task.isCancelled else { return }
-            chatGPTModels = models
-            if let index = aiConnections.connections.firstIndex(where: { $0.chatGPTProfileID == profile.id }) {
-                aiConnections.connections[index].models = models.map(\.slug)
-                settingsRepository.saveAIConnections(aiConnections)
-            }
-            if provider == .chatGPT, defaultAIConnection?.chatGPTProfileID == profile.id, !chatGPTModels.contains(where: { $0.slug == model }) { model = chatGPTModels.first?.slug ?? "" }
-            if provider == .chatGPT, defaultAIConnection?.chatGPTProfileID == profile.id, !chatGPTReasoningEffort.isEmpty,
-               selectedChatGPTModel?.reasoningEfforts.contains(chatGPTReasoningEffort) != true {
-                chatGPTReasoningEffort = ""
-            }
-            if provider == .chatGPT, defaultAIConnection?.chatGPTProfileID == profile.id, chatGPTFastMode, selectedChatGPTModel?.supportsFastMode != true {
-                chatGPTFastMode = false
-            }
-            if translationProvider == .chatGPT, !chatGPTModels.contains(where: { $0.slug == translationModel }) {
-                translationModel = chatGPTModels.first?.slug ?? ""
-            }
-        } else {
-            chatGPTModels = []
-        }
     }
 }
 
@@ -2105,7 +1920,7 @@ extension MarrController {
             model: resolved.model, connection: resolved.connection)
     }
 
-    private func synchronizeChatGPTConnections(_ profiles: [ChatGPTProfile], activeID: String?) {
+    func synchronizeChatGPTConnections(_ profiles: [ChatGPTProfile], activeID: String?) {
         if let index = aiConnections.connections.firstIndex(where: { $0.id == "legacy.chatgpt" }),
            aiConnections.connections[index].chatGPTProfileID == nil, let activeID {
             aiConnections.connections[index].chatGPTProfileID = activeID

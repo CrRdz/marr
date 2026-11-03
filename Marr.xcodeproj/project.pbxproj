@@ -149,6 +149,13 @@
 		B11000000000000000000005 = {isa = PBXBuildFile; productRef = B11000000000000000000006 /* RiveRuntime */;};
 		B11000000000000000000008 = {isa = PBXBuildFile; fileRef = B11000000000000000000009 /* MarrCompanionTests.swift */;};
 		B1100000000000000000000A = {isa = PBXBuildFile; productRef = B1100000000000000000000B /* RiveRuntime */;};
+		C0DE00000000000000000001 /* AIAccountController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010001 /* AIAccountController.swift */; };
+		C0DE00000000000000000002 /* AgentCompletionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010002 /* AgentCompletionPanel.swift */; };
+		C0DE00000000000000000003 /* AnswerPanelConversationActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010003 /* AnswerPanelConversationActions.swift */; };
+		C0DE00000000000000000004 /* AnswerPanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010004 /* AnswerPanelPlacement.swift */; };
+		C0DE00000000000000000005 /* TranslationCompareLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010005 /* TranslationCompareLayout.swift */; };
+		C0DE00000000000000000006 /* TranslationTextDrawing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010006 /* TranslationTextDrawing.swift */; };
+		C0DE00000000000000000007 /* MarrWorkspaceConversationRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000010007 /* MarrWorkspaceConversationRows.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -297,6 +304,13 @@
 		B11000000000000000000002 /* MarrCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrCompanion.swift; sourceTree = "<group>"; };
 		B11000000000000000000004 /* MarrCompanion.riv */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/MarrCompanion.riv; sourceTree = "<group>"; };
 		B11000000000000000000009 /* MarrCompanionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrCompanionTests.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010001 /* AIAccountController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAccountController.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010002 /* AgentCompletionPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCompletionPanel.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010003 /* AnswerPanelConversationActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanelConversationActions.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010004 /* AnswerPanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanelPlacement.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010005 /* TranslationCompareLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationCompareLayout.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010006 /* TranslationTextDrawing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationTextDrawing.swift; sourceTree = "<group>"; };
+		C0DE00000000000000010007 /* MarrWorkspaceConversationRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrWorkspaceConversationRows.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -405,6 +419,7 @@
 				1A0000102C00000000000001 /* MarrApp.swift */,
 				A01120260000000000000001 /* MarrWelcome.swift */,
 				1A0000162C00000000000001 /* MarrController.swift */,
+				C0DE00000000000000010001 /* AIAccountController.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -431,6 +446,7 @@
 				D170703E80C07F497F2F610C /* ConversationContext.swift */,
 				1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */,
 				1A00001C2C00000000000001 /* ConversationSession.swift */,
+				C0DE00000000000000010002 /* AgentCompletionPanel.swift */,
 			);
 			path = Conversation;
 			sourceTree = "<group>";
@@ -485,6 +501,8 @@
 				B9F5AB148CBD85D548C9BF02 /* MarrToolActivity.swift */,
 				CD95EE9D7CE8475F0560E507 /* UserMessageContent.swift */,
 				C3640EF9CA014E8DB58F70F2 /* UserMessagePresentation.swift */,
+				C0DE00000000000000010003 /* AnswerPanelConversationActions.swift */,
+				C0DE00000000000000010004 /* AnswerPanelPlacement.swift */,
 			);
 			path = Presentation;
 			sourceTree = "<group>";
@@ -525,6 +543,8 @@
 				1D0000122C00000000000001 /* TranslationRecognition.swift */,
 				1D0000142C00000000000001 /* TranslationRenderer.swift */,
 				B7184AD4D280E180DDECEB51 /* TranslationTypography.swift */,
+				C0DE00000000000000010005 /* TranslationCompareLayout.swift */,
+				C0DE00000000000000010006 /* TranslationTextDrawing.swift */,
 			);
 			path = Translation;
 			sourceTree = "<group>";
@@ -546,6 +566,7 @@
 				10F101C50831161F1566D4B3 /* WorkbenchModels.swift */,
 				1F0000102C00000000000001 /* WorkbenchStore.swift */,
 				E83BB28EB3ADA8C9B2465B28 /* WorkspaceTaskBrowser.swift */,
+				C0DE00000000000000010007 /* MarrWorkspaceConversationRows.swift */,
 			);
 			path = Workspace;
 			sourceTree = "<group>";
@@ -898,6 +919,13 @@
 				1A0000222C00000000000001 /* SettingsView.swift in Sources */,
 				1A0000042C00000000000001 /* PickedImage.swift in Sources */,
 				B7FCDCB3BC7946DAB6C62346 /* AttachmentImport.swift in Sources */,
+				C0DE00000000000000000001 /* AIAccountController.swift in Sources */,
+				C0DE00000000000000000002 /* AgentCompletionPanel.swift in Sources */,
+				C0DE00000000000000000003 /* AnswerPanelConversationActions.swift in Sources */,
+				C0DE00000000000000000004 /* AnswerPanelPlacement.swift in Sources */,
+				C0DE00000000000000000005 /* TranslationCompareLayout.swift in Sources */,
+				C0DE00000000000000000006 /* TranslationTextDrawing.swift in Sources */,
+				C0DE00000000000000000007 /* MarrWorkspaceConversationRows.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

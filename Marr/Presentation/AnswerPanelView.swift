@@ -10,45 +10,45 @@ struct AnswerPanelView: View {
         let workspacePath: String?
     }
     @ObservedObject var controller: MarrController
-    @ObservedObject private var workSession: RuntimeWorkspaceController
+    @ObservedObject var workSession: RuntimeWorkspaceController
     @ObservedObject private var composerDraftStore: ComposerDraftStore
     @ObservedObject var session: ConversationSession
-    @ObservedObject private var historyStore: ConversationHistoryStore
+    @ObservedObject var historyStore: ConversationHistoryStore
     let requestCoordinator: ConversationRequestCoordinator
     let titleCoordinator: ConversationTitleCoordinator
     @ObservedObject var navigation: AnswerPanelNavigation
     let actions: AnswerPanelActions
 
-    @State private var question = ""
-    @State private var loadedDraftKey: ComposerDraftKey?
-    @State private var hasSubmittedInitialQuestion = false
-    @State private var editingTurnID: UUID?
-    private var showsHistoryPanel: Bool { navigation.isHistoryExpanded }
+    @State var question = ""
+    @State var loadedDraftKey: ComposerDraftKey?
+    @State var hasSubmittedInitialQuestion = false
+    @State var editingTurnID: UUID?
+    var showsHistoryPanel: Bool { navigation.isHistoryExpanded }
     private var hasSidebarColumn: Bool { showsHistoryPanel || navigation.sidebarRevealWidth > 0 }
-    @State private var showsSettingsPanel = false
-    @State private var showsAccountMenu = false
-    @State private var settingsReturnSection: MarrPanelSection?
-    @StateObject private var settingsNavigation = MarrSettingsNavigation()
-    @State private var usesCodex = false
+    @State var showsSettingsPanel = false
+    @State var showsAccountMenu = false
+    @State var settingsReturnSection: MarrPanelSection?
+    @StateObject var settingsNavigation = MarrSettingsNavigation()
+    @State var usesCodex = false
     @State private var localWorkMode = false
     @State private var showsGlobalSearch = false
     @State private var showsNewWorkspace = false
     private var isWorkMode: Bool { usesCodex || localWorkMode }
     private var localWorkspace: LocalWorkspaceRecord? { historyStore.workspaces.first { $0.id == session.workspaceID } }
     @State private var showsCodexTaskBrowser = false
-    @State private var showsChatDetails = false
-    @State private var showsRenameChat = false
+    @State var showsChatDetails = false
+    @State var showsRenameChat = false
     @State private var renamingTaskID: UUID?
     @State private var renamedChatTitle = ""
     @State private var conversationTitleHovered = false
     @StateObject private var conversationScrollChrome = MarrConversationScrollChrome()
     @State private var selectedSlashCommandIndex = 0
-    @State private var dismissedSlashMenuInput: String?
+    @State var dismissedSlashMenuInput: String?
     @State private var attachmentErrorMessage: String?
     @State private var isAttachmentDropTargeted = false
-    @State private var workAttachments: [ConversationImageAsset] = []
+    @State var workAttachments: [ConversationImageAsset] = []
     @State private var composerSelection = NSRange(location: 0, length: 0)
-    @State private var dismissedCompletion: AgentComposerToken?
+    @State var dismissedCompletion: AgentComposerToken?
     @State private var commandFeedback: String?
     @State private var showsGoalEditor = false
     @State private var workEditorFocused = false
@@ -56,7 +56,7 @@ struct AnswerPanelView: View {
     @State private var mentionCapabilitiesWorkspace: String?
     @State private var pendingFileQuery: String?
     @Namespace private var modeSelection
-    @Environment(\.accessibilityReduceMotion) private var reducesMotion
+    @Environment(\.accessibilityReduceMotion) var reducesMotion
     @Environment(\.accessibilityReduceTransparency) private var reducesTransparency
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.colorScheme) private var colorScheme
@@ -66,7 +66,7 @@ struct AnswerPanelView: View {
     @FocusState private var questionFocused: Bool
 
     @State private var panelWidth = AnswerPanelConversationLayout.panelSize.width
-    @State private var activeComposerMenu: MarrComposerMenuKind?
+    @State var activeComposerMenu: MarrComposerMenuKind?
     @State private var morphMenu: MarrComposerMenuKind?
     @State private var menuExpansion: CGFloat = 0
     @State private var menuTransitionID = UUID()
@@ -869,7 +869,7 @@ struct AnswerPanelView: View {
         .onKeyPress(.rightArrow) { selectMode(isWork: true); return .handled }
     }
 
-    private func selectMode(isWork: Bool) {
+    func selectMode(isWork: Bool) {
         guard !session.hasLoadingTurn else { return }
         persistComposerDraft()
         if !isWork, session.workspaceID != nil || session.isDeleted {
@@ -886,7 +886,7 @@ struct AnswerPanelView: View {
         setQuestionFocus(true)
     }
 
-    private func selectCodexMode() {
+    func selectCodexMode() {
         guard workSession.codexSyncEnabled else { return }
         controller.cancelPendingHistoryLoad()
         usesCodex = true
@@ -1608,7 +1608,7 @@ struct AnswerPanelView: View {
         else { setComposerMenu(menu) }
     }
 
-    private func dismissComposerMenu() {
+    func dismissComposerMenu() {
         activeComposerMenu = nil
         if morphMenu == nil { restoreComposerFocus() }
     }
@@ -1854,12 +1854,12 @@ struct AnswerPanelView: View {
         }
     }
 
-    private var workCompletionToken: AgentComposerToken? {
+    var workCompletionToken: AgentComposerToken? {
         guard usesCodex, composerSelection.length == 0 else { return nil }
         return AgentComposerCompletion.token(in: question, caretUTF16: composerSelection.location)
     }
 
-    private var showsWorkCompletion: Bool {
+    var showsWorkCompletion: Bool {
         guard usesCodex, workEditorFocused, !showsSettingsPanel, !showsCodexTaskBrowser,
               activeComposerMenu == nil, !showsGoalEditor, let token = workCompletionToken else { return false }
         return token != dismissedCompletion
@@ -2042,13 +2042,13 @@ struct AnswerPanelView: View {
         }
     }
 
-    private func setComposerText(_ text: String) {
+    func setComposerText(_ text: String) {
         question = text
         composerSelection = NSRange(location: text.utf16.count, length: 0)
         dismissedCompletion = nil
     }
 
-    private func finishAcceptedWorkCommand() {
+    func finishAcceptedWorkCommand() {
         setComposerText("")
         persistComposerDraft()
         if loadedDraftKey != workSession.composerDraftKey {
@@ -2074,7 +2074,7 @@ struct AnswerPanelView: View {
         persistComposerDraft()
     }
 
-    private func persistComposerDraft() {
+    func persistComposerDraft() {
         guard let key = loadedDraftKey else { return }
         if let id = key.conversationID, historyStore.deletedConversationIDs.contains(id) { return }
         var draft = composerDraftStore.draft(for: key)
@@ -2097,7 +2097,7 @@ struct AnswerPanelView: View {
         loadComposerDraft(for: key)
     }
 
-    private func loadComposerDraft(for key: ComposerDraftKey) {
+    func loadComposerDraft(for key: ComposerDraftKey) {
         var incoming = composerDraftStore.draft(for: key)
         if !key.isWork {
             let pending = session.pendingImageIDs.compactMap { session.images[$0] }
@@ -2125,7 +2125,7 @@ struct AnswerPanelView: View {
         return "\(project) · \(task)"
     }
 
-    private func setQuestionFocus(_ focused: Bool) {
+    func setQuestionFocus(_ focused: Bool) {
         questionFocused = focused && navigation.section == .chats && !usesCodex
         workEditorFocused = focused && navigation.section == .chats && usesCodex
     }
@@ -2134,7 +2134,7 @@ struct AnswerPanelView: View {
 
     /// Commands are client actions. Never leak an unknown or unsupported command
     /// into a model request as if it had been handled by the terminal frontend.
-    private func dispatchWorkCommand(_ input: String) -> Bool {
+    func dispatchWorkCommand(_ input: String) -> Bool {
         let parts = input.split(maxSplits: 1, whereSeparator: \.isWhitespace)
         guard let name = parts.first, let command = AgentComposerCatalog.command(named: String(name)) else {
             commandFeedback = "Unknown command. Type / to browse commands, or /help to see support details."
@@ -2316,7 +2316,7 @@ struct AnswerPanelView: View {
         ConversationSlashCommand.matching(question)
     }
 
-    private var showsSlashCommandMenu: Bool {
+    var showsSlashCommandMenu: Bool {
         !usesCodex && activeComposerMenu == nil && !slashCommandMatches.isEmpty && dismissedSlashMenuInput != question
     }
 
@@ -2369,312 +2369,5 @@ struct AnswerPanelView: View {
 
     private var selectedAccent: MarrAccentColor {
         MarrAccentColor.resolve(accentColor)
-    }
-
-    private func showHistorySearch() {
-        historyStore.reload()
-        showsSettingsPanel = false
-        navigation.setHistoryExpanded(true)
-    }
-
-    private func hideHistorySearch() {
-        navigation.setHistoryExpanded(false)
-        DispatchQueue.main.async {
-            guard !showsHistoryPanel else { return }
-            setQuestionFocus(true)
-        }
-    }
-
-    private var accountMenuEntries: [MarrAccountMenuEntry] {
-        let entries = controller.aiConnections.connections.map { connection in
-            MarrAccountMenuEntry(id: connection.id, title: connection.name,
-                detail: connection.kind == .deepLX ? "Translation connection" : "AI connection",
-                iconName: connection.iconName, section: .conversation)
-        }
-        return entries.isEmpty ? [.init(id: "setup", title: "Add connection", detail: "AI & Models",
-            iconName: nil, section: .conversation)] : entries
-    }
-
-    private var railAccountName: String {
-        if controller.usesCodexForConversation { return "Codex" }
-        return controller.defaultAIConnection?.name ?? "Marr"
-    }
-
-    private var railAccountDetail: String {
-        if controller.usesCodexForConversation { return "Work integration" }
-        return controller.model.isEmpty ? "Choose a model" : controller.model
-    }
-
-    private var railAccountInitial: String? {
-        guard controller.activeChatGPTProfile?.isSignedIn == true
-            || (workSession.codexSyncEnabled && workSession.account?.email != nil) else { return nil }
-        return railAccountName.first.map { String($0).uppercased() }
-    }
-
-    private func showSettings() {
-        if !showsSettingsPanel { settingsReturnSection = navigation.section }
-        navigation.section = .chats
-        controller.cancelPendingHistoryLoad()
-        setQuestionFocus(false)
-        navigation.setHistoryExpanded(false)
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            showsSettingsPanel = true
-        }
-    }
-
-    private func showUtilityDestination(_ destination: AnswerPanelUtilityDestination?) {
-        controller.cancelPendingHistoryLoad()
-        if destination != nil { navigation.section = .chats }
-        switch destination {
-        case .history:
-            showHistorySearch()
-        case .settings:
-            showSettings()
-        case .aiModels:
-            settingsNavigation.open(.conversation)
-            showSettings()
-        case .codex:
-            guard workSession.codexSyncEnabled else { return }
-            navigation.setHistoryExpanded(false)
-            selectCodexMode()
-        case .conversation, .work:
-            navigation.setHistoryExpanded(false)
-            showsSettingsPanel = false
-            selectMode(isWork: destination == .work)
-        case nil:
-            break
-        }
-    }
-
-    private func hideSettings() {
-        settingsNavigation.query = ""
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-            showsSettingsPanel = false
-            if let section = settingsReturnSection { navigation.section = section }
-            settingsReturnSection = nil
-        }
-        DispatchQueue.main.async {
-            guard !showsSettingsPanel, navigation.section == .chats else { return }
-            setQuestionFocus(true)
-        }
-    }
-
-    private func backFromSettings() {
-        if !settingsNavigation.back() { hideSettings() }
-    }
-
-    private func handleEscape() {
-        if showsAccountMenu { showsAccountMenu = false; return }
-        if navigation.section == .personalAgent { navigation.section = .chats; return }
-        if activeComposerMenu != nil { dismissComposerMenu(); return }
-        if showsChatDetails { showsChatDetails = false; return }
-        if showsRenameChat { showsRenameChat = false; return }
-        if showsWorkCompletion { dismissedCompletion = workCompletionToken; return }
-        if showsSlashCommandMenu { dismissedSlashMenuInput = question; return }
-        switch AnswerPanelEscapeAction.resolve(
-            showsSettings: showsSettingsPanel,
-            showsHistory: showsHistoryPanel,
-            isEditing: editingTurnID != nil
-        ) {
-        case .closeSettings:
-            backFromSettings()
-        case .closeHistory:
-            hideHistorySearch()
-        case .cancelEditing:
-            cancelEditing()
-        case .closePanel:
-            actions.close()
-        }
-    }
-
-    private func sendCurrentQuestion() {
-        if usesCodex {
-            sendToCodex()
-            return
-        }
-        let current = question
-        if let editingTurnID {
-            reviseAndResend(current, turnID: editingTurnID)
-        } else {
-            send(current)
-        }
-    }
-
-    private func send(_ rawQuestion: String) {
-        let trimmedQuestion = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuestion.isEmpty, !session.hasLoadingTurn else {
-            return
-        }
-
-        guard let turnID = session.beginTurn(question: trimmedQuestion) else { return }
-        question = ""
-
-        withAnimation(MarrMotion.transition(reducesMotion: reducesMotion)) {
-            session.revealAssistant(for: turnID)
-        }
-        submit(turnID)
-    }
-
-    private func sendToCodex() {
-        persistComposerDraft()
-        let request = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !request.isEmpty || !workAttachments.isEmpty else { return }
-        if request.hasPrefix("/") {
-            if dispatchWorkCommand(request) { finishAcceptedWorkCommand() }
-            return
-        }
-        let accepted: Bool
-        if workSession.canSteer {
-            accepted = workSession.steer(prompt: request, images: workAttachments)
-        } else {
-            guard workSession.canSubmit else { return }
-            accepted = controller.submitToCodex(request, images: workAttachments)
-        }
-        if accepted {
-            loadedDraftKey = workSession.composerDraftKey
-            setComposerText("")
-            workAttachments = []
-            persistComposerDraft()
-        }
-    }
-
-    private func movePendingAttachmentsToWork(ids: Set<UUID>? = nil) {
-        let existingIDs = Set(workAttachments.map(\.id))
-        workAttachments.append(contentsOf: session.takePendingAttachments(ids: ids).filter { !existingIDs.contains($0.id) })
-    }
-
-    private func restoreWorkDraft(_ draft: CodexSubmissionDraft) {
-        persistComposerDraft()
-        guard workSession.restoreRecoveredDraft(draft) else { return }
-        loadComposerDraft(for: workSession.composerDraftKey)
-        setQuestionFocus(true)
-    }
-
-    private func beginEditing(_ turn: ConversationTurn) {
-        guard canEdit(turn) else { return }
-        editingTurnID = turn.id
-        question = turn.question
-        setQuestionFocus(true)
-    }
-
-    private func cancelEditing() {
-        editingTurnID = nil
-        question = ""
-        setQuestionFocus(true)
-    }
-
-    private func canEdit(_ turn: ConversationTurn) -> Bool {
-        session.latestEditableTurnID == turn.id
-    }
-
-    private func reviseAndResend(_ rawQuestion: String, turnID: UUID) {
-        let trimmedQuestion = rawQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuestion.isEmpty, !session.hasLoadingTurn else {
-            question = rawQuestion
-            return
-        }
-
-        guard session.reviseLatestTurn(turnID, question: trimmedQuestion) else {
-            question = rawQuestion
-            return
-        }
-
-        editingTurnID = nil
-        question = ""
-        submit(turnID)
-    }
-
-    private func submitInitialQuestion() {
-        guard
-            !hasSubmittedInitialQuestion,
-            let turn = session.turns.first,
-            turn.isLoading
-        else {
-            return
-        }
-
-        hasSubmittedInitialQuestion = true
-        if usesCodex, let draft = session.takeUnsubmittedInitialTurn(turn.id) {
-            workAttachments.append(contentsOf: draft.attachments)
-            if question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { setComposerText(draft.question) }
-            return
-        }
-        submit(turn.id)
-    }
-
-    private func retry(_ turnID: UUID) {
-        guard session.prepareRetry(turnID) else { return }
-        submit(turnID)
-    }
-
-    private func submit(_ turnID: UUID) {
-        requestCoordinator.submit(turnID)
-    }
-}
-
-/// Observes trackpad navigation without replacing vertical scrolling or mouse dragging.
-private struct TwoFingerBackGesture: NSViewRepresentable {
-    let isEnabled: Bool
-    let onBack: () -> Void
-
-    func makeNSView(context: Context) -> BackGestureView { BackGestureView() }
-
-    func updateNSView(_ view: BackGestureView, context: Context) {
-        view.isEnabled = isEnabled
-        view.onBack = onBack
-    }
-
-    final class BackGestureView: NSView {
-        var isEnabled = false
-        var onBack: (() -> Void)?
-        private var monitor: Any?
-        private var horizontal: CGFloat = 0
-        private var vertical: CGFloat = 0
-        private var didNavigate = false
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if let monitor { NSEvent.removeMonitor(monitor) }
-            monitor = nil
-            guard window != nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                guard let self, self.isEnabled, event.window === self.window,
-                      event.hasPreciseScrollingDeltas,
-                      self.bounds.contains(self.convert(event.locationInWindow, from: nil))
-                else { return event }
-                if event.phase.contains(.began) {
-                    self.horizontal = 0
-                    self.vertical = 0
-                    self.didNavigate = false
-                }
-                guard !event.phase.isEmpty, !self.didNavigate else { return event }
-                self.horizontal += event.scrollingDeltaX
-                self.vertical += event.scrollingDeltaY
-                if self.horizontal > 70 && self.horizontal > abs(self.vertical) * 2 {
-                    self.didNavigate = true
-                    self.onBack?()
-                    return nil
-                }
-                return event
-            }
-        }
-
-        deinit {
-            if let monitor { NSEvent.removeMonitor(monitor) }
-        }
-    }
-}
-
-/// Only the empty header area moves the window; selectable content keeps mouse drags.
-struct AnswerPanelDragRegion: NSViewRepresentable {
-    func makeNSView(context: Context) -> DragView { DragView() }
-    func updateNSView(_ nsView: DragView, context: Context) {}
-
-    final class DragView: NSView {
-        override var mouseDownCanMoveWindow: Bool { false }
-        override func mouseDown(with event: NSEvent) {
-            (window as? AnswerPanelWindow)?.prepareForUserGeometryChange?()
-            window?.performDrag(with: event)
-        }
     }
 }
