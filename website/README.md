@@ -43,10 +43,10 @@
 
 ## 产品 UI 依据
 
-- `Marr/TranslationOverlay.swift`：译文保留 anchorRect；原文窗口候选位置左、右、上、下；Compare 为 104×32。网页按用户要求去掉缩放胶囊，改为拖角调整窗口。
-- `Marr/ScreenshotOverlay.swift`：42 点圆形按钮，8 点间距；46 点高、23 点圆角的输入条；38×30 截图缩略图；白/黑双层选区描边。
-- `Marr/AnswerPanel.swift`：420×596 窗口、24 点圆角、356 点输入区、16 点底部间距、Conversation / Work 与 CodexActivityTimeline。
-- `Marr/ScreenshotAnnotation.swift`：红色标注、3 点线宽、26 点编号圆。
+- `Marr/Translation/TranslationOverlay.swift`：译文保留 anchorRect；原文窗口候选位置左、右、上、下；Compare 为 104×32。网页按用户要求去掉缩放胶囊，改为拖角调整窗口。
+- `Marr/Capture/ScreenshotOverlay.swift`：42 点圆形按钮，8 点间距；46 点高、23 点圆角的输入条；38×30 截图缩略图；白/黑双层选区描边。
+- `Marr/Presentation/AnswerPanel.swift`：420×596 窗口、24 点圆角、356 点输入区、16 点底部间距、Conversation / Work 与 CodexActivityTimeline。
+- `Marr/Capture/ScreenshotAnnotation.swift`：红色标注、3 点线宽、26 点编号圆。
 
 ## 本轮验证
 
