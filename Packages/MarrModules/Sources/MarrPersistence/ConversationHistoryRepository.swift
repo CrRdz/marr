@@ -11,6 +11,9 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
     private let decoder: JSONDecoder
     private var database: OpaquePointer?
     private var records: [ConversationHistoryRecord] = []
+    private let lock = NSRecursiveLock()
+    private var schemaPrepared = false
+    private var deletedConversationIDs = Set<UUID>()
 
     public init(rootURL: URL, fileManager: FileManager = .default) {
         self.rootURL = rootURL
@@ -29,7 +32,9 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
     }
 
     public func save(_ archive: ConversationArchive) throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
         try prepareDatabase()
+        guard !deletedConversationIDs.contains(archive.id) else { return records }
 
         let candidateFileURLs = archive.images.compactMap { image -> URL? in
             let storedFileName = storedFileName(for: image)
@@ -40,6 +45,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
 
         do {
             let references = try saveAttachments(archive.images, conversationID: archive.id)
+            let existingRecord = records.first(where: { $0.id == archive.id })
             let record = ConversationHistoryRecord(
                 id: archive.id,
                 createdAt: archive.createdAt,
@@ -47,7 +53,11 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
                 generatedTitle: archive.generatedTitle,
                 turns: archive.turns,
                 images: references.sorted { $0.id.uuidString < $1.id.uuidString },
-                pendingImageIDs: archive.pendingImageIDs
+                pendingImageIDs: archive.pendingImageIDs,
+                // Metadata actions are authoritative even when they intentionally clear an association.
+                // A delayed streaming snapshot must not undo move/remove/archive/restore actions.
+                workspaceID: existingRecord != nil ? existingRecord?.workspaceID : archive.workspaceID,
+                archivedAt: existingRecord != nil ? existingRecord?.archivedAt : archive.archivedAt
             )
             try saveRecord(record)
             didCommitRecord = true
@@ -65,6 +75,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
     }
 
     public func delete(_ conversationID: UUID) throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
         try prepareDatabase()
         let record = records.first(where: { $0.id == conversationID })
         let attachmentURLs = record?
@@ -76,6 +87,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
         do {
             let stagedDeletion = try stageForDeletion(attachmentURLs + [legacyURL])
             records.removeAll { $0.id == conversationID }
+            deletedConversationIDs.insert(conversationID)
             stagedDeletion.discard(using: fileManager)
             return records
         } catch {
@@ -87,6 +99,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
     }
 
     public func deleteAll() throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
         try prepareDatabase()
         let previousRecords = records
         try execute("DELETE FROM conversations")
@@ -96,6 +109,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
             stagedDeletion = try stageForDeletion([attachmentsURL, legacyHistoryURL])
             try fileManager.createDirectory(at: attachmentsURL, withIntermediateDirectories: true)
             records.removeAll()
+            deletedConversationIDs.formUnion(previousRecords.map(\.id))
             stagedDeletion?.discard(using: fileManager)
             return records
         } catch {
@@ -111,11 +125,82 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
     }
 
     public func reload() throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
         try prepareDatabase()
         try migrateLegacyHistoryIfNeeded()
         records = try loadRecords()
         try? cleanupUnreferencedAttachments()
         return records
+    }
+
+    public func workspaces() throws -> [LocalWorkspaceRecord] {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        return try query("SELECT * FROM local_workspaces ORDER BY updated_at DESC, name COLLATE NOCASE ASC").compactMap { row in
+            guard let id = UUID(uuidString: row.string("id")),
+                  let created = date(from: row.string("created_at")),
+                  let updated = date(from: row.string("updated_at")) else { return nil }
+            return LocalWorkspaceRecord(id: id, name: row.string("name"), path: row.optionalString("path"),
+                                        bookmark: row.data("bookmark"), createdAt: created, updatedAt: updated)
+        }
+    }
+
+    @discardableResult
+    public func createWorkspace(name: String, path: String? = nil, bookmark: Data? = nil) throws -> LocalWorkspaceRecord {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw SQLiteStoreError.bind(message: "Workspace name cannot be empty.") }
+        let now = Date()
+        let workspace = LocalWorkspaceRecord(name: name, path: path, bookmark: bookmark, createdAt: now, updatedAt: now)
+        try execute("INSERT INTO local_workspaces (id, name, path, bookmark, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    [workspace.id.uuidString, workspace.name, path as Any, bookmark as Any, dateString(now), dateString(now)])
+        return workspace
+    }
+
+    public func renameWorkspace(_ id: UUID, name: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw SQLiteStoreError.bind(message: "Workspace name cannot be empty.") }
+        try execute("UPDATE local_workspaces SET name = ?, updated_at = ? WHERE id = ?", [name, dateString(Date()), id.uuidString])
+    }
+
+    /// Removes metadata only. Conversations are detached by the foreign key; user folders are never touched.
+    public func removeWorkspace(_ id: UUID) throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        try execute("DELETE FROM local_workspaces WHERE id = ?", [id.uuidString])
+        records = try loadRecords()
+        return records
+    }
+
+    public func assignConversation(_ id: UUID, to workspaceID: UUID?) throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        try execute("UPDATE conversations SET workspace_id = ? WHERE id = ?", [workspaceID?.uuidString as Any, id.uuidString])
+        records = try loadRecords()
+        return records
+    }
+
+    public func setArchived(_ id: UUID, archived: Bool) throws -> [ConversationHistoryRecord] {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        let archivedAt = archived ? dateString(Date()) : nil
+        try execute("UPDATE conversations SET archived_at = ? WHERE id = ?", [archivedAt as Any, id.uuidString])
+        records = try loadRecords()
+        return records
+    }
+
+    public func storageReport() throws -> LocalStorageReport {
+        lock.lock(); defer { lock.unlock() }
+        try prepareDatabase()
+        let allRecords = try loadRecords()
+        let archivedNames = Set(allRecords.filter(\.isArchived).flatMap { $0.images.map(\.storedFileName) })
+        let activeNames = Set(allRecords.filter { !$0.isArchived }.flatMap { $0.images.map(\.storedFileName) })
+        return LocalStorageScanner.scan(rootURL: rootURL, archivedAttachmentNames: archivedNames.subtracting(activeNames),
+            conversationCount: allRecords.count, archivedConversationCount: allRecords.filter(\.isArchived).count,
+            workspaceCount: try workspaces().count, fileManager: fileManager)
     }
 
     private func stageForDeletion(_ sourceURLs: [URL]) throws -> StagedDeletion {
@@ -174,13 +259,34 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
             guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK else {
                 throw SQLiteStoreError.open(message: sqliteMessage)
             }
+            sqlite3_busy_timeout(database, 5_000)
             try execute("PRAGMA foreign_keys = ON")
+            _ = try query("PRAGMA journal_mode = WAL")
+            try execute("PRAGMA synchronous = FULL")
         }
 
-        try migrateSchema()
+        if !schemaPrepared {
+            try transaction { try migrateSchema() }
+            schemaPrepared = true
+            records = try loadRecords()
+        }
     }
 
     private func migrateSchema() throws {
+        let version = try query("PRAGMA user_version").first?.int("user_version") ?? 0
+        guard version <= 3 else {
+            throw SQLiteStoreError.prepare(message: "This history database was created by a newer version of Marr.")
+        }
+        try execute("""
+            CREATE TABLE IF NOT EXISTS local_workspaces (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                path TEXT,
+                bookmark BLOB,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """)
         try execute("""
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -193,6 +299,12 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
             .map { $0.string("name") }
         if !conversationColumns.contains("generated_title") {
             try execute("ALTER TABLE conversations ADD COLUMN generated_title TEXT")
+        }
+        if !conversationColumns.contains("workspace_id") {
+            try execute("ALTER TABLE conversations ADD COLUMN workspace_id TEXT REFERENCES local_workspaces(id) ON DELETE SET NULL")
+        }
+        if !conversationColumns.contains("archived_at") {
+            try execute("ALTER TABLE conversations ADD COLUMN archived_at TEXT")
         }
         try execute("""
             CREATE TABLE IF NOT EXISTS turns (
@@ -239,7 +351,9 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
             """)
         try execute("CREATE INDEX IF NOT EXISTS turns_conversation_position ON turns(conversation_id, position)")
         try execute("CREATE INDEX IF NOT EXISTS attachments_conversation ON attachments(conversation_id)")
-        try execute("PRAGMA user_version = 2")
+        try execute("CREATE INDEX IF NOT EXISTS conversations_workspace_updated ON conversations(workspace_id, updated_at)")
+        try execute("CREATE INDEX IF NOT EXISTS conversations_archived ON conversations(archived_at)")
+        try execute("PRAGMA user_version = 3")
     }
 
     private func saveAttachments(
@@ -268,18 +382,22 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
         try transaction {
             try execute(
                 """
-                INSERT INTO conversations (id, created_at, updated_at, generated_title)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO conversations (id, created_at, updated_at, generated_title, workspace_id, archived_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     created_at = excluded.created_at,
                     updated_at = excluded.updated_at,
-                    generated_title = excluded.generated_title
+                    generated_title = excluded.generated_title,
+                    workspace_id = excluded.workspace_id,
+                    archived_at = excluded.archived_at
                 """,
                 [
                     record.id.uuidString,
                     dateString(record.createdAt),
                     dateString(record.updatedAt),
-                    record.generatedTitle as Any
+                    record.generatedTitle as Any,
+                    record.workspaceID?.uuidString as Any,
+                    record.archivedAt.map(dateString) as Any
                 ]
             )
             try execute("DELETE FROM pending_images WHERE conversation_id = ?", [record.id.uuidString])
@@ -340,7 +458,7 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
 
     private func loadRecords() throws -> [ConversationHistoryRecord] {
         let rows = try query(
-            "SELECT id, created_at, updated_at, generated_title FROM conversations ORDER BY updated_at DESC"
+            "SELECT id, created_at, updated_at, generated_title, workspace_id, archived_at FROM conversations ORDER BY updated_at DESC"
         )
 
         return try rows.compactMap { row in
@@ -359,7 +477,9 @@ public final class ConversationHistoryRepository: @unchecked Sendable {
                 generatedTitle: row.optionalString("generated_title"),
                 turns: try loadTurns(conversationID: id),
                 images: try loadImages(conversationID: id),
-                pendingImageIDs: try loadPendingImageIDs(conversationID: id)
+                pendingImageIDs: try loadPendingImageIDs(conversationID: id),
+                workspaceID: row.optionalString("workspace_id").flatMap(UUID.init(uuidString:)),
+                archivedAt: row.optionalString("archived_at").flatMap(date(from:))
             )
         }
     }
@@ -587,34 +707,36 @@ private extension ConversationHistoryRepository {
     }
 
     func bind(_ values: [Any], to statement: OpaquePointer?) throws {
-        for (index, value) in values.enumerated() {
-            let sqliteIndex = Int32(index + 1)
-            switch value {
-            case Optional<Any>.none:
-                sqlite3_bind_null(statement, sqliteIndex)
-            case let string as String:
-                sqlite3_bind_text(statement, sqliteIndex, string, -1, SQLITE_TRANSIENT)
-            case let int as Int:
-                sqlite3_bind_int64(statement, sqliteIndex, sqlite3_int64(int))
-            case let bool as Bool:
-                sqlite3_bind_int(statement, sqliteIndex, bool ? 1 : 0)
-            case let uuid as UUID:
-                sqlite3_bind_text(statement, sqliteIndex, uuid.uuidString, -1, SQLITE_TRANSIENT)
-            case let optionalString as String?:
-                if let optionalString {
-                    sqlite3_bind_text(statement, sqliteIndex, optionalString, -1, SQLITE_TRANSIENT)
-                } else {
-                    sqlite3_bind_null(statement, sqliteIndex)
+        func bindValue(_ value: Any, at index: Int32) throws {
+            let mirror = Mirror(reflecting: value)
+            if mirror.displayStyle == .optional {
+                guard let wrapped = mirror.children.first?.value else {
+                    guard sqlite3_bind_null(statement, index) == SQLITE_OK else { throw SQLiteStoreError.bind(message: sqliteMessage) }
+                    return
                 }
-            default:
-                if case Optional<Any>.some(let wrapped) = value {
-                    try bind([wrapped], to: statement)
-                } else {
-                    throw SQLiteStoreError.bind(message: "Unsupported SQLite binding: \(type(of: value))")
-                }
+                try bindValue(wrapped, at: index)
+                return
             }
+            let status: Int32
+            switch value {
+            case let string as String:
+                status = sqlite3_bind_text(statement, index, string, -1, SQLITE_TRANSIENT)
+            case let int as Int:
+                status = sqlite3_bind_int64(statement, index, sqlite3_int64(int))
+            case let bool as Bool:
+                status = sqlite3_bind_int(statement, index, bool ? 1 : 0)
+            case let uuid as UUID:
+                status = sqlite3_bind_text(statement, index, uuid.uuidString, -1, SQLITE_TRANSIENT)
+            case let data as Data:
+                status = data.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32(data.count), SQLITE_TRANSIENT) }
+            default:
+                throw SQLiteStoreError.bind(message: "Unsupported SQLite binding: \(type(of: value))")
+            }
+            guard status == SQLITE_OK else { throw SQLiteStoreError.bind(message: sqliteMessage) }
         }
+        for (index, value) in values.enumerated() { try bindValue(value, at: Int32(index + 1)) }
     }
+
 }
 
 private struct StagedDeletion {
@@ -656,6 +778,10 @@ private struct SQLiteRow {
                 values[name] = .int(Int(sqlite3_column_int64(statement, index)))
             case SQLITE_NULL:
                 values[name] = .null
+            case SQLITE_BLOB:
+                let count = Int(sqlite3_column_bytes(statement, index))
+                if let bytes = sqlite3_column_blob(statement, index), count > 0 { values[name] = .data(Data(bytes: bytes, count: count)) }
+                else { values[name] = .data(Data()) }
             default:
                 let text = sqlite3_column_text(statement, index).map { String(cString: $0) } ?? ""
                 values[name] = .string(text)
@@ -670,7 +796,7 @@ private struct SQLiteRow {
             return value
         case .int(let value):
             return String(value)
-        case .null, .none:
+        case .null, .none, .data:
             return ""
         }
     }
@@ -681,9 +807,14 @@ private struct SQLiteRow {
             return value
         case .int(let value):
             return String(value)
-        case .null, .none:
+        case .null, .none, .data:
             return nil
         }
+    }
+
+    func data(_ key: String) -> Data? {
+        if case .data(let value) = values[key] { return value }
+        return nil
     }
 
     func int(_ key: String) -> Int {
@@ -692,13 +823,14 @@ private struct SQLiteRow {
             return value
         case .string(let value):
             return Int(value) ?? 0
-        case .null, .none:
+        case .null, .none, .data:
             return 0
         }
     }
 }
 
 private enum SQLiteValue {
+    case data(Data)
     case string(String)
     case int(Int)
     case null

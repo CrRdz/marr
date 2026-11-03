@@ -32,6 +32,8 @@ public struct ConversationTurn: Identifiable, Codable, Equatable, Sendable {
     public var errorMessage: String?
     public var status: ConversationTurnStatus
     public var showsAssistant: Bool
+    public var retryAt: Date?
+    public var retryAttempt: Int?
 
     public init(
         id: UUID,
@@ -107,6 +109,16 @@ public struct VisionResponse: Equatable, Sendable {
     }
 }
 
+/// Text is the complete answer received so far, not an artificial typing animation.
+public enum VisionResponseEvent: Equatable, Sendable {
+    case text(String)
+    case requestStarted
+    case retryScheduled(attempt: Int, resumeAt: Date)
+    case usage(InferenceTokenUsage)
+}
+
+public typealias VisionResponseHandler = @MainActor @Sendable (VisionResponseEvent) -> Void
+
 public protocol VisionAIClient: Sendable {
     func ask(request: VisionRequest, model: String, connection: InferenceConnection) async throws -> String
     func askWithUsage(
@@ -114,9 +126,30 @@ public protocol VisionAIClient: Sendable {
         model: String,
         connection: InferenceConnection
     ) async throws -> VisionResponse
+    func askStreaming(
+        request: VisionRequest,
+        model: String,
+        connection: InferenceConnection,
+        onEvent: @escaping VisionResponseHandler
+    ) async throws -> VisionResponse
 }
 
 public extension VisionAIClient {
+    /// Compatibility for clients that only implement complete responses.
+    func askStreaming(
+        request: VisionRequest,
+        model: String,
+        connection: InferenceConnection,
+        onEvent: @escaping VisionResponseHandler
+    ) async throws -> VisionResponse {
+        await onEvent(.requestStarted)
+        let response = try await askWithUsage(request: request, model: model, connection: connection)
+        try Task.checkCancellation()
+        await onEvent(.text(response.text))
+        if let usage = response.usage { await onEvent(.usage(usage)) }
+        return response
+    }
+
     func askWithUsage(
         request: VisionRequest,
         model: String,
@@ -128,6 +161,7 @@ public extension VisionAIClient {
 
 public enum InferenceProvider: String, CaseIterable, Identifiable, Codable, Sendable {
     case openAI = "OpenAI"
+    case chatGPT = "ChatGPT plan"
     case gateway = "Gateway"
 
     public var id: String { rawValue }
@@ -135,6 +169,7 @@ public enum InferenceProvider: String, CaseIterable, Identifiable, Codable, Send
 
 public enum TranslationProvider: String, CaseIterable, Identifiable, Codable, Sendable {
     case openAI = "OpenAI"
+    case chatGPT = "ChatGPT plan"
     case gateway = "Gateway"
     case deepLX = "DeepLX"
 
@@ -144,6 +179,8 @@ public enum TranslationProvider: String, CaseIterable, Identifiable, Codable, Se
         switch self {
         case .openAI:
             .openAI
+        case .chatGPT:
+            .chatGPT
         case .gateway:
             .gateway
         case .deepLX:
@@ -162,6 +199,7 @@ public enum GatewayAuthScheme: String, CaseIterable, Identifiable, Codable, Send
 
 public enum GatewayAPIFormat: String, CaseIterable, Identifiable, Codable, Sendable {
     case openAIResponses = "OpenAI Responses"
+    case openAIChatCompletions = "OpenAI Chat Completions"
     case anthropicMessages = "Anthropic Messages"
 
     public var id: String { rawValue }
@@ -176,6 +214,9 @@ public struct InferenceConnection: Equatable, Sendable {
     public var customHeaders: [String: String]
     public var maximumOutputTokens: Int
     public var requestTimeout: TimeInterval
+    public var chatGPTProfileID: String?
+    public var reasoningEffort: String? = nil
+    public var fastMode = false
 
     public init(
         provider: InferenceProvider,
@@ -195,6 +236,13 @@ public struct InferenceConnection: Equatable, Sendable {
         self.customHeaders = customHeaders
         self.maximumOutputTokens = min(max(256, maximumOutputTokens), 32_768)
         self.requestTimeout = min(max(5, requestTimeout), 300)
+    }
+
+    public static func chatGPT(profileID: String) -> InferenceConnection {
+        var connection = InferenceConnection.openAI(apiKey: "")
+        connection.provider = .chatGPT
+        connection.chatGPTProfileID = profileID
+        return connection
     }
 
     public static func openAI(apiKey: String, maximumOutputTokens: Int = 4_096) -> InferenceConnection {

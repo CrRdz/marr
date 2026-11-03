@@ -11,6 +11,8 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
     public var gatewayAPIFormat: GatewayAPIFormat
     public var customHeadersText: String
     public var model: String
+    public var chatGPTReasoningEffort: String
+    public var chatGPTFastMode: Bool
     public var maximumOutputTokens: Int
     public var translationUsesDedicatedConfiguration: Bool
     public var translationProvider: TranslationProvider
@@ -24,6 +26,8 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
     public var translationDeepLXAccessToken: String
     public var translationModel: String
     public var translationMaximumOutputTokens: Int
+    public var translationCodexModel: String
+    public var translationCodexReasoningEffort: String
 
     public init(
         provider: InferenceProvider,
@@ -34,6 +38,8 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
         gatewayAPIFormat: GatewayAPIFormat,
         customHeadersText: String,
         model: String,
+        chatGPTReasoningEffort: String = "",
+        chatGPTFastMode: Bool = false,
         maximumOutputTokens: Int,
         translationUsesDedicatedConfiguration: Bool = false,
         translationProvider: TranslationProvider = .openAI,
@@ -41,12 +47,14 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
         translationGatewayBaseURL: String = "",
         translationGatewayAPIKey: String = "",
         translationGatewayAuthScheme: GatewayAuthScheme = .bearer,
-        translationGatewayAPIFormat: GatewayAPIFormat = .openAIResponses,
+        translationGatewayAPIFormat: GatewayAPIFormat = .openAIChatCompletions,
         translationCustomHeadersText: String = "",
         translationDeepLXServerURL: String = "http://127.0.0.1:1188",
         translationDeepLXAccessToken: String = "",
         translationModel: String = "gpt-4.1-mini",
-        translationMaximumOutputTokens: Int = 4_096
+        translationMaximumOutputTokens: Int = 4_096,
+        translationCodexModel: String = "",
+        translationCodexReasoningEffort: String = ""
     ) {
         self.provider = provider
         self.openAIAPIKey = openAIAPIKey
@@ -56,6 +64,8 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
         self.gatewayAPIFormat = gatewayAPIFormat
         self.customHeadersText = customHeadersText
         self.model = model
+        self.chatGPTReasoningEffort = chatGPTReasoningEffort
+        self.chatGPTFastMode = chatGPTFastMode
         self.maximumOutputTokens = min(max(256, maximumOutputTokens), 32_768)
         self.translationUsesDedicatedConfiguration = translationUsesDedicatedConfiguration
         self.translationProvider = translationProvider
@@ -69,17 +79,19 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
         self.translationDeepLXAccessToken = translationDeepLXAccessToken
         self.translationModel = translationModel
         self.translationMaximumOutputTokens = min(max(256, translationMaximumOutputTokens), 32_768)
+        self.translationCodexModel = translationCodexModel
+        self.translationCodexReasoningEffort = translationCodexReasoningEffort
     }
 
     public static let `default` = InferenceSettingsSnapshot(
-        provider: .gateway,
+        provider: .chatGPT,
         openAIAPIKey: "",
         gatewayBaseURL: "http://127.0.0.1:15721/claude-desktop",
         gatewayAPIKey: "",
         gatewayAuthScheme: .bearer,
         gatewayAPIFormat: .anthropicMessages,
         customHeadersText: "",
-        model: "claude-sonnet-4-6",
+        model: "",
         maximumOutputTokens: 4_096,
         translationUsesDedicatedConfiguration: false,
         translationProvider: .openAI,
@@ -87,12 +99,14 @@ public struct InferenceSettingsSnapshot: Equatable, Sendable {
         translationGatewayBaseURL: "",
         translationGatewayAPIKey: "",
         translationGatewayAuthScheme: .bearer,
-        translationGatewayAPIFormat: .openAIResponses,
+        translationGatewayAPIFormat: .openAIChatCompletions,
         translationCustomHeadersText: "",
         translationDeepLXServerURL: "http://127.0.0.1:1188",
         translationDeepLXAccessToken: "",
         translationModel: "gpt-4.1-mini",
-        translationMaximumOutputTokens: 4_096
+        translationMaximumOutputTokens: 4_096,
+        translationCodexModel: "",
+        translationCodexReasoningEffort: ""
     )
 }
 
@@ -134,7 +148,17 @@ public struct InferenceSecretsSnapshot: Equatable, Sendable {
     )
 }
 
-public enum InferenceCredential: CaseIterable, Hashable, Sendable {
+public enum InferenceCredential: CaseIterable, Hashable, Codable, Sendable {
+    case connectionKey(String)
+    case connectionHeaders(String)
+    case providerAPIKey(GatewayPreset)
+    case providerHeaders(GatewayPreset)
+
+    public static var allCases: [Self] {
+        [.openAIAPIKey, .gatewayAPIKey, .customHeaders, .translationOpenAIAPIKey,
+         .translationGatewayAPIKey, .translationCustomHeaders, .translationDeepLXAccessToken]
+        + GatewayPreset.allCases.filter { $0 != .custom && $0 != .ccSwitch }.flatMap { [.providerAPIKey($0), .providerHeaders($0)] }
+    }
     case openAIAPIKey
     case gatewayAPIKey
     case customHeaders
@@ -243,6 +267,8 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
         static let gatewayAuthScheme = "inference.gateway.authScheme"
         static let gatewayAPIFormat = "inference.gateway.apiFormat"
         static let model = "inference.model"
+        static let chatGPTReasoningEffort = "inference.chatgpt.reasoningEffort"
+        static let chatGPTFastMode = "inference.chatgpt.fastMode"
         static let maximumOutputTokens = "inference.maximumOutputTokens"
         static let translationUsesDedicatedConfiguration = "translation.usesDedicatedConfiguration"
         static let translationProvider = "translation.provider"
@@ -252,6 +278,8 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
         static let translationModel = "translation.model"
         static let translationMaximumOutputTokens = "translation.maximumOutputTokens"
         static let translationDeepLXServerURL = "translation.deeplx.serverURL"
+        static let translationCodexModel = "translation.codex.model"
+        static let translationCodexReasoningEffort = "translation.codex.reasoningEffort"
         static let openAIAPIKey = "openai-api-key"
         static let gatewayAPIKey = "gateway-api-key"
         static let customHeaders = "custom-headers"
@@ -291,6 +319,8 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
             gatewayAPIFormat: configuration.gatewayAPIFormat,
             customHeadersText: secrets.customHeadersText,
             model: configuration.model,
+            chatGPTReasoningEffort: configuration.chatGPTReasoningEffort,
+            chatGPTFastMode: configuration.chatGPTFastMode,
             maximumOutputTokens: configuration.maximumOutputTokens,
             translationUsesDedicatedConfiguration: configuration.translationUsesDedicatedConfiguration,
             translationProvider: configuration.translationProvider,
@@ -303,7 +333,9 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
             translationDeepLXServerURL: configuration.translationDeepLXServerURL,
             translationDeepLXAccessToken: secrets.translationDeepLXAccessToken,
             translationModel: configuration.translationModel,
-            translationMaximumOutputTokens: configuration.translationMaximumOutputTokens
+            translationMaximumOutputTokens: configuration.translationMaximumOutputTokens,
+            translationCodexModel: configuration.translationCodexModel,
+            translationCodexReasoningEffort: configuration.translationCodexReasoningEffort
         )
     }
 
@@ -318,6 +350,8 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
             gatewayAPIFormat: values.string(forKey: Key.gatewayAPIFormat).flatMap(GatewayAPIFormat.init(rawValue:)) ?? fallback.gatewayAPIFormat,
             customHeadersText: "",
             model: values.string(forKey: Key.model) ?? fallback.model,
+            chatGPTReasoningEffort: values.string(forKey: Key.chatGPTReasoningEffort) ?? fallback.chatGPTReasoningEffort,
+            chatGPTFastMode: values.integer(forKey: Key.chatGPTFastMode) == 1,
             maximumOutputTokens: values.integer(forKey: Key.maximumOutputTokens) ?? fallback.maximumOutputTokens,
             translationUsesDedicatedConfiguration: values.integer(forKey: Key.translationUsesDedicatedConfiguration) == 1,
             translationProvider: values.string(forKey: Key.translationProvider).flatMap(TranslationProvider.init(rawValue:)) ?? fallback.translationProvider,
@@ -330,7 +364,9 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
             translationDeepLXServerURL: values.string(forKey: Key.translationDeepLXServerURL) ?? fallback.translationDeepLXServerURL,
             translationDeepLXAccessToken: "",
             translationModel: values.string(forKey: Key.translationModel) ?? fallback.translationModel,
-            translationMaximumOutputTokens: values.integer(forKey: Key.translationMaximumOutputTokens) ?? fallback.translationMaximumOutputTokens
+            translationMaximumOutputTokens: values.integer(forKey: Key.translationMaximumOutputTokens) ?? fallback.translationMaximumOutputTokens,
+            translationCodexModel: values.string(forKey: Key.translationCodexModel) ?? fallback.translationCodexModel,
+            translationCodexReasoningEffort: values.string(forKey: Key.translationCodexReasoningEffort) ?? fallback.translationCodexReasoningEffort
         )
     }
 
@@ -380,6 +416,8 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
         values.set(settings.gatewayAuthScheme.rawValue, forKey: Key.gatewayAuthScheme)
         values.set(settings.gatewayAPIFormat.rawValue, forKey: Key.gatewayAPIFormat)
         values.set(settings.model, forKey: Key.model)
+        values.set(settings.chatGPTReasoningEffort, forKey: Key.chatGPTReasoningEffort)
+        values.set(settings.chatGPTFastMode ? 1 : 0, forKey: Key.chatGPTFastMode)
         values.set(settings.maximumOutputTokens, forKey: Key.maximumOutputTokens)
         values.set(settings.translationUsesDedicatedConfiguration ? 1 : 0, forKey: Key.translationUsesDedicatedConfiguration)
         values.set(settings.translationProvider.rawValue, forKey: Key.translationProvider)
@@ -389,6 +427,8 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
         values.set(settings.translationModel, forKey: Key.translationModel)
         values.set(settings.translationMaximumOutputTokens, forKey: Key.translationMaximumOutputTokens)
         values.set(settings.translationDeepLXServerURL, forKey: Key.translationDeepLXServerURL)
+        values.set(settings.translationCodexModel, forKey: Key.translationCodexModel)
+        values.set(settings.translationCodexReasoningEffort, forKey: Key.translationCodexReasoningEffort)
     }
 
     public func saveSecrets(_ settings: InferenceSecretsSnapshot) throws {
@@ -401,8 +441,98 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
         try setCredential(settings.translationDeepLXAccessToken, for: .translationDeepLXAccessToken)
     }
 
+    public var selectedGatewayPreset: GatewayPreset {
+        get { values.string(forKey: "gateway.preset").flatMap(GatewayPreset.init(rawValue:)) ?? .custom }
+        set { values.set(newValue.rawValue, forKey: "gateway.preset") }
+    }
+
+    public var prefersAPIConversation: Bool {
+        get { values.integer(forKey: "inference.prefersAPI") == 1 }
+        set { values.set(newValue ? 1 : 0, forKey: "inference.prefersAPI") }
+    }
+
+    public func providerProfile(_ preset: GatewayPreset) -> ProviderConnectionProfile? {
+        guard let text = values.string(forKey: "provider.profile." + preset.rawValue),
+              let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ProviderConnectionProfile.self, from: data)
+    }
+
+    public func saveProviderProfile(_ profile: ProviderConnectionProfile, for preset: GatewayPreset) {
+        guard let data = try? JSONEncoder().encode(profile), let text = String(data: data, encoding: .utf8) else { return }
+        values.set(text, forKey: "provider.profile." + preset.rawValue)
+    }
+
+    public func loadAIConnections() -> AIConnectionRegistry {
+        if let text = values.string(forKey: "ai.connections.v1"), let data = text.data(using: .utf8),
+           let registry = try? JSONDecoder().decode(AIConnectionRegistry.self, from: data) { return registry }
+        let old = loadConfiguration()
+        var connections: [AIConnectionProfile] = []
+        let openAI = AIConnectionProfile(id: "legacy.openai", name: "OpenAI API",
+            baseURL: "https://api.openai.com/v1", apiFormat: .openAIResponses,
+            models: old.provider == .openAI ? [old.model] : [],
+            keyCredential: .openAIAPIKey, headersCredential: .connectionHeaders("legacy.openai"))
+        if old.provider == .openAI || credentialIsStored(.openAIAPIKey) { connections.append(openAI) }
+        for preset in GatewayPreset.allCases {
+            let active = old.provider == .gateway && preset == selectedGatewayPreset
+            let saved = providerProfile(preset)
+            guard active || saved != nil else { continue }
+            let profile = active ? ProviderConnectionProfile(baseURL: old.gatewayBaseURL,
+                authScheme: old.gatewayAuthScheme, apiFormat: old.gatewayAPIFormat, model: old.model) : saved!
+            connections.append(AIConnectionProfile(id: "legacy." + preset.rawValue, name: preset.title,
+                preset: preset, baseURL: profile.baseURL, apiFormat: profile.apiFormat,
+                authScheme: profile.authScheme, models: profile.model.isEmpty ? [] : [profile.model],
+                keyCredential: [.custom, .ccSwitch].contains(preset) ? .gatewayAPIKey : .providerAPIKey(preset),
+                headersCredential: [.custom, .ccSwitch].contains(preset) ? .customHeaders : .providerHeaders(preset)))
+        }
+        if old.provider == .chatGPT || old.translationProvider == .chatGPT {
+            connections.append(.init(id: "legacy.chatgpt", name: "ChatGPT", kind: .chatGPT,
+                                     models: old.provider == .chatGPT ? [old.model] : [old.translationModel]))
+        }
+        let activeID = old.provider == .openAI ? "legacy.openai" : old.provider == .chatGPT
+            ? "legacy.chatgpt" : "legacy." + selectedGatewayPreset.rawValue
+        var translation: AIModelReference?
+        if old.translationUsesDedicatedConfiguration {
+            let connection: AIConnectionProfile
+            switch old.translationProvider {
+            case .chatGPT:
+                translation = .init(connectionID: "legacy.chatgpt", modelID: old.translationModel)
+                connection = connections.first { $0.id == "legacy.chatgpt" }!
+            case .deepLX:
+                connection = .init(id: "legacy.translation", name: "DeepLX", kind: .deepLX,
+                    baseURL: old.translationDeepLXServerURL, authScheme: .none,
+                    keyCredential: .translationDeepLXAccessToken)
+            case .openAI:
+                connection = .init(id: "legacy.translation", name: "OpenAI · Translation",
+                    baseURL: "https://api.openai.com/v1", apiFormat: .openAIResponses,
+                    models: [old.translationModel], keyCredential: .translationOpenAIAPIKey)
+            case .gateway:
+                connection = .init(id: "legacy.translation", name: "Translation API",
+                    baseURL: old.translationGatewayBaseURL, apiFormat: old.translationGatewayAPIFormat,
+                    authScheme: old.translationGatewayAuthScheme, models: [old.translationModel],
+                    keyCredential: .translationGatewayAPIKey, headersCredential: .translationCustomHeaders)
+            }
+            if translation == nil {
+                connections.append(connection)
+                translation = .init(connectionID: connection.id, modelID: old.translationModel)
+            }
+        }
+        let registry = AIConnectionRegistry(connections: connections,
+            conversation: .init(connectionID: activeID, modelID: old.model), translation: translation)
+        saveAIConnections(registry)
+        return registry
+    }
+
+    public func saveAIConnections(_ registry: AIConnectionRegistry) {
+        guard let data = try? JSONEncoder().encode(registry), let text = String(data: data, encoding: .utf8) else { return }
+        values.set(text, forKey: "ai.connections.v1")
+    }
+
     private func account(for credential: InferenceCredential) -> String {
         switch credential {
+        case .connectionKey(let id): "connection." + id + ".apiKey"
+        case .connectionHeaders(let id): "connection." + id + ".headers"
+        case .providerAPIKey(let preset): "provider." + preset.rawValue + ".apiKey"
+        case .providerHeaders(let preset): "provider." + preset.rawValue + ".headers"
         case .openAIAPIKey:
             Key.openAIAPIKey
         case .gatewayAPIKey:
@@ -422,6 +552,7 @@ public final class InferenceSettingsRepository: @unchecked Sendable {
 
     private func configuredKey(for credential: InferenceCredential) -> String {
         switch credential {
+        case .connectionKey, .connectionHeaders, .providerAPIKey, .providerHeaders: account(for: credential) + ".configured"
         case .openAIAPIKey:
             Key.openAIAPIKeyConfigured
         case .gatewayAPIKey:

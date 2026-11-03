@@ -7,6 +7,20 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		87434A29A9594876B36CE613 /* AttachmentDropTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8041A9EE37AB4FBA8EC44550 /* AttachmentDropTests.swift */; };
+		B7FCDCB3BC7946DAB6C62346 /* AttachmentImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B901B17958754E86AB3A5285 /* AttachmentImport.swift */; };
+		5EC7B9CB6CE84EE4B2CA5366 /* AttachmentDropArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B2C60E93E0642249BB45A7D /* AttachmentDropArea.swift */; };
+		7D78D7CD23C44772940EBF4A /* AgentComposerEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDE8733772C4B56BDD8BD20 /* AgentComposerEditor.swift */; };
+		A01120260000000000000002 /* MarrWelcome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01120260000000000000001; };
+		CC9EA1302026102900000120 /* MarrChatComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9EA1302026102900000020 /* MarrChatComponents.swift */; };
+		CC9EA1302026102900000101 /* PersonalAgentCloudSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9EA1302026102900000001 /* PersonalAgentCloudSettings.swift */; };
+		CC9EA1302026102900000100 /* PersonalAgentCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9EA1302026102900000000 /* PersonalAgentCloud.swift */; };
+		D02800000000000000000002 /* MarrNavigationRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02800000000000000000001; };
+		F01A00100000000000000001 /* loss-inline-math.png in Resources */ = {isa = PBXBuildFile; fileRef = F01A00100000000000000002; };
+		F01A00100000000000000003 /* coursework-style.png in Resources */ = {isa = PBXBuildFile; fileRef = F01A00100000000000000004; };
+        AB2310010000000000000001 /* DesktopSidebarSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2310030000000000000001; };
+		1B1700012C00000000000001 /* MarrIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1700022C00000000000001 /* MarrIcons.swift */; };
+		1F0000022C00000000000001 /* ScreenshotAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0000112C00000000000001 /* ScreenshotAnnotation.swift */; };
 		1A0000012C00000000000001 /* MarrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000102C00000000000001 /* MarrApp.swift */; };
 		1A0000042C00000000000001 /* PickedImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000132C00000000000001 /* PickedImage.swift */; };
 		1A0000052C00000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000142C00000000000001 /* Assets.xcassets */; };
@@ -14,9 +28,8 @@
 		1A0000062C00000000000001 /* MarrController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000162C00000000000001 /* MarrController.swift */; };
 		1A0000072C00000000000001 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000172C00000000000001 /* HotKeyManager.swift */; };
 		1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000182C00000000000001 /* ScreenshotOverlay.swift */; };
-		1A00000A2C00000000000001 /* WindowCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001A2C00000000000001 /* WindowCapture.swift */; };
 		1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001B2C00000000000001 /* AnswerPanel.swift */; };
-		1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001C2C00000000000001 /* ConversationHarness.swift */; };
+		1A00000C2C00000000000001 /* ConversationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001C2C00000000000001 /* ConversationSession.swift */; };
 		1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001D2C00000000000001 /* ConversationHistoryStore.swift */; };
 		1A00000E2C00000000000001 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001E2C00000000000001 /* HistoryView.swift */; };
 		1A00000F2C00000000000001 /* MarrTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00001F2C00000000000001 /* MarrTypography.swift */; };
@@ -29,10 +42,8 @@
 		1D0000042C00000000000001 /* TranslationLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000132C00000000000001 /* TranslationLayout.swift */; };
 		1D0000052C00000000000001 /* TranslationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000142C00000000000001 /* TranslationRenderer.swift */; };
 		1D0000062C00000000000001 /* BackgroundOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000152C00000000000001 /* BackgroundOperation.swift */; };
-		1D0000072C00000000000001 /* CodexWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000162C00000000000001 /* CodexWorkspace.swift */; };
-		1F0000012C00000000000001 /* CodexWorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0000102C00000000000001 /* CodexWorkbenchStore.swift */; };
-		1E0000012C00000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E0000102C00000000000001 /* main.swift */; };
-		1E0000022C00000000000001 /* MarrCodexServer.app in Embed Background Helper */ = {isa = PBXBuildFile; fileRef = 1E0000202C00000000000001 /* MarrCodexServer.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		1D0000072C00000000000001 /* RuntimeWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000162C00000000000001 /* RuntimeWorkspace.swift */; };
+		1F0000012C00000000000001 /* WorkbenchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0000102C00000000000001 /* WorkbenchStore.swift */; };
 		1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000102C00000000000001 /* ConversationHarnessTests.swift */; };
 		1C0000012C00000000000001 /* MarrCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000102C00000000000001 /* MarrCore */; };
 		1C0000022C00000000000001 /* MarrNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000112C00000000000001 /* MarrNetworking */; };
@@ -41,6 +52,103 @@
 		1C0000052C00000000000001 /* MarrNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000142C00000000000001 /* MarrNetworking */; };
 		1C0000062C00000000000001 /* MarrSettings in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000152C00000000000001 /* MarrSettings */; };
 		1C0000072C00000000000001 /* MarrPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0000162C00000000000001 /* MarrPersistence */; };
+		1F1000012C00000000000001 /* RuntimeProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1000112C00000000000001 /* RuntimeProtocol.swift */; };
+		1F1000022C00000000000001 /* RuntimeSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1000122C00000000000001 /* RuntimeSupportViews.swift */; };
+		1F1000032C00000000000001 /* RuntimeProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1000132C00000000000001 /* RuntimeProtocolTests.swift */; };
+		1F1000042C00000000000001 /* WorkbenchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1000142C00000000000001 /* WorkbenchTests.swift */; };
+		1F1000052C00000000000001 /* RuntimeWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1000152C00000000000001 /* RuntimeWorkspaceTests.swift */; };
+		1F1000062C00000000000001 /* RuntimeSupportViewsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1000162C00000000000001 /* RuntimeSupportViewsTests.swift */; };
+		1F2000012C00000000000001 /* AgentComposerSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2000112C00000000000001 /* AgentComposerSupport.swift */; };
+		1F2000022C00000000000001 /* AgentComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2000122C00000000000001 /* AgentComposerView.swift */; };
+		1F2000032C00000000000001 /* AgentComposerSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2000132C00000000000001 /* AgentComposerSupportTests.swift */; };
+		1F2000042C00000000000001 /* AgentComposerViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F2000142C00000000000001 /* AgentComposerViewTests.swift */; };
+		1F3000012C00000000000001 /* TranslationRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3000112C00000000000001 /* TranslationRendererTests.swift */; };
+		1F3000022C00000000000001 /* TranslationRecognitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3000122C00000000000001 /* TranslationRecognitionTests.swift */; };
+		1F4000012C00000000000001 /* TranslationMathProtection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F4000112C00000000000001 /* TranslationMathProtection.swift */; };
+		1F4000022C00000000000001 /* TranslationMathProtectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F4000122C00000000000001 /* TranslationMathProtectionTests.swift */; };
+		1F5000012C00000000000001 /* TranslationOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F5000112C00000000000001 /* TranslationOverlayTests.swift */; };
+		54AAA0399186F5C7F89732E8 /* MarrResponseComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1F2495F49EB3A7E62B5E44 /* MarrResponseComponents.swift */; };
+		6048E0C1FA82EC3F0F575B37 /* MarrAgentMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3375191A5812B95A175F6BD /* MarrAgentMotion.swift */; };
+		5691E24AB4C4D6CC16F52E77 /* ComposerDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1D41A575B8DE51185EB823 /* ComposerDraftStore.swift */; };
+		265943D8ECD6531C03BA85FC /* MarrResponseComponentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F06DA132489155DB1E1B7A6 /* MarrResponseComponentsTests.swift */; };
+		503A3850B23609753F59433F /* MarrAgentMotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F09B09CEA0A70380A4D9BB62 /* MarrAgentMotionTests.swift */; };
+		5EC5FEB6CB028A10584324D7 /* ComposerDraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBB6CADF2C433130E8D33E7 /* ComposerDraftStoreTests.swift */; };
+		B69C3DB76CE2793699489A14 /* ComposerContextStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9513D4A9266A79F0CC15420 /* ComposerContextStrip.swift */; };
+		CF249A3B6A25D51F7016B140 /* MarrMediaViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57879C1875FF987FFA4A1F21 /* MarrMediaViewer.swift */; };
+		FEA2324040FA497EB71FD587 /* MarrComponentGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2606E9E95A145C69946BF2FF /* MarrComponentGallery.swift */; };
+		2B4C0F554BD47F3033736ED9 /* MarrToolActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F5AB148CBD85D548C9BF02 /* MarrToolActivity.swift */; };
+		D01C00000000000000000002 /* MarrStorageSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01C00000000000000000001 /* MarrStorageSettingsTests.swift */; };
+		D01D00000000000000000002 /* MarrStandaloneWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01D00000000000000000001 /* MarrStandaloneWorkspaceTests.swift */; };
+		A14155F526DE8B19DBBE0200 /* MarrMediaViewerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B944717817DA6ABAB0B837 /* MarrMediaViewerTests.swift */; };
+		793D6DBF898958E9B167C2D0 /* MarrToolActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85992E4D6FD16FBD687E1347 /* MarrToolActivityTests.swift */; };
+		D0AAC68F3C3A50BEA82F935F /* MarrUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7DE2DD22C3E0E5AE763660 /* MarrUITestSupport.swift */; };
+		8F2B1D9D0222AF917E154AA7 /* MarrSurfaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64127130037E4BCF565B9D9 /* MarrSurfaceTests.swift */; };
+		1B1384B80E4020984B9618CC /* RuntimeTransportIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E886BB66DD8668BFC64B2961 /* RuntimeTransportIntegrationTests.swift */; };
+		44EC313D399047929116E705 /* AnswerPanelSidebarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 759AE31088E14CB3A4295385 /* AnswerPanelSidebarLayout.swift */; };
+		2EC248A0FA6B4585985E33E9 /* AnswerPanelSidebarLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9935B03448947CFA44B3516 /* AnswerPanelSidebarLayoutTests.swift */; };
+		1B35038FB184483192B0BFB3 /* MarrHistorySidebarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39642599EF24414C9EA3A5BA /* MarrHistorySidebarTests.swift */; };
+		4DD76BD4A4A9447FAD8ECFC9 /* MarrHistorySidebarRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98790234245A498FB45BC5D1 /* MarrHistorySidebarRenderingTests.swift */; };
+		DF1C48314AD840D5B5D98950 /* MarrHistoryLoadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAAE86F58874CEEBA79D539 /* MarrHistoryLoadTests.swift */; };
+		30EA1EBB5B0143CC9FE9EE2E /* MarrWorkspaceSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C83F8625024A1889382437 /* MarrWorkspaceSidebar.swift */; };
+		4BC0A77CFFED492CBB2C4AA6 /* MarrWorkspaceSidebarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA636CDE2C5F4B9F981B5F7A /* MarrWorkspaceSidebarTests.swift */; };
+		D01A00000000000000000002 /* MarrLocalWorkspaceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01A00000000000000000001 /* MarrLocalWorkspaceViews.swift */; };
+		D01B00000000000000000002 /* MarrStorageSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01B00000000000000000001 /* MarrStorageSettings.swift */; };
+		7820C3497424439965D48DEE /* ImageTranslationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFFF12683FD16256DDA89D36 /* ImageTranslationModels.swift */; };
+		48FADA41D2579D4DB8929F5D /* ImageTranslationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA55C77A572561485D08EE64 /* ImageTranslationPrompt.swift */; };
+		52020E7B3AFA7CC7C07B4263 /* ImageTranslationMerger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A747DCA9E4E420069BA5A4D /* ImageTranslationMerger.swift */; };
+		F66DCBEAC5B2C8ABB78E3D46 /* ImageTranslationResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5286A8BE914EA3B363AFAAEB /* ImageTranslationResponseParser.swift */; };
+		77E83946148E227BFA5B612E /* ConversationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = D170703E80C07F497F2F610C /* ConversationContext.swift */; };
+		D938A9E01DE131FDF131D6FE /* UserMessagePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3640EF9CA014E8DB58F70F2 /* UserMessagePresentation.swift */; };
+		AC88AB0BAA39F3E582C773CB /* WorkbenchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F101C50831161F1566D4B3 /* WorkbenchModels.swift */; };
+		0E726BCCA8716295A9557056 /* WorkbenchArchiveWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 627DF2B0439D7E9674F21A59 /* WorkbenchArchiveWriter.swift */; };
+		751194774CEDAC1B0622AC13 /* RuntimeWorkspaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD84DA3A3B8B9E03504AF7E /* RuntimeWorkspaceModels.swift */; };
+		AE28E841C8C548C5584677C7 /* RuntimeConversationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B547E3698CD06CDF018A9030 /* RuntimeConversationClient.swift */; };
+		C33E88069FE3618A3796C59F /* RuntimeHistoryProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39F591982E8A0EF7A37F840 /* RuntimeHistoryProjection.swift */; };
+		BFFC225ACC7AC0089D7CB499 /* AnswerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECAAAF83833B213CABAF39C6 /* AnswerPanelView.swift */; };
+		7E940D884A72DCC4C7ADD928 /* WorkspaceTaskBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83BB28EB3ADA8C9B2465B28 /* WorkspaceTaskBrowser.swift */; };
+		CA2204843BD67ED6505516FC /* WorkActivityTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32CAE3289A69D1A6E5ACBDDD /* WorkActivityTimeline.swift */; };
+		0124D59CA5693050495816B5 /* ConversationHistorySidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281F0EF61D58A44F8C8EF3F0 /* ConversationHistorySidebar.swift */; };
+		34A19FA3ABFB9A23B2B962E0 /* AnswerPanelControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 818A0BCEA007A734AC548E4F /* AnswerPanelControls.swift */; };
+		B9BC47E70CD79EECA5A12815 /* UserMessageContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD95EE9D7CE8475F0560E507 /* UserMessageContent.swift */; };
+		849D9B4CB7EBEDF591A8FC45 /* MarkdownResponseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCCE3D97C5C74DF725ED272 /* MarkdownResponseView.swift */; };
+		8C47B99C44FF0E8003060956 /* CaptureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEF09F94EB4BEA31BF037C6 /* CaptureSettings.swift */; };
+		716A36D10754968A9E12B6E3 /* RuntimeAccountSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25138C872A3465BBB8E3D5C1 /* RuntimeAccountSettings.swift */; };
+		60E20BFC2E81741F71D0718C /* RuntimeConfigurationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F309EA2A4AD7DE8FD7823F46 /* RuntimeConfigurationSettings.swift */; };
+		C72981B05B81043396705FB0 /* WorkspaceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0371355052F082DABC022A4D /* WorkspaceSettings.swift */; };
+		CE9BD23D9C96250349041869 /* ConversationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A8C2294995AAB29B53A71C9 /* ConversationSettings.swift */; };
+		6A5F68C2D08A61A98BB0D02A /* InferenceConnectionSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592F51C8CCB3C8EAF62436A1 /* InferenceConnectionSettings.swift */; };
+		7AB945E9D0FDA18A1DD895CD /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE62CFEB2D00A260E60D0988 /* AppearanceSettings.swift */; };
+		6C19516C809C997A5E355CCF /* UsageSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D14D0EE759348CDFE0FFD94 /* UsageSettings.swift */; };
+		E6D4512DD71D993E0113BFAC /* SettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B9B4E25A80B4C3719A5E8E /* SettingsControls.swift */; };
+		2E6808A82C7E8294719E2C28 /* HotKeyRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E27306F60018E986547FE755 /* HotKeyRecorder.swift */; };
+		47B9FC6AF5682E2DFEA6BE95 /* SettingsColorControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1389F19DA45FFE54A975116 /* SettingsColorControls.swift */; };
+		EDA3889A746BEE85DABC6499 /* PlanAccountSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F0E147D8C5E91D3CA6899E /* PlanAccountSettings.swift */; };
+		C96BEE3C5249A2FABBC8A053 /* TranslationColorSampling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCB63D26F053EC6A48F84B8 /* TranslationColorSampling.swift */; };
+		367513F76627BF973E223FE0 /* TranslationBackgroundRestoration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C6438F4DB391EC0C73173F /* TranslationBackgroundRestoration.swift */; };
+		406E2B42706162C3F574D045 /* TranslationTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7184AD4D280E180DDECEB51 /* TranslationTypography.swift */; };
+		21EC2CDD46AF375BEE43B84A /* CaptureImagePreparation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AC6B3EEC44130D520B83EE /* CaptureImagePreparation.swift */; };
+		2988B8968628FB27A3F2D0B9 /* CaptureImagePreparationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EE6935DAC2180506175DCA /* CaptureImagePreparationTests.swift */; };
+		735F70115C9DDC304A68BB45 /* MarrText in Frameworks */ = {isa = PBXBuildFile; productRef = FEBD1A04787A583CE4990534 /* MarrText */; };
+		2125423D2B75BCAE31D6B191 /* MarrText in Frameworks */ = {isa = PBXBuildFile; productRef = 39C490A8BEF142B979202862 /* MarrText */; };
+		DF095715035CBB2C4C89042E /* PersonalAgentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D0FFDA202E28FBD6293201C /* PersonalAgentCoordinator.swift */; };
+		24D26021183EFA6BD049800F /* PersonalAgentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2498AFC3C29104D1F3A2D68 /* PersonalAgentEditorView.swift */; };
+		5D77A4F461B10AB7FED91B95 /* PersonalAgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BCFA63217C4557DEAACFCA /* PersonalAgentModels.swift */; };
+		60B25BC1D29FAF4383718FC1 /* PersonalAgentRunView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17BDA2F22DBE91C59E43208A /* PersonalAgentRunView.swift */; };
+		75DB951C575F1AD5D98E8525 /* PersonalAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6716CBB8CB0A5F3F73F81418 /* PersonalAgentRuntime.swift */; };
+		E3518451D7CA4147198CB78F /* PersonalAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282302A70888EB5D1CDC54E0 /* PersonalAgentStore.swift */; };
+		0DF6A845ED9C61D2D55F8BD4 /* PersonalAgentWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0675B7869163C63BC4B5A3E /* PersonalAgentWorkspaceView.swift */; };
+		68D7C3A154BDADFC3BCBB1B3 /* PersonalAgentCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1928437E8F102D94662738C /* PersonalAgentCoordinatorTests.swift */; };
+		C131AD5E9CCF63973C244E49 /* PersonalAgentRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F916B110079FF980A7CB62CA /* PersonalAgentRenderingTests.swift */; };
+		7E488CFDFA8B14878B570495 /* PersonalAgentRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF1A0D4ABEADFE6EA6C4017 /* PersonalAgentRuntimeTests.swift */; };
+		20742BD60365242E801A18B8 /* PersonalAgentStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3060258E1C9CDDB26503D8 /* PersonalAgentStoreTests.swift */; };
+		D0C710000000000000000001 /* MarrDockTilePlugIn.m in Sources */ = {isa = PBXBuildFile; fileRef = D0C710000000000000000004; };
+		D0C710000000000000000002 /* Circular artwork in Resources */ = {isa = PBXBuildFile; fileRef = D0C710000000000000000005; };
+		D0C710000000000000000003 /* MarrDockTile in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = D0C710000000000000000006; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B11000000000000000000001 = {isa = PBXBuildFile; fileRef = B11000000000000000000002 /* MarrCompanion.swift */;};
+		B11000000000000000000003 = {isa = PBXBuildFile; fileRef = B11000000000000000000004 /* MarrCompanion.riv */;};
+		B11000000000000000000005 = {isa = PBXBuildFile; productRef = B11000000000000000000006 /* RiveRuntime */;};
+		B11000000000000000000008 = {isa = PBXBuildFile; fileRef = B11000000000000000000009 /* MarrCompanionTests.swift */;};
+		B1100000000000000000000A = {isa = PBXBuildFile; productRef = B1100000000000000000000B /* RiveRuntime */;};
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,9 +159,24 @@
 			remoteGlobalIDString = 1A0000502C00000000000001;
 			remoteInfo = Marr;
 		};
+		D0C71000000000000000000E = {isa = PBXContainerItemProxy; containerPortal = 1A0000802C00000000000001; proxyType = 1; remoteGlobalIDString = D0C71000000000000000000C; remoteInfo = MarrDockTile; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		8041A9EE37AB4FBA8EC44550 /* AttachmentDropTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDropTests.swift; sourceTree = "<group>"; };
+		B901B17958754E86AB3A5285 /* AttachmentImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentImport.swift; sourceTree = "<group>"; };
+		9B2C60E93E0642249BB45A7D /* AttachmentDropArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDropArea.swift; sourceTree = "<group>"; };
+		9FDE8733772C4B56BDD8BD20 /* AgentComposerEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComposerEditor.swift; sourceTree = "<group>"; };
+		A01120260000000000000001 /* MarrWelcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrWelcome.swift; sourceTree = "<group>"; };
+		CC9EA1302026102900000020 /* MarrChatComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrChatComponents.swift; sourceTree = "<group>"; };
+		CC9EA1302026102900000001 /* PersonalAgentCloudSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentCloudSettings.swift; sourceTree = "<group>"; };
+		CC9EA1302026102900000000 /* PersonalAgentCloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentCloud.swift; sourceTree = "<group>"; };
+		D02800000000000000000001 /* MarrNavigationRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrNavigationRail.swift; sourceTree = "<group>"; };
+		F01A00100000000000000002 /* loss-inline-math.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Fixtures/loss-inline-math.png"; sourceTree = "<group>"; };
+		F01A00100000000000000004 /* coursework-style.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Fixtures/coursework-style.png"; sourceTree = "<group>"; };
+        AB2310030000000000000001 /* DesktopSidebarSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopSidebarSnapshot.swift; sourceTree = "<group>"; };
+		1B1700022C00000000000001 /* MarrIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrIcons.swift; sourceTree = "<group>"; };
+		1F0000112C00000000000001 /* ScreenshotAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotAnnotation.swift; sourceTree = "<group>"; };
 		1A0000102C00000000000001 /* MarrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrApp.swift; sourceTree = "<group>"; };
 		1A0000132C00000000000001 /* PickedImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickedImage.swift; sourceTree = "<group>"; };
 		1A0000142C00000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -61,9 +184,8 @@
 		1A0000162C00000000000001 /* MarrController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrController.swift; sourceTree = "<group>"; };
 		1A0000172C00000000000001 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		1A0000182C00000000000001 /* ScreenshotOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotOverlay.swift; sourceTree = "<group>"; };
-		1A00001A2C00000000000001 /* WindowCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCapture.swift; sourceTree = "<group>"; };
 		1A00001B2C00000000000001 /* AnswerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanel.swift; sourceTree = "<group>"; };
-		1A00001C2C00000000000001 /* ConversationHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarness.swift; sourceTree = "<group>"; };
+		1A00001C2C00000000000001 /* ConversationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSession.swift; sourceTree = "<group>"; };
 		1A00001D2C00000000000001 /* ConversationHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHistoryStore.swift; sourceTree = "<group>"; };
 		1A00001E2C00000000000001 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		1A00001F2C00000000000001 /* MarrTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrTypography.swift; sourceTree = "<group>"; };
@@ -78,12 +200,103 @@
 		1D0000132C00000000000001 /* TranslationLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationLayout.swift; sourceTree = "<group>"; };
 		1D0000142C00000000000001 /* TranslationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRenderer.swift; sourceTree = "<group>"; };
 		1D0000152C00000000000001 /* BackgroundOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundOperation.swift; sourceTree = "<group>"; };
-		1D0000162C00000000000001 /* CodexWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWorkspace.swift; sourceTree = "<group>"; };
-		1F0000102C00000000000001 /* CodexWorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexWorkbenchStore.swift; sourceTree = "<group>"; };
-		1E0000102C00000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
-		1E0000202C00000000000001 /* MarrCodexServer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MarrCodexServer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D0000162C00000000000001 /* RuntimeWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeWorkspace.swift; sourceTree = "<group>"; };
+		1F0000102C00000000000001 /* WorkbenchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchStore.swift; sourceTree = "<group>"; };
 		1B0000102C00000000000001 /* ConversationHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHarnessTests.swift; sourceTree = "<group>"; };
 		1B0000202C00000000000001 /* MarrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MarrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1F1000112C00000000000001 /* RuntimeProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeProtocol.swift; sourceTree = "<group>"; };
+		1F1000122C00000000000001 /* RuntimeSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeSupportViews.swift; sourceTree = "<group>"; };
+		1F1000132C00000000000001 /* RuntimeProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeProtocolTests.swift; sourceTree = "<group>"; };
+		1F1000142C00000000000001 /* WorkbenchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchTests.swift; sourceTree = "<group>"; };
+		1F1000152C00000000000001 /* RuntimeWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeWorkspaceTests.swift; sourceTree = "<group>"; };
+		1F1000162C00000000000001 /* RuntimeSupportViewsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeSupportViewsTests.swift; sourceTree = "<group>"; };
+		1F2000112C00000000000001 /* AgentComposerSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComposerSupport.swift; sourceTree = "<group>"; };
+		1F2000122C00000000000001 /* AgentComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComposerView.swift; sourceTree = "<group>"; };
+		1F2000132C00000000000001 /* AgentComposerSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComposerSupportTests.swift; sourceTree = "<group>"; };
+		1F2000142C00000000000001 /* AgentComposerViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComposerViewTests.swift; sourceTree = "<group>"; };
+		1F3000112C00000000000001 /* TranslationRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRendererTests.swift; sourceTree = "<group>"; };
+		1F3000122C00000000000001 /* TranslationRecognitionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationRecognitionTests.swift; sourceTree = "<group>"; };
+		1F4000112C00000000000001 /* TranslationMathProtection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationMathProtection.swift; sourceTree = "<group>"; };
+		1F4000122C00000000000001 /* TranslationMathProtectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationMathProtectionTests.swift; sourceTree = "<group>"; };
+		1F5000112C00000000000001 /* TranslationOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationOverlayTests.swift; sourceTree = "<group>"; };
+		FC1F2495F49EB3A7E62B5E44 /* MarrResponseComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrResponseComponents.swift; sourceTree = "<group>"; };
+		E3375191A5812B95A175F6BD /* MarrAgentMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrAgentMotion.swift; sourceTree = "<group>"; };
+		6C1D41A575B8DE51185EB823 /* ComposerDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerDraftStore.swift; sourceTree = "<group>"; };
+		1F06DA132489155DB1E1B7A6 /* MarrResponseComponentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrResponseComponentsTests.swift; sourceTree = "<group>"; };
+		F09B09CEA0A70380A4D9BB62 /* MarrAgentMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrAgentMotionTests.swift; sourceTree = "<group>"; };
+		FEBB6CADF2C433130E8D33E7 /* ComposerDraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerDraftStoreTests.swift; sourceTree = "<group>"; };
+		A9513D4A9266A79F0CC15420 /* ComposerContextStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerContextStrip.swift; sourceTree = "<group>"; };
+		57879C1875FF987FFA4A1F21 /* MarrMediaViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrMediaViewer.swift; sourceTree = "<group>"; };
+		2606E9E95A145C69946BF2FF /* MarrComponentGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrComponentGallery.swift; sourceTree = "<group>"; };
+		B9F5AB148CBD85D548C9BF02 /* MarrToolActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrToolActivity.swift; sourceTree = "<group>"; };
+		D01C00000000000000000001 /* MarrStorageSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrStorageSettingsTests.swift; sourceTree = "<group>"; };
+		D01D00000000000000000001 /* MarrStandaloneWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrStandaloneWorkspaceTests.swift; sourceTree = "<group>"; };
+		E7B944717817DA6ABAB0B837 /* MarrMediaViewerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrMediaViewerTests.swift; sourceTree = "<group>"; };
+		85992E4D6FD16FBD687E1347 /* MarrToolActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrToolActivityTests.swift; sourceTree = "<group>"; };
+		BF7DE2DD22C3E0E5AE763660 /* MarrUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrUITestSupport.swift; sourceTree = "<group>"; };
+		E64127130037E4BCF565B9D9 /* MarrSurfaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrSurfaceTests.swift; sourceTree = "<group>"; };
+		E886BB66DD8668BFC64B2961 /* RuntimeTransportIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeTransportIntegrationTests.swift; sourceTree = "<group>"; };
+		759AE31088E14CB3A4295385 /* AnswerPanelSidebarLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanelSidebarLayout.swift; sourceTree = "<group>"; };
+		B9935B03448947CFA44B3516 /* AnswerPanelSidebarLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanelSidebarLayoutTests.swift; sourceTree = "<group>"; };
+		39642599EF24414C9EA3A5BA /* MarrHistorySidebarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrHistorySidebarTests.swift; sourceTree = "<group>"; };
+		98790234245A498FB45BC5D1 /* MarrHistorySidebarRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrHistorySidebarRenderingTests.swift; sourceTree = "<group>"; };
+		6FAAE86F58874CEEBA79D539 /* MarrHistoryLoadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrHistoryLoadTests.swift; sourceTree = "<group>"; };
+		B4C83F8625024A1889382437 /* MarrWorkspaceSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrWorkspaceSidebar.swift; sourceTree = "<group>"; };
+		CA636CDE2C5F4B9F981B5F7A /* MarrWorkspaceSidebarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrWorkspaceSidebarTests.swift; sourceTree = "<group>"; };
+		D01A00000000000000000001 /* MarrLocalWorkspaceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrLocalWorkspaceViews.swift; sourceTree = "<group>"; };
+		D01B00000000000000000001 /* MarrStorageSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrStorageSettings.swift; sourceTree = "<group>"; };
+		BFFF12683FD16256DDA89D36 /* ImageTranslationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageTranslationModels.swift; sourceTree = "<group>"; };
+		BA55C77A572561485D08EE64 /* ImageTranslationPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageTranslationPrompt.swift; sourceTree = "<group>"; };
+		5A747DCA9E4E420069BA5A4D /* ImageTranslationMerger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageTranslationMerger.swift; sourceTree = "<group>"; };
+		5286A8BE914EA3B363AFAAEB /* ImageTranslationResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageTranslationResponseParser.swift; sourceTree = "<group>"; };
+		D170703E80C07F497F2F610C /* ConversationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContext.swift; sourceTree = "<group>"; };
+		C3640EF9CA014E8DB58F70F2 /* UserMessagePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMessagePresentation.swift; sourceTree = "<group>"; };
+		10F101C50831161F1566D4B3 /* WorkbenchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchModels.swift; sourceTree = "<group>"; };
+		627DF2B0439D7E9674F21A59 /* WorkbenchArchiveWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchArchiveWriter.swift; sourceTree = "<group>"; };
+		EDD84DA3A3B8B9E03504AF7E /* RuntimeWorkspaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeWorkspaceModels.swift; sourceTree = "<group>"; };
+		B547E3698CD06CDF018A9030 /* RuntimeConversationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeConversationClient.swift; sourceTree = "<group>"; };
+		B39F591982E8A0EF7A37F840 /* RuntimeHistoryProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeHistoryProjection.swift; sourceTree = "<group>"; };
+		ECAAAF83833B213CABAF39C6 /* AnswerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanelView.swift; sourceTree = "<group>"; };
+		E83BB28EB3ADA8C9B2465B28 /* WorkspaceTaskBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTaskBrowser.swift; sourceTree = "<group>"; };
+		32CAE3289A69D1A6E5ACBDDD /* WorkActivityTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkActivityTimeline.swift; sourceTree = "<group>"; };
+		281F0EF61D58A44F8C8EF3F0 /* ConversationHistorySidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationHistorySidebar.swift; sourceTree = "<group>"; };
+		818A0BCEA007A734AC548E4F /* AnswerPanelControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerPanelControls.swift; sourceTree = "<group>"; };
+		CD95EE9D7CE8475F0560E507 /* UserMessageContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMessageContent.swift; sourceTree = "<group>"; };
+		1FCCE3D97C5C74DF725ED272 /* MarkdownResponseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownResponseView.swift; sourceTree = "<group>"; };
+		3EEF09F94EB4BEA31BF037C6 /* CaptureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSettings.swift; sourceTree = "<group>"; };
+		25138C872A3465BBB8E3D5C1 /* RuntimeAccountSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeAccountSettings.swift; sourceTree = "<group>"; };
+		F309EA2A4AD7DE8FD7823F46 /* RuntimeConfigurationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeConfigurationSettings.swift; sourceTree = "<group>"; };
+		0371355052F082DABC022A4D /* WorkspaceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettings.swift; sourceTree = "<group>"; };
+		6A8C2294995AAB29B53A71C9 /* ConversationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSettings.swift; sourceTree = "<group>"; };
+		592F51C8CCB3C8EAF62436A1 /* InferenceConnectionSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InferenceConnectionSettings.swift; sourceTree = "<group>"; };
+		CE62CFEB2D00A260E60D0988 /* AppearanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettings.swift; sourceTree = "<group>"; };
+		1D14D0EE759348CDFE0FFD94 /* UsageSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSettings.swift; sourceTree = "<group>"; };
+		A5B9B4E25A80B4C3719A5E8E /* SettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsControls.swift; sourceTree = "<group>"; };
+		E27306F60018E986547FE755 /* HotKeyRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyRecorder.swift; sourceTree = "<group>"; };
+		A1389F19DA45FFE54A975116 /* SettingsColorControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsColorControls.swift; sourceTree = "<group>"; };
+		01F0E147D8C5E91D3CA6899E /* PlanAccountSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanAccountSettings.swift; sourceTree = "<group>"; };
+		1FCB63D26F053EC6A48F84B8 /* TranslationColorSampling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationColorSampling.swift; sourceTree = "<group>"; };
+		65C6438F4DB391EC0C73173F /* TranslationBackgroundRestoration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationBackgroundRestoration.swift; sourceTree = "<group>"; };
+		B7184AD4D280E180DDECEB51 /* TranslationTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationTypography.swift; sourceTree = "<group>"; };
+		87AC6B3EEC44130D520B83EE /* CaptureImagePreparation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImagePreparation.swift; sourceTree = "<group>"; };
+		72EE6935DAC2180506175DCA /* CaptureImagePreparationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImagePreparationTests.swift; sourceTree = "<group>"; };
+		6D0FFDA202E28FBD6293201C /* PersonalAgentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentCoordinator.swift; sourceTree = "<group>"; };
+		C2498AFC3C29104D1F3A2D68 /* PersonalAgentEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentEditorView.swift; sourceTree = "<group>"; };
+		91BCFA63217C4557DEAACFCA /* PersonalAgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentModels.swift; sourceTree = "<group>"; };
+		17BDA2F22DBE91C59E43208A /* PersonalAgentRunView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentRunView.swift; sourceTree = "<group>"; };
+		6716CBB8CB0A5F3F73F81418 /* PersonalAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentRuntime.swift; sourceTree = "<group>"; };
+		282302A70888EB5D1CDC54E0 /* PersonalAgentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentStore.swift; sourceTree = "<group>"; };
+		C0675B7869163C63BC4B5A3E /* PersonalAgentWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentWorkspaceView.swift; sourceTree = "<group>"; };
+		A1928437E8F102D94662738C /* PersonalAgentCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentCoordinatorTests.swift; sourceTree = "<group>"; };
+		F916B110079FF980A7CB62CA /* PersonalAgentRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentRenderingTests.swift; sourceTree = "<group>"; };
+		9CF1A0D4ABEADFE6EA6C4017 /* PersonalAgentRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentRuntimeTests.swift; sourceTree = "<group>"; };
+		DA3060258E1C9CDDB26503D8 /* PersonalAgentStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentStoreTests.swift; sourceTree = "<group>"; };
+		D0C710000000000000000004 /* MarrDockTilePlugIn.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MarrDockTilePlugIn.m; sourceTree = "<group>"; };
+		D0C710000000000000000005 /* Circular artwork */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Marr/Assets.xcassets/AppIcon.appiconset/Marr-Dock-512@2x.png"; sourceTree = SOURCE_ROOT; };
+		D0C710000000000000000006 /* MarrDockTile.docktileplugin */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MarrDockTile.docktileplugin; sourceTree = BUILT_PRODUCTS_DIR; };
+		B11000000000000000000002 /* MarrCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrCompanion.swift; sourceTree = "<group>"; };
+		B11000000000000000000004 /* MarrCompanion.riv */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/MarrCompanion.riv; sourceTree = "<group>"; };
+		B11000000000000000000009 /* MarrCompanionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarrCompanionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +304,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B11000000000000000000005 /* RiveRuntime in Frameworks */,
+				735F70115C9DDC304A68BB45 /* MarrText in Frameworks */,
 				1C0000012C00000000000001 /* MarrCore in Frameworks */,
 				1C0000022C00000000000001 /* MarrNetworking in Frameworks */,
 				1C0000072C00000000000001 /* MarrPersistence in Frameworks */,
@@ -102,24 +317,25 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1100000000000000000000A /* RiveRuntime in Frameworks */,
+				2125423D2B75BCAE31D6B191 /* MarrText in Frameworks */,
 				1C0000042C00000000000001 /* MarrCore in Frameworks */,
 				1C0000052C00000000000001 /* MarrNetworking in Frameworks */,
 				1C0000062C00000000000001 /* MarrSettings in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0C71000000000000000000A = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		1E0000702C00000000000001 /* Embed Background Helper */ = {
+		D0C71000000000000000000B /* Embed Dock PlugIn */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "Contents/Library/LoginItems";
-			dstSubfolderSpec = 1;
-			files = (
-				1E0000022C00000000000001 /* MarrCodexServer.app in Embed Background Helper */,
-			);
-			name = "Embed Background Helper";
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (D0C710000000000000000003, );
+			name = "Embed Dock PlugIn";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -129,45 +345,27 @@
 			isa = PBXGroup;
 			children = (
 				1A0000412C00000000000001 /* Marr */,
-				1E0000402C00000000000001 /* MarrCodexServer */,
 				1B0000412C00000000000001 /* MarrTests */,
+				D0C710000000000000000007 /* MarrDockTile */,
 				1A0000422C00000000000001 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		1E0000402C00000000000001 /* MarrCodexServer */ = {
-			isa = PBXGroup;
-			children = (
-				1E0000102C00000000000001 /* main.swift */,
-			);
-			path = MarrCodexServer;
 			sourceTree = "<group>";
 		};
 		1A0000412C00000000000001 /* Marr */ = {
 			isa = PBXGroup;
 			children = (
-				1A0000102C00000000000001 /* MarrApp.swift */,
-				1A0000162C00000000000001 /* MarrController.swift */,
-				1D0000112C00000000000001 /* TranslationOverlay.swift */,
-				1D0000122C00000000000001 /* TranslationRecognition.swift */,
-				1D0000132C00000000000001 /* TranslationLayout.swift */,
-				1D0000142C00000000000001 /* TranslationRenderer.swift */,
-				1A0000172C00000000000001 /* HotKeyManager.swift */,
-				1A00001A2C00000000000001 /* WindowCapture.swift */,
-				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
-				1A00001B2C00000000000001 /* AnswerPanel.swift */,
-				1D0000152C00000000000001 /* BackgroundOperation.swift */,
-				1D0000162C00000000000001 /* CodexWorkspace.swift */,
-				1F0000102C00000000000001 /* CodexWorkbenchStore.swift */,
-				1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */,
-				1A00001C2C00000000000001 /* ConversationHarness.swift */,
-				1A00001D2C00000000000001 /* ConversationHistoryStore.swift */,
-				1A00001E2C00000000000001 /* HistoryView.swift */,
-				1A00001F2C00000000000001 /* MarrTypography.swift */,
-				1A0000252C00000000000001 /* MarrSurface.swift */,
-				1A0000272C00000000000001 /* MarrBubbleColor.swift */,
-				1A0000242C00000000000001 /* SettingsView.swift */,
-				1A0000132C00000000000001 /* PickedImage.swift */,
+				A7C97B76153A3F85287FB3C0 /* PersonalAgent */,
+				CEF7C96BED7CDCD65D6C9BD2 /* App */,
+				0BF63F89EDB6C4098754F79D /* Capture */,
+				EEE24BE6C5FC8510CBCEDAAC /* Conversation */,
+				ABA2756677D98CB124FE6E3E /* DesignSystem */,
+				EEF103142433ECADBC446EA5 /* History */,
+				7B17A4F91D64BF69693249E9 /* Infrastructure */,
+				1BA8DFAFE8FBA37FA4D36A0E /* Presentation */,
+				72FC57B529EE17C2AF325A81 /* Settings */,
+				51F5C1E091CAFA746F28B177 /* Translation */,
+				F98BEB358583205FAA7681C8 /* Workspace */,
+				B11000000000000000000004 /* MarrCompanion.riv */,
 				1A0000142C00000000000001 /* Assets.xcassets */,
 				1A0000212C00000000000001 /* Fonts */,
 				1A0000152C00000000000001 /* Marr.entitlements */,
@@ -179,8 +377,8 @@
 			isa = PBXGroup;
 			children = (
 				1A0000202C00000000000001 /* Marr.app */,
-				1E0000202C00000000000001 /* MarrCodexServer.app */,
 				1B0000202C00000000000001 /* MarrTests.xctest */,
+				D0C710000000000000000006 /* MarrDockTile.docktileplugin */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -188,9 +386,288 @@
 		1B0000412C00000000000001 /* MarrTests */ = {
 			isa = PBXGroup;
 			children = (
-				1B0000102C00000000000001 /* ConversationHarnessTests.swift */,
+				2EDD398E6192B561516C8D04 /* PersonalAgent */,
+				928960EA8FA5DCAD9CD62325 /* Capture */,
+				BCEA0738CF88A4577CC42D5F /* Conversation */,
+				937E2CD02AF099B9FF6F02FA /* History */,
+				D7E25B62EF973FB2C7052899 /* Presentation */,
+				6C0E1E8B3B590547AED0E857 /* Settings */,
+				42B2F8117761F0176AFE17FE /* Support */,
+				4C44A2CD830C61C6FDE868CC /* Translation */,
+				3FDA9993F959E71207CCD9D2 /* Workspace */,
 			);
 			path = MarrTests;
+			sourceTree = "<group>";
+		};
+		CEF7C96BED7CDCD65D6C9BD2 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				1A0000102C00000000000001 /* MarrApp.swift */,
+				A01120260000000000000001 /* MarrWelcome.swift */,
+				1A0000162C00000000000001 /* MarrController.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		0BF63F89EDB6C4098754F79D /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				87AC6B3EEC44130D520B83EE /* CaptureImagePreparation.swift */,
+				1F0000112C00000000000001 /* ScreenshotAnnotation.swift */,
+				1A0000182C00000000000001 /* ScreenshotOverlay.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		EEE24BE6C5FC8510CBCEDAAC /* Conversation */ = {
+			isa = PBXGroup;
+			children = (
+				1F2000112C00000000000001 /* AgentComposerSupport.swift */,
+				1F2000122C00000000000001 /* AgentComposerView.swift */,
+				9B2C60E93E0642249BB45A7D /* AttachmentDropArea.swift */,
+				9FDE8733772C4B56BDD8BD20 /* AgentComposerEditor.swift */,
+				A9513D4A9266A79F0CC15420 /* ComposerContextStrip.swift */,
+				6C1D41A575B8DE51185EB823 /* ComposerDraftStore.swift */,
+				D170703E80C07F497F2F610C /* ConversationContext.swift */,
+				1D0000102C00000000000001 /* ConversationRequestCoordinator.swift */,
+				1A00001C2C00000000000001 /* ConversationSession.swift */,
+			);
+			path = Conversation;
+			sourceTree = "<group>";
+		};
+		ABA2756677D98CB124FE6E3E /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				B11000000000000000000002 /* MarrCompanion.swift */,
+				E3375191A5812B95A175F6BD /* MarrAgentMotion.swift */,
+				1A0000272C00000000000001 /* MarrBubbleColor.swift */,
+				2606E9E95A145C69946BF2FF /* MarrComponentGallery.swift */,
+				1B1700022C00000000000001 /* MarrIcons.swift */,
+				1A0000252C00000000000001 /* MarrSurface.swift */,
+				1A00001F2C00000000000001 /* MarrTypography.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		EEF103142433ECADBC446EA5 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				281F0EF61D58A44F8C8EF3F0 /* ConversationHistorySidebar.swift */,
+				1A00001D2C00000000000001 /* ConversationHistoryStore.swift */,
+				1A00001E2C00000000000001 /* HistoryView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		7B17A4F91D64BF69693249E9 /* Infrastructure */ = {
+			isa = PBXGroup;
+			children = (
+				1D0000152C00000000000001 /* BackgroundOperation.swift */,
+				1A0000172C00000000000001 /* HotKeyManager.swift */,
+				1A0000132C00000000000001 /* PickedImage.swift */,
+				B901B17958754E86AB3A5285 /* AttachmentImport.swift */,
+			);
+			path = Infrastructure;
+			sourceTree = "<group>";
+		};
+		1BA8DFAFE8FBA37FA4D36A0E /* Presentation */ = {
+			isa = PBXGroup;
+			children = (
+				1A00001B2C00000000000001 /* AnswerPanel.swift */,
+				818A0BCEA007A734AC548E4F /* AnswerPanelControls.swift */,
+				D02800000000000000000001 /* MarrNavigationRail.swift */,
+				759AE31088E14CB3A4295385 /* AnswerPanelSidebarLayout.swift */,
+				ECAAAF83833B213CABAF39C6 /* AnswerPanelView.swift */,
+				1FCCE3D97C5C74DF725ED272 /* MarkdownResponseView.swift */,
+				57879C1875FF987FFA4A1F21 /* MarrMediaViewer.swift */,
+				FC1F2495F49EB3A7E62B5E44 /* MarrResponseComponents.swift */,
+				CC9EA1302026102900000020 /* MarrChatComponents.swift */,
+				B9F5AB148CBD85D548C9BF02 /* MarrToolActivity.swift */,
+				CD95EE9D7CE8475F0560E507 /* UserMessageContent.swift */,
+				C3640EF9CA014E8DB58F70F2 /* UserMessagePresentation.swift */,
+			);
+			path = Presentation;
+			sourceTree = "<group>";
+		};
+		72FC57B529EE17C2AF325A81 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				CE62CFEB2D00A260E60D0988 /* AppearanceSettings.swift */,
+				3EEF09F94EB4BEA31BF037C6 /* CaptureSettings.swift */,
+				6A8C2294995AAB29B53A71C9 /* ConversationSettings.swift */,
+				E27306F60018E986547FE755 /* HotKeyRecorder.swift */,
+				592F51C8CCB3C8EAF62436A1 /* InferenceConnectionSettings.swift */,
+				D01B00000000000000000001 /* MarrStorageSettings.swift */,
+				01F0E147D8C5E91D3CA6899E /* PlanAccountSettings.swift */,
+				25138C872A3465BBB8E3D5C1 /* RuntimeAccountSettings.swift */,
+				F309EA2A4AD7DE8FD7823F46 /* RuntimeConfigurationSettings.swift */,
+				A1389F19DA45FFE54A975116 /* SettingsColorControls.swift */,
+				A5B9B4E25A80B4C3719A5E8E /* SettingsControls.swift */,
+				1A0000242C00000000000001 /* SettingsView.swift */,
+				1D14D0EE759348CDFE0FFD94 /* UsageSettings.swift */,
+				0371355052F082DABC022A4D /* WorkspaceSettings.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		51F5C1E091CAFA746F28B177 /* Translation */ = {
+			isa = PBXGroup;
+			children = (
+				5A747DCA9E4E420069BA5A4D /* ImageTranslationMerger.swift */,
+				BFFF12683FD16256DDA89D36 /* ImageTranslationModels.swift */,
+				BA55C77A572561485D08EE64 /* ImageTranslationPrompt.swift */,
+				5286A8BE914EA3B363AFAAEB /* ImageTranslationResponseParser.swift */,
+				65C6438F4DB391EC0C73173F /* TranslationBackgroundRestoration.swift */,
+				1FCB63D26F053EC6A48F84B8 /* TranslationColorSampling.swift */,
+				1D0000132C00000000000001 /* TranslationLayout.swift */,
+				1F4000112C00000000000001 /* TranslationMathProtection.swift */,
+				1D0000112C00000000000001 /* TranslationOverlay.swift */,
+				1D0000122C00000000000001 /* TranslationRecognition.swift */,
+				1D0000142C00000000000001 /* TranslationRenderer.swift */,
+				B7184AD4D280E180DDECEB51 /* TranslationTypography.swift */,
+			);
+			path = Translation;
+			sourceTree = "<group>";
+		};
+		F98BEB358583205FAA7681C8 /* Workspace */ = {
+			isa = PBXGroup;
+			children = (
+				AB2310030000000000000001 /* DesktopSidebarSnapshot.swift */,
+				D01A00000000000000000001 /* MarrLocalWorkspaceViews.swift */,
+				B4C83F8625024A1889382437 /* MarrWorkspaceSidebar.swift */,
+				B547E3698CD06CDF018A9030 /* RuntimeConversationClient.swift */,
+				B39F591982E8A0EF7A37F840 /* RuntimeHistoryProjection.swift */,
+				1F1000112C00000000000001 /* RuntimeProtocol.swift */,
+				1F1000122C00000000000001 /* RuntimeSupportViews.swift */,
+				1D0000162C00000000000001 /* RuntimeWorkspace.swift */,
+				EDD84DA3A3B8B9E03504AF7E /* RuntimeWorkspaceModels.swift */,
+				32CAE3289A69D1A6E5ACBDDD /* WorkActivityTimeline.swift */,
+				627DF2B0439D7E9674F21A59 /* WorkbenchArchiveWriter.swift */,
+				10F101C50831161F1566D4B3 /* WorkbenchModels.swift */,
+				1F0000102C00000000000001 /* WorkbenchStore.swift */,
+				E83BB28EB3ADA8C9B2465B28 /* WorkspaceTaskBrowser.swift */,
+			);
+			path = Workspace;
+			sourceTree = "<group>";
+		};
+		928960EA8FA5DCAD9CD62325 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				72EE6935DAC2180506175DCA /* CaptureImagePreparationTests.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		BCEA0738CF88A4577CC42D5F /* Conversation */ = {
+			isa = PBXGroup;
+			children = (
+				1F2000132C00000000000001 /* AgentComposerSupportTests.swift */,
+				1F2000142C00000000000001 /* AgentComposerViewTests.swift */,
+				8041A9EE37AB4FBA8EC44550 /* AttachmentDropTests.swift */,
+				FEBB6CADF2C433130E8D33E7 /* ComposerDraftStoreTests.swift */,
+				1B0000102C00000000000001 /* ConversationHarnessTests.swift */,
+			);
+			path = Conversation;
+			sourceTree = "<group>";
+		};
+		937E2CD02AF099B9FF6F02FA /* History */ = {
+			isa = PBXGroup;
+			children = (
+				6FAAE86F58874CEEBA79D539 /* MarrHistoryLoadTests.swift */,
+				98790234245A498FB45BC5D1 /* MarrHistorySidebarRenderingTests.swift */,
+				39642599EF24414C9EA3A5BA /* MarrHistorySidebarTests.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		D7E25B62EF973FB2C7052899 /* Presentation */ = {
+			isa = PBXGroup;
+			children = (
+				B9935B03448947CFA44B3516 /* AnswerPanelSidebarLayoutTests.swift */,
+				B11000000000000000000009 /* MarrCompanionTests.swift */,
+				F09B09CEA0A70380A4D9BB62 /* MarrAgentMotionTests.swift */,
+				E7B944717817DA6ABAB0B837 /* MarrMediaViewerTests.swift */,
+				1F06DA132489155DB1E1B7A6 /* MarrResponseComponentsTests.swift */,
+				E64127130037E4BCF565B9D9 /* MarrSurfaceTests.swift */,
+				85992E4D6FD16FBD687E1347 /* MarrToolActivityTests.swift */,
+			);
+			path = Presentation;
+			sourceTree = "<group>";
+		};
+		6C0E1E8B3B590547AED0E857 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				D01C00000000000000000001 /* MarrStorageSettingsTests.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		42B2F8117761F0176AFE17FE /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				BF7DE2DD22C3E0E5AE763660 /* MarrUITestSupport.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		4C44A2CD830C61C6FDE868CC /* Translation */ = {
+			isa = PBXGroup;
+			children = (
+				F01A00100000000000000002 /* loss-inline-math.png */,
+				F01A00100000000000000004 /* coursework-style.png */,
+				1F4000122C00000000000001 /* TranslationMathProtectionTests.swift */,
+				1F5000112C00000000000001 /* TranslationOverlayTests.swift */,
+				1F3000122C00000000000001 /* TranslationRecognitionTests.swift */,
+				1F3000112C00000000000001 /* TranslationRendererTests.swift */,
+			);
+			path = Translation;
+			sourceTree = "<group>";
+		};
+		3FDA9993F959E71207CCD9D2 /* Workspace */ = {
+			isa = PBXGroup;
+			children = (
+				D01D00000000000000000001 /* MarrStandaloneWorkspaceTests.swift */,
+				CA636CDE2C5F4B9F981B5F7A /* MarrWorkspaceSidebarTests.swift */,
+				1F1000132C00000000000001 /* RuntimeProtocolTests.swift */,
+				1F1000162C00000000000001 /* RuntimeSupportViewsTests.swift */,
+				E886BB66DD8668BFC64B2961 /* RuntimeTransportIntegrationTests.swift */,
+				1F1000152C00000000000001 /* RuntimeWorkspaceTests.swift */,
+				1F1000142C00000000000001 /* WorkbenchTests.swift */,
+			);
+			path = Workspace;
+			sourceTree = "<group>";
+		};
+		A7C97B76153A3F85287FB3C0 /* PersonalAgent */ = {
+			isa = PBXGroup;
+			children = (
+				6D0FFDA202E28FBD6293201C /* PersonalAgentCoordinator.swift */,
+				C2498AFC3C29104D1F3A2D68 /* PersonalAgentEditorView.swift */,
+				91BCFA63217C4557DEAACFCA /* PersonalAgentModels.swift */,
+				17BDA2F22DBE91C59E43208A /* PersonalAgentRunView.swift */,
+				6716CBB8CB0A5F3F73F81418 /* PersonalAgentRuntime.swift */,
+				CC9EA1302026102900000001 /* PersonalAgentCloudSettings.swift */,
+				CC9EA1302026102900000000 /* PersonalAgentCloud.swift */,
+				282302A70888EB5D1CDC54E0 /* PersonalAgentStore.swift */,
+				C0675B7869163C63BC4B5A3E /* PersonalAgentWorkspaceView.swift */,
+			);
+			path = PersonalAgent;
+			sourceTree = "<group>";
+		};
+		2EDD398E6192B561516C8D04 /* PersonalAgent */ = {
+			isa = PBXGroup;
+			children = (
+				A1928437E8F102D94662738C /* PersonalAgentCoordinatorTests.swift */,
+				F916B110079FF980A7CB62CA /* PersonalAgentRenderingTests.swift */,
+				9CF1A0D4ABEADFE6EA6C4017 /* PersonalAgentRuntimeTests.swift */,
+				DA3060258E1C9CDDB26503D8 /* PersonalAgentStoreTests.swift */,
+			);
+			path = PersonalAgent;
+			sourceTree = "<group>";
+		};
+		D0C710000000000000000007 /* MarrDockTile */ = {
+			isa = PBXGroup;
+			children = (D0C710000000000000000004, D0C710000000000000000005, );
+			path = MarrDockTile;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -203,16 +680,18 @@
 				1A0000602C00000000000001 /* Sources */,
 				1A0000302C00000000000001 /* Frameworks */,
 				1A0000702C00000000000001 /* Resources */,
-				1E0000702C00000000000001 /* Embed Background Helper */,
+				D0C71000000000000000000B /* Embed Dock PlugIn */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				1E0000812C00000000000001 /* PBXTargetDependency */,
+				D0C71000000000000000000F,
 			);
 			name = Marr;
 			packageProductDependencies = (
+				B11000000000000000000006 /* RiveRuntime */,
 				1C0000102C00000000000001 /* MarrCore */,
+				FEBD1A04787A583CE4990534 /* MarrText */,
 				1C0000112C00000000000001 /* MarrNetworking */,
 				1C0000162C00000000000001 /* MarrPersistence */,
 				1C0000122C00000000000001 /* MarrSettings */,
@@ -221,29 +700,13 @@
 			productReference = 1A0000202C00000000000001 /* Marr.app */;
 			productType = "com.apple.product-type.application";
 		};
-		1E0000502C00000000000001 /* MarrCodexServer */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 1E0000902C00000000000001 /* Build configuration list for PBXNativeTarget "MarrCodexServer" */;
-			buildPhases = (
-				1E0000602C00000000000001 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = MarrCodexServer;
-			packageProductDependencies = (
-			);
-			productName = MarrCodexServer;
-			productReference = 1E0000202C00000000000001 /* MarrCodexServer.app */;
-			productType = "com.apple.product-type.application";
-		};
 		1B0000502C00000000000001 /* MarrTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1B0000902C00000000000001 /* Build configuration list for PBXNativeTarget "MarrTests" */;
 			buildPhases = (
 				1B0000602C00000000000001 /* Sources */,
 				1B0000302C00000000000001 /* Frameworks */,
+				1B0000702C00000000000001 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -252,13 +715,26 @@
 			);
 			name = MarrTests;
 			packageProductDependencies = (
+				B1100000000000000000000B /* RiveRuntime */,
 				1C0000132C00000000000001 /* MarrCore */,
+				39C490A8BEF142B979202862 /* MarrText */,
 				1C0000142C00000000000001 /* MarrNetworking */,
 				1C0000152C00000000000001 /* MarrSettings */,
 			);
 			productName = MarrTests;
 			productReference = 1B0000202C00000000000001 /* MarrTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D0C71000000000000000000C /* MarrDockTile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0C71000000000000000000D;
+			buildPhases = (D0C710000000000000000008, D0C71000000000000000000A, D0C710000000000000000009, );
+			buildRules = ();
+			dependencies = ();
+			name = MarrDockTile;
+			productName = MarrDockTile;
+			productReference = D0C710000000000000000006;
+			productType = "com.apple.product-type.bundle";
 		};
 /* End PBXNativeTarget section */
 
@@ -277,9 +753,6 @@
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = 1A0000502C00000000000001;
 					};
-					1E0000502C00000000000001 = {
-						CreatedOnToolsVersion = 26.4.1;
-					};
 				};
 			};
 			buildConfigurationList = 1A0000812C00000000000001 /* Build configuration list for PBXProject "Marr" */;
@@ -292,6 +765,7 @@
 			mainGroup = 1A0000402C00000000000001;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				B11000000000000000000007 /* rive-ios */,
 				1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -300,22 +774,33 @@
 			projectRoot = "";
 			targets = (
 				1A0000502C00000000000001 /* Marr */,
-				1E0000502C00000000000001 /* MarrCodexServer */,
 				1B0000502C00000000000001 /* MarrTests */,
+				D0C71000000000000000000C /* MarrDockTile */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		1B0000702C00000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F01A00100000000000000001 /* loss-inline-math.png in Resources */,
+				F01A00100000000000000003 /* coursework-style.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		1A0000702C00000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B11000000000000000000003 /* MarrCompanion.riv in Resources */,
 				1A0000052C00000000000001 /* Assets.xcassets in Resources */,
 				1A0000092C00000000000001 /* Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0C710000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (D0C710000000000000000002, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -323,28 +808,96 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B11000000000000000000001 /* MarrCompanion.swift in Sources */,
+				0DF6A845ED9C61D2D55F8BD4 /* PersonalAgentWorkspaceView.swift in Sources */,
+				E3518451D7CA4147198CB78F /* PersonalAgentStore.swift in Sources */,
+				75DB951C575F1AD5D98E8525 /* PersonalAgentRuntime.swift in Sources */,
+				CC9EA1302026102900000101 /* PersonalAgentCloudSettings.swift in Sources */,
+				CC9EA1302026102900000100 /* PersonalAgentCloud.swift in Sources */,
+				60B25BC1D29FAF4383718FC1 /* PersonalAgentRunView.swift in Sources */,
+				5D77A4F461B10AB7FED91B95 /* PersonalAgentModels.swift in Sources */,
+				24D26021183EFA6BD049800F /* PersonalAgentEditorView.swift in Sources */,
+				DF095715035CBB2C4C89042E /* PersonalAgentCoordinator.swift in Sources */,
+				21EC2CDD46AF375BEE43B84A /* CaptureImagePreparation.swift in Sources */,
+				2B4C0F554BD47F3033736ED9 /* MarrToolActivity.swift in Sources */,
+				FEA2324040FA497EB71FD587 /* MarrComponentGallery.swift in Sources */,
+				CF249A3B6A25D51F7016B140 /* MarrMediaViewer.swift in Sources */,
+				D01B00000000000000000002 /* MarrStorageSettings.swift in Sources */,
+				D01A00000000000000000002 /* MarrLocalWorkspaceViews.swift in Sources */,
+				44EC313D399047929116E705 /* AnswerPanelSidebarLayout.swift in Sources */,
+				30EA1EBB5B0143CC9FE9EE2E /* MarrWorkspaceSidebar.swift in Sources */,
+				B69C3DB76CE2793699489A14 /* ComposerContextStrip.swift in Sources */,
+				5691E24AB4C4D6CC16F52E77 /* ComposerDraftStore.swift in Sources */,
+				6048E0C1FA82EC3F0F575B37 /* MarrAgentMotion.swift in Sources */,
+				54AAA0399186F5C7F89732E8 /* MarrResponseComponents.swift in Sources */,
+				CC9EA1302026102900000120 /* MarrChatComponents.swift in Sources */,
 				1A0000012C00000000000001 /* MarrApp.swift in Sources */,
+				A01120260000000000000002 /* MarrWelcome.swift in Sources */,
 				1A0000062C00000000000001 /* MarrController.swift in Sources */,
 				1D0000022C00000000000001 /* TranslationOverlay.swift in Sources */,
 				1D0000032C00000000000001 /* TranslationRecognition.swift in Sources */,
 				1D0000042C00000000000001 /* TranslationLayout.swift in Sources */,
+				1F4000012C00000000000001 /* TranslationMathProtection.swift in Sources */,
 				1D0000052C00000000000001 /* TranslationRenderer.swift in Sources */,
 				1A0000072C00000000000001 /* HotKeyManager.swift in Sources */,
-				1A00000A2C00000000000001 /* WindowCapture.swift in Sources */,
 				1A0000082C00000000000001 /* ScreenshotOverlay.swift in Sources */,
+				1F0000022C00000000000001 /* ScreenshotAnnotation.swift in Sources */,
 				1A00000B2C00000000000001 /* AnswerPanel.swift in Sources */,
+				406E2B42706162C3F574D045 /* TranslationTypography.swift in Sources */,
+				367513F76627BF973E223FE0 /* TranslationBackgroundRestoration.swift in Sources */,
+				C96BEE3C5249A2FABBC8A053 /* TranslationColorSampling.swift in Sources */,
+				7820C3497424439965D48DEE /* ImageTranslationModels.swift in Sources */,
+				48FADA41D2579D4DB8929F5D /* ImageTranslationPrompt.swift in Sources */,
+				52020E7B3AFA7CC7C07B4263 /* ImageTranslationMerger.swift in Sources */,
+				F66DCBEAC5B2C8ABB78E3D46 /* ImageTranslationResponseParser.swift in Sources */,
+				77E83946148E227BFA5B612E /* ConversationContext.swift in Sources */,
+				D938A9E01DE131FDF131D6FE /* UserMessagePresentation.swift in Sources */,
+				AC88AB0BAA39F3E582C773CB /* WorkbenchModels.swift in Sources */,
+				0E726BCCA8716295A9557056 /* WorkbenchArchiveWriter.swift in Sources */,
+				751194774CEDAC1B0622AC13 /* RuntimeWorkspaceModels.swift in Sources */,
+				AE28E841C8C548C5584677C7 /* RuntimeConversationClient.swift in Sources */,
+				C33E88069FE3618A3796C59F /* RuntimeHistoryProjection.swift in Sources */,
+				BFFC225ACC7AC0089D7CB499 /* AnswerPanelView.swift in Sources */,
+				7E940D884A72DCC4C7ADD928 /* WorkspaceTaskBrowser.swift in Sources */,
+				CA2204843BD67ED6505516FC /* WorkActivityTimeline.swift in Sources */,
+				0124D59CA5693050495816B5 /* ConversationHistorySidebar.swift in Sources */,
+				34A19FA3ABFB9A23B2B962E0 /* AnswerPanelControls.swift in Sources */,
+				D02800000000000000000002 /* MarrNavigationRail.swift in Sources */,
+				B9BC47E70CD79EECA5A12815 /* UserMessageContent.swift in Sources */,
+				849D9B4CB7EBEDF591A8FC45 /* MarkdownResponseView.swift in Sources */,
+				8C47B99C44FF0E8003060956 /* CaptureSettings.swift in Sources */,
+				716A36D10754968A9E12B6E3 /* RuntimeAccountSettings.swift in Sources */,
+				60E20BFC2E81741F71D0718C /* RuntimeConfigurationSettings.swift in Sources */,
+				C72981B05B81043396705FB0 /* WorkspaceSettings.swift in Sources */,
+				CE9BD23D9C96250349041869 /* ConversationSettings.swift in Sources */,
+				6A5F68C2D08A61A98BB0D02A /* InferenceConnectionSettings.swift in Sources */,
+				7AB945E9D0FDA18A1DD895CD /* AppearanceSettings.swift in Sources */,
+				6C19516C809C997A5E355CCF /* UsageSettings.swift in Sources */,
+				E6D4512DD71D993E0113BFAC /* SettingsControls.swift in Sources */,
+				2E6808A82C7E8294719E2C28 /* HotKeyRecorder.swift in Sources */,
+				47B9FC6AF5682E2DFEA6BE95 /* SettingsColorControls.swift in Sources */,
+				EDA3889A746BEE85DABC6499 /* PlanAccountSettings.swift in Sources */,
 				1D0000062C00000000000001 /* BackgroundOperation.swift in Sources */,
-				1D0000072C00000000000001 /* CodexWorkspace.swift in Sources */,
-				1F0000012C00000000000001 /* CodexWorkbenchStore.swift in Sources */,
+				1D0000072C00000000000001 /* RuntimeWorkspace.swift in Sources */,
+				1F1000022C00000000000001 /* RuntimeSupportViews.swift in Sources */,
+				1F2000022C00000000000001 /* AgentComposerView.swift in Sources */,
+				5EC7B9CB6CE84EE4B2CA5366 /* AttachmentDropArea.swift in Sources */,
+				7D78D7CD23C44772940EBF4A /* AgentComposerEditor.swift in Sources */,
+				1F2000012C00000000000001 /* AgentComposerSupport.swift in Sources */,
+				1F1000012C00000000000001 /* RuntimeProtocol.swift in Sources */,
+				1F0000012C00000000000001 /* WorkbenchStore.swift in Sources */,
+                AB2310010000000000000001 /* DesktopSidebarSnapshot.swift in Sources */,
 				1D0000012C00000000000001 /* ConversationRequestCoordinator.swift in Sources */,
-				1A00000C2C00000000000001 /* ConversationHarness.swift in Sources */,
+				1A00000C2C00000000000001 /* ConversationSession.swift in Sources */,
 				1A00000D2C00000000000001 /* ConversationHistoryStore.swift in Sources */,
 				1A00000E2C00000000000001 /* HistoryView.swift in Sources */,
 				1A00000F2C00000000000001 /* MarrTypography.swift in Sources */,
+				1B1700012C00000000000001 /* MarrIcons.swift in Sources */,
 				1A0000232C00000000000001 /* MarrSurface.swift in Sources */,
 				1A0000262C00000000000001 /* MarrBubbleColor.swift in Sources */,
 				1A0000222C00000000000001 /* SettingsView.swift in Sources */,
 				1A0000042C00000000000001 /* PickedImage.swift in Sources */,
+				B7FCDCB3BC7946DAB6C62346 /* AttachmentImport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,18 +905,43 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B11000000000000000000008 /* MarrCompanionTests.swift in Sources */,
+				20742BD60365242E801A18B8 /* PersonalAgentStoreTests.swift in Sources */,
+				7E488CFDFA8B14878B570495 /* PersonalAgentRuntimeTests.swift in Sources */,
+				C131AD5E9CCF63973C244E49 /* PersonalAgentRenderingTests.swift in Sources */,
+				68D7C3A154BDADFC3BCBB1B3 /* PersonalAgentCoordinatorTests.swift in Sources */,
+				2988B8968628FB27A3F2D0B9 /* CaptureImagePreparationTests.swift in Sources */,
+				1B1384B80E4020984B9618CC /* RuntimeTransportIntegrationTests.swift in Sources */,
+				8F2B1D9D0222AF917E154AA7 /* MarrSurfaceTests.swift in Sources */,
+				D0AAC68F3C3A50BEA82F935F /* MarrUITestSupport.swift in Sources */,
+				793D6DBF898958E9B167C2D0 /* MarrToolActivityTests.swift in Sources */,
+				D01C00000000000000000002 /* MarrStorageSettingsTests.swift in Sources */,
+				D01D00000000000000000002 /* MarrStandaloneWorkspaceTests.swift in Sources */,
+				A14155F526DE8B19DBBE0200 /* MarrMediaViewerTests.swift in Sources */,
+				DF1C48314AD840D5B5D98950 /* MarrHistoryLoadTests.swift in Sources */,
+				4DD76BD4A4A9447FAD8ECFC9 /* MarrHistorySidebarRenderingTests.swift in Sources */,
+				1B35038FB184483192B0BFB3 /* MarrHistorySidebarTests.swift in Sources */,
+				2EC248A0FA6B4585985E33E9 /* AnswerPanelSidebarLayoutTests.swift in Sources */,
+				4BC0A77CFFED492CBB2C4AA6 /* MarrWorkspaceSidebarTests.swift in Sources */,
+				5EC5FEB6CB028A10584324D7 /* ComposerDraftStoreTests.swift in Sources */,
+				503A3850B23609753F59433F /* MarrAgentMotionTests.swift in Sources */,
+				265943D8ECD6531C03BA85FC /* MarrResponseComponentsTests.swift in Sources */,
 				1B0000012C00000000000001 /* ConversationHarnessTests.swift in Sources */,
+				1F3000022C00000000000001 /* TranslationRecognitionTests.swift in Sources */,
+				1F4000022C00000000000001 /* TranslationMathProtectionTests.swift in Sources */,
+				1F5000012C00000000000001 /* TranslationOverlayTests.swift in Sources */,
+				1F3000012C00000000000001 /* TranslationRendererTests.swift in Sources */,
+				1F1000062C00000000000001 /* RuntimeSupportViewsTests.swift in Sources */,
+				1F2000042C00000000000001 /* AgentComposerViewTests.swift in Sources */,
+				87434A29A9594876B36CE613 /* AttachmentDropTests.swift in Sources */,
+				1F2000032C00000000000001 /* AgentComposerSupportTests.swift in Sources */,
+				1F1000052C00000000000001 /* RuntimeWorkspaceTests.swift in Sources */,
+				1F1000042C00000000000001 /* WorkbenchTests.swift in Sources */,
+				1F1000032C00000000000001 /* RuntimeProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		1E0000602C00000000000001 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				1E0000012C00000000000001 /* main.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+		D0C710000000000000000008 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D0C710000000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -372,10 +950,7 @@
 			target = 1A0000502C00000000000001 /* Marr */;
 			targetProxy = 1B0000802C00000000000001 /* PBXContainerItemProxy */;
 		};
-		1E0000812C00000000000001 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 1E0000502C00000000000001 /* MarrCodexServer */;
-		};
+		D0C71000000000000000000F = {isa = PBXTargetDependency; target = D0C71000000000000000000C; targetProxy = D0C71000000000000000000E; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -508,7 +1083,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Marr;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_FILE = Marr/App/Info.plist;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = NO;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -538,7 +1114,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Marr;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_FILE = Marr/App/Info.plist;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = NO;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -582,42 +1159,36 @@
 			};
 			name = Release;
 		};
-		1E0000912C00000000000001 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
-				DEVELOPMENT_TEAM = TFG8WUM38S;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSBackgroundOnly = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.marr.Marr.CodexServer;
-				PRODUCT_NAME = MarrCodexServer;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		1E0000922C00000000000001 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
-				DEVELOPMENT_TEAM = TFG8WUM38S;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSBackgroundOnly = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.marr.Marr.CodexServer;
-				PRODUCT_NAME = MarrCodexServer;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
+		D0C710000000000000000010 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+                CLANG_ENABLE_OBJC_ARC = YES;
+                CODE_SIGN_STYLE = Automatic;
+                DEVELOPMENT_TEAM = TFG8WUM38S;
+                ENABLE_HARDENED_RUNTIME = YES;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_KEY_NSPrincipalClass = MarrDockTilePlugIn;
+                MACOSX_DEPLOYMENT_TARGET = 14.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.marr.Marr.DockTile;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = macosx;
+                SKIP_INSTALL = YES;
+                WRAPPER_EXTENSION = docktileplugin;
+                OTHER_LDFLAGS = ("-framework", AppKit, );
+			}; name = Debug; };
+		D0C710000000000000000011 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+                CLANG_ENABLE_OBJC_ARC = YES;
+                CODE_SIGN_STYLE = Automatic;
+                DEVELOPMENT_TEAM = TFG8WUM38S;
+                ENABLE_HARDENED_RUNTIME = YES;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_KEY_NSPrincipalClass = MarrDockTilePlugIn;
+                MACOSX_DEPLOYMENT_TARGET = 14.0;
+                PRODUCT_BUNDLE_IDENTIFIER = com.marr.Marr.DockTile;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = macosx;
+                SKIP_INSTALL = YES;
+                WRAPPER_EXTENSION = docktileplugin;
+                OTHER_LDFLAGS = ("-framework", AppKit, );
+			}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -648,15 +1219,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1E0000902C00000000000001 /* Build configuration list for PBXNativeTarget "MarrCodexServer" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				1E0000912C00000000000001 /* Debug */,
-				1E0000922C00000000000001 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
+		D0C71000000000000000000D = {isa = XCConfigurationList; buildConfigurations = (D0C710000000000000000010, D0C710000000000000000011, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -666,6 +1229,10 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		B11000000000000000000007 /* rive-ios */ = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/rive-app/rive-ios.git"; requirement = {kind = exactVersion; version = 6.29.0; }; };
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		1C0000102C00000000000001 /* MarrCore */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrCore; };
 		1C0000112C00000000000001 /* MarrNetworking */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrNetworking; };
@@ -674,6 +1241,10 @@
 		1C0000142C00000000000001 /* MarrNetworking */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrNetworking; };
 		1C0000152C00000000000001 /* MarrSettings */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrSettings; };
 		1C0000162C00000000000001 /* MarrPersistence */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001 /* XCLocalSwiftPackageReference "Packages/MarrModules" */; productName = MarrPersistence; };
+		FEBD1A04787A583CE4990534 /* MarrText */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001; productName = MarrText; };
+		39C490A8BEF142B979202862 /* MarrText */ = {isa = XCSwiftPackageProductDependency; package = 1C0000202C00000000000001; productName = MarrText; };
+		B11000000000000000000006 /* RiveRuntime */ = {isa = XCSwiftPackageProductDependency; package = B11000000000000000000007 /* rive-ios */; productName = RiveRuntime; };
+		B1100000000000000000000B /* RiveRuntime */ = {isa = XCSwiftPackageProductDependency; package = B11000000000000000000007 /* rive-ios */; productName = RiveRuntime; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1A0000802C00000000000001 /* Project object */;
