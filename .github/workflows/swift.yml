@@ -17,7 +17,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Check code quality boundaries
+      run: python3 scripts/check-code-quality.py
     - name: Build
       run: xcodebuild build -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     - name: Run tests
-      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: scripts/test-marr.sh --ui

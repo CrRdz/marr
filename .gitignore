@@ -21,3 +21,17 @@ Package.resolved
 
 # Local test coverage output
 *.profraw
+*.profdata
+*.xcresult/
+
+# Generated demos, validation reports and design previews
+/output/
+/demo-output/
+/design-system/marr/previews/
+/DesignAssets/MarrIcons/catalog-*.png
+/DesignAssets/MarrIcons/in-app-*.png
+/DesignAssets/MarrAppIcon/dock-*.png
+/DesignAssets/MarrAppIcon/marr-logo-white-transparent.png
+/DesignAssets/MarrAppIcon/*.mp4
+/DesignAssets/MarrAppIcon/archive-*/
+/DesignAssets/MarrAppIcon/Liquid-*/
