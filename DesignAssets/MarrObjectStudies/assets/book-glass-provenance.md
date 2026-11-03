@@ -1,0 +1,11 @@
+# Glass book prop
+
+Tool: built-in imagegen edit, transparent background. Edit target: `open-book.png`. Material reference: approved `../../MarrAppIcon/glass-companion.png`. Original pixels preserved; no raster retouching.
+
+Saved asset: `open-book-glass.png`.
+
+Generated original: `/Users/crzhu/.codex/generated_images/01a18e47-58a2-75e3-b1b4-c00e5182d0cb/exec-8d11a33b-ab66-41ae-afeb-eef2fe309e02.png`.
+
+Final prompt:
+
+> Use case: style-transfer. Asset type: transparent foreground prop for a Rive mascot scene. Image 1 is the EDIT TARGET: the open book. Image 2 is the MATERIAL REFERENCE ONLY: the approved smoky gray / pearl-white translucent glass sphere. Edit the book into the SAME elegant glass design language as that sphere. Preserve the book's exact open shallow-V silhouette, frontal slightly elevated camera, spread proportions, central gutter, thickness, visible stacked page edges and placement within the canvas. Replace all yellow ivory paper, cloth cover and coral ribbon with a beautifully simplified optical glass object: thin softly frosted pearl-white glass leaves, transparent smoky gray layered edges, thick softly rounded clear glass covers, delicate pale ice-blue edge refraction, broad soft white studio highlights from upper left. The glass book must still be clearly recognizable as a physical open book, with gentle curved surfaces and a center fold, not a flat icon or wireframe. Subtle low-contrast etched text-like grooves on the open spread instead of printed dense black text. Frosted areas should provide meaningful semi-opaque body and foreground occlusion; clear edges provide translucency. Bookmark, if retained, is a slim clear blue-gray glass ribbon rather than colored fabric. Quiet gray-white palette exactly coherent with the reference, not cyan colored glass, not rainbow crystal, not chrome, no yellow gold, no neon. No sphere or mascot in the output, no eyes, no face, no mouth, no hands, no floating symbols. Retain genuine transparent background outside the book, including between any silhouette details. No floor, background, detached shadow, labels, watermark. Preserve full object with generous transparent padding. This is an isolated RGBA scene layer, not a full illustration.

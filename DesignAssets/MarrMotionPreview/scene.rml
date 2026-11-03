@@ -1,0 +1,872 @@
+<Rive version="1" kind="fragment">
+  <Artboard name="Marr Motion" id="0:2" width="760" height="640" styleId="0:5" defaultStateMachineId="0:7" viewModelId="0:40" viewModelInstanceId="0:41">
+    <LayoutComponentStyle name="Artboard Style" id="0:5" />
+    <Fill name="Background">
+      <SolidColor colorValue="FFF5F4F1" />
+    </Fill>
+    <Text x="40" y="40" originX="0" originY="0.5" name="MARR">
+      <TextStylePaint id="0:1001" fontSize="13" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF252524" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1001" text="MARR" />
+    </Text>
+    <Text x="572" y="40" originX="0" originY="0.5" name="MOTION STUDY / 01">
+      <TextStylePaint id="0:1002" fontSize="11" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF696964" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1002" text="MOTION STUDY / 01" />
+    </Text>
+    <Text x="380" y="90" originX="0.5" originY="0.5" name="A little presence.">
+      <TextStylePaint id="0:1003" fontSize="29" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF252524" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1003" text="A little presence." />
+    </Text>
+    <Text x="380" y="126" originX="0.5" originY="0.5" name="Same glass. A little more alive.">
+      <TextStylePaint id="0:1004" fontSize="14" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF696964" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1004" text="Same glass. A little more alive." />
+    </Text>
+    <Text x="197" y="544" originX="0.5" originY="0.5" name="Idle">
+      <TextStylePaint id="0:1005" fontSize="14" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF333330" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1005" text="Idle" />
+    </Text>
+    <Shape x="197" y="544" name="Idle button" id="0:70">
+      <SemanticData role="button" label="Idle" hint="Preview idle motion" />
+      <Rectangle width="108" height="44" cornerRadiusTL="22" />
+      <Fill>
+        <SolidColor colorValue="FFE5E4E0" />
+      </Fill>
+    </Shape>
+    <Shape x="197" y="577" opacity="1" name="Idle selected" id="0:80">
+      <Rectangle width="20" height="2" cornerRadiusTL="1" />
+      <Fill>
+        <SolidColor colorValue="FF555550" />
+      </Fill>
+    </Shape>
+    <Text x="319" y="544" originX="0.5" originY="0.5" name="Hello">
+      <TextStylePaint id="0:1006" fontSize="14" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF333330" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1006" text="Hello" />
+    </Text>
+    <Shape x="319" y="544" name="Hello button" id="0:71">
+      <SemanticData role="button" label="Hello" hint="Preview hello motion" />
+      <Rectangle width="108" height="44" cornerRadiusTL="22" />
+      <Fill>
+        <SolidColor colorValue="FFE5E4E0" />
+      </Fill>
+    </Shape>
+    <Shape x="319" y="577" opacity="0" name="Hello selected" id="0:81">
+      <Rectangle width="20" height="2" cornerRadiusTL="1" />
+      <Fill>
+        <SolidColor colorValue="FF555550" />
+      </Fill>
+    </Shape>
+    <Text x="441" y="544" originX="0.5" originY="0.5" name="Thinking">
+      <TextStylePaint id="0:1007" fontSize="14" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF333330" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1007" text="Thinking" />
+    </Text>
+    <Shape x="441" y="544" name="Thinking button" id="0:72">
+      <SemanticData role="button" label="Thinking" hint="Preview thinking motion" />
+      <Rectangle width="108" height="44" cornerRadiusTL="22" />
+      <Fill>
+        <SolidColor colorValue="FFE5E4E0" />
+      </Fill>
+    </Shape>
+    <Shape x="441" y="577" opacity="0" name="Thinking selected" id="0:82">
+      <Rectangle width="20" height="2" cornerRadiusTL="1" />
+      <Fill>
+        <SolidColor colorValue="FF555550" />
+      </Fill>
+    </Shape>
+    <Text x="563" y="544" originX="0.5" originY="0.5" name="Still">
+      <TextStylePaint id="0:1008" fontSize="14" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF333330" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1008" text="Still" />
+    </Text>
+    <Shape x="563" y="544" name="Still button" id="0:73">
+      <SemanticData role="button" label="Still" hint="Preview still motion" />
+      <Rectangle width="108" height="44" cornerRadiusTL="22" />
+      <Fill>
+        <SolidColor colorValue="FFE5E4E0" />
+      </Fill>
+    </Shape>
+    <Shape x="563" y="577" opacity="0" name="Still selected" id="0:83">
+      <Rectangle width="20" height="2" cornerRadiusTL="1" />
+      <Fill>
+        <SolidColor colorValue="FF555550" />
+      </Fill>
+    </Shape>
+    <Text x="380" y="610" originX="0.5" originY="0.5" name="Choose a mood. Use Still to stop motion.">
+      <TextStylePaint id="0:1009" fontSize="12" fontAssetId="0:61">
+        <Fill>
+          <SolidColor colorValue="FF696964" />
+        </Fill>
+      </TextStylePaint>
+      <TextValueRun styleId="0:1009" text="Choose a mood. Use Still to stop motion." />
+    </Text>
+    <Node x="380" y="316" name="Companion transform" id="0:10">
+      <Image assetId="0:60" scaleX="0.29" scaleY="0.29" name="Original glass artwork">
+        <SemanticData role="image" label="Marr glass companion" />
+      </Image>
+    </Node>
+    <Shape x="365" y="479" name="Thinking dot 1" id="0:90" opacity="0">
+      <Ellipse width="4" height="4" />
+      <Fill>
+        <SolidColor colorValue="FF6E6E69" />
+      </Fill>
+    </Shape>
+    <Shape x="380" y="479" name="Thinking dot 2" id="0:91" opacity="0">
+      <Ellipse width="4" height="4" />
+      <Fill>
+        <SolidColor colorValue="FF6E6E69" />
+      </Fill>
+    </Shape>
+    <Shape x="395" y="479" name="Thinking dot 3" id="0:92" opacity="0">
+      <Ellipse width="4" height="4" />
+      <Fill>
+        <SolidColor colorValue="FF6E6E69" />
+      </Fill>
+    </Shape>
+    <Shape x="380" y="466" opacity="0.045" name="Ground shadow" id="0:11">
+      <Ellipse width="134" height="9" />
+      <Fill>
+        <SolidColor colorValue="FF333330" />
+      </Fill>
+    </Shape>
+    <StateMachine name="Marr moods" id="0:7">
+      <StateMachineListener targetId="0:70" name="Choose Idle">
+        <ListenerInputType listenerTypeValue="click" />
+        <ListenerInputTypeSemantic listenerTypeValue="semanticAction">
+          <SemanticInput actionType="tap" />
+        </ListenerInputTypeSemantic>
+        <ListenerViewModelChange>
+          <BindablePropertyNumber propertyValue="0">
+            <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" direction="true" />
+          </BindablePropertyNumber>
+        </ListenerViewModelChange>
+      </StateMachineListener>
+      <StateMachineListener targetId="0:71" name="Choose Hello">
+        <ListenerInputType listenerTypeValue="click" />
+        <ListenerInputTypeSemantic listenerTypeValue="semanticAction">
+          <SemanticInput actionType="tap" />
+        </ListenerInputTypeSemantic>
+        <ListenerViewModelChange>
+          <BindablePropertyNumber propertyValue="1">
+            <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" direction="true" />
+          </BindablePropertyNumber>
+        </ListenerViewModelChange>
+      </StateMachineListener>
+      <StateMachineListener targetId="0:72" name="Choose Thinking">
+        <ListenerInputType listenerTypeValue="click" />
+        <ListenerInputTypeSemantic listenerTypeValue="semanticAction">
+          <SemanticInput actionType="tap" />
+        </ListenerInputTypeSemantic>
+        <ListenerViewModelChange>
+          <BindablePropertyNumber propertyValue="2">
+            <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" direction="true" />
+          </BindablePropertyNumber>
+        </ListenerViewModelChange>
+      </StateMachineListener>
+      <StateMachineListener targetId="0:73" name="Choose Still">
+        <ListenerInputType listenerTypeValue="click" />
+        <ListenerInputTypeSemantic listenerTypeValue="semanticAction">
+          <SemanticInput actionType="tap" />
+        </ListenerInputTypeSemantic>
+        <ListenerViewModelChange>
+          <BindablePropertyNumber propertyValue="3">
+            <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" direction="true" />
+          </BindablePropertyNumber>
+        </ListenerViewModelChange>
+      </StateMachineListener>
+      <StateMachineLayer name="Mood">
+        <EntryState x="0" y="0">
+          <StateTransition stateToId="0:120" />
+        </EntryState>
+        <AnyState x="0" y="-160" />
+        <ExitState x="700" y="-160" />
+        <AnimationState x="200" y="0" animationId="0:20" id="0:120" reset="true">
+          <StateTransition stateToId="0:121" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="1" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:122" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="2" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:123" duration="0">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="3" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+        </AnimationState>
+        <AnimationState x="500" y="0" animationId="0:21" id="0:121" reset="true">
+          <StateTransition stateToId="0:120" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="0" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:122" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="2" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:123" duration="0">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="3" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+        </AnimationState>
+        <AnimationState x="200" y="220" animationId="0:22" id="0:122" reset="true">
+          <StateTransition stateToId="0:120" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="0" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:121" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="1" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:123" duration="0">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="3" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+        </AnimationState>
+        <AnimationState x="500" y="220" animationId="0:23" id="0:123" reset="true">
+          <StateTransition stateToId="0:120" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="0" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:121" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="1" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+          <StateTransition stateToId="0:122" duration="180">
+            <TransitionViewModelCondition opValue="equal">
+              <TransitionPropertyViewModelComparator>
+                <BindablePropertyNumber>
+                  <DataBindContext sourcePathIds="0:40-0:45" propertyKey="636" />
+                </BindablePropertyNumber>
+              </TransitionPropertyViewModelComparator>
+              <TransitionValueNumberComparator value="2" />
+            </TransitionViewModelCondition>
+          </StateTransition>
+        </AnimationState>
+      </StateMachineLayer>
+    </StateMachine>
+    <LinearAnimation name="Idle" id="0:20" duration="240" fps="60" loopValue="loop">
+      <KeyedObject objectId="0:10">
+        <KeyedProperty property="x">
+          <KeyFrameDouble frame="0" value="380" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="y">
+          <KeyFrameDouble frame="0" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="60" value="310.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="120" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="320.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="120" value="1.008" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleY">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="120" value="1.008" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="rotation">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:11">
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="120.0" value="0.9" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.045" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:80">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:81">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:82">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:83">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:90">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:91">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:92">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+    </LinearAnimation>
+    <LinearAnimation name="Hello" id="0:21" duration="240" fps="60" loopValue="loop">
+      <KeyedObject objectId="0:10">
+        <KeyedProperty property="x">
+          <KeyFrameDouble frame="0" value="380" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="y">
+          <KeyFrameDouble frame="0" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="9" value="321.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="24" value="289.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="43" value="318.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="58" value="312.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="76" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="9" value="1.045" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="24" value="0.977" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="43" value="1.025" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="65" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleY">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="9" value="0.955" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="24" value="1.03" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="43" value="0.98" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="65" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="rotation">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="20" value="-0.055" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="41" value="0.025" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="65" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:11">
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="120.0" value="0.9" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="240" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.045" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:80">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:81">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:82">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:83">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:90">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:91">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:92">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+    </LinearAnimation>
+    <LinearAnimation name="Thinking" id="0:22" duration="180" fps="60" loopValue="loop">
+      <KeyedObject objectId="0:10">
+        <KeyedProperty property="x">
+          <KeyFrameDouble frame="0" value="380" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="45" value="383" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="90" value="380" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="135" value="377" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="380" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="y">
+          <KeyFrameDouble frame="0" value="313.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="90" value="317.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="313.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleY">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="rotation">
+          <KeyFrameDouble frame="0" value="-0.025" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="90" value="0.025" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="-0.025" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:11">
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="90.0" value="0.9" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.045" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:80">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:81">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:82">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:83">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:90">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="15" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="30" value="0.8" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="45" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:91">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="27" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="42" value="0.8" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="57" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:92">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="39" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="54" value="0.8" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="69" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+          <KeyFrameDouble frame="180" value="0.25" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+    </LinearAnimation>
+    <LinearAnimation name="Still" id="0:23" duration="1" fps="60" loopValue="oneShot">
+      <KeyedObject objectId="0:10">
+        <KeyedProperty property="x">
+          <KeyFrameDouble frame="0" value="380" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="y">
+          <KeyFrameDouble frame="0" value="316.0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="scaleY">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="rotation">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:11">
+        <KeyedProperty property="scaleX">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0.045" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:80">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:81">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:82">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:83">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="1" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:90">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:91">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+      <KeyedObject objectId="0:92">
+        <KeyedProperty property="opacity">
+          <KeyFrameDouble frame="0" value="0" interpolationType="cubic">
+            <CubicEaseInterpolator x1="0.42" y1="0" x2="0.58" y2="1" />
+          </KeyFrameDouble>
+        </KeyedProperty>
+      </KeyedObject>
+    </LinearAnimation>
+  </Artboard>
+  <ImageAsset file="assets/glass-companion.png" name="glass-companion" id="0:60" />
+  <FontAsset file="assets/Inter.ttf" name="Inter" id="0:61" />
+  <ViewModel name="MarrMotion" id="0:40" defaultInstanceId="0:41">
+    <ViewModelPropertyNumber name="mood" id="0:45" />
+    <ViewModelInstance name="Default" exports="true" id="0:41">
+      <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:45" />
+    </ViewModelInstance>
+  </ViewModel>
+</Rive>
