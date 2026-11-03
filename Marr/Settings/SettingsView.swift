@@ -19,6 +19,7 @@ final class MarrSettingsNavigation: ObservableObject {
     @Published var selection: MarrSettingsSection = .general
     @Published var query = ""
     @Published var capabilitySection: CodexCapabilitySection = .skills
+    @Published private(set) var capabilityFocusRequest = 0
 
     func open(_ section: MarrSettingsSection) {
         query = ""
@@ -27,6 +28,7 @@ final class MarrSettingsNavigation: ObservableObject {
 
     func openCapabilities(_ section: CodexCapabilitySection) {
         capabilitySection = section
+        capabilityFocusRequest += 1
         open(.work)
     }
 
@@ -212,16 +214,24 @@ struct AnswerPanelSettingsView: View {
                 CompactSettingsDivider()
                 ZStack(alignment: .topLeading) {
                     // Keep the current page alive while search temporarily covers it.
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: MarrSettingsLayout.sectionSpacing) {
-                            selectedPanel(navigation.selection)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: MarrSettingsLayout.sectionSpacing) {
+                                selectedPanel(navigation.selection)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 4)
+                            .padding(.bottom, 12)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
-                        .padding(.bottom, 12)
+                        .scrollIndicators(.automatic)
+                        .id(navigation.selection)
+                        .task(id: navigation.capabilityFocusRequest) {
+                            guard navigation.capabilityFocusRequest > 0 else { return }
+                            try? await Task.sleep(for: .milliseconds(100))
+                            guard !Task.isCancelled else { return }
+                            proxy.scrollTo("codex-capabilities", anchor: .top)
+                        }
                     }
-                    .scrollIndicators(.automatic)
-                    .id(navigation.selection)
                     .opacity(isSearching ? 0 : 1)
                     .allowsHitTesting(!isSearching)
                     .disabled(isSearching)
@@ -354,6 +364,7 @@ struct AnswerPanelSettingsView: View {
             if workspace.codexSyncEnabled {
                 CodexAccountSettings(workspace: workspace)
                 CodexCapabilitiesView(workspace: workspace, section: $navigation.capabilitySection, embedded: true)
+                    .id("codex-capabilities")
             }
         case .advanced, .configuration:
             MarrCodexSyncSettings(workspace: workspace)

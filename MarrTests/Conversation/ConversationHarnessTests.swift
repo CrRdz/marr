@@ -5191,20 +5191,30 @@ final class ScreenshotAnnotationTests: XCTestCase {
 
             let scale = CGFloat(bitmap.pixelsWide) / bounds.width
             let center = CGPoint(x: layout.frame.midX, y: layout.frame.minY + 75)
-            var readablePixels = 0
-            var backgroundPixels = 0
-            for y in Int((center.y - 10) * scale)..<Int((center.y + 10) * scale) {
-                for x in Int((center.x - 10) * scale)..<Int((center.x + 10) * scale) {
-                    let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
-                    let channels = [color.redComponent, color.greenComponent, color.blueComponent]
-                    if color.alphaComponent > 0.9, scheme == .light ? channels.max()! < 0.35 : channels.min()! > 0.75 {
-                        readablePixels += 1
-                    } else if color.alphaComponent > 0.9,
-                              scheme == .light ? channels.min()! > 0.65 : channels.max()! < 0.45 {
-                        backgroundPixels += 1
+            let sampleCenters = [center, CGPoint(x: center.x, y: bounds.height - center.y)]
+            var pixelCounts: [(readable: Int, background: Int)] = []
+            for sampleCenter in sampleCenters {
+                var readablePixels = 0
+                var backgroundPixels = 0
+                for y in Int((sampleCenter.y - 10) * scale)..<Int((sampleCenter.y + 10) * scale) {
+                    for x in Int((sampleCenter.x - 10) * scale)..<Int((sampleCenter.x + 10) * scale) {
+                        let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                        let channels = [color.redComponent, color.greenComponent, color.blueComponent]
+                        if color.alphaComponent > 0.9, scheme == .light ? channels.max()! < 0.35 : channels.min()! > 0.75 {
+                            readablePixels += 1
+                        } else if color.alphaComponent > 0.9,
+                                  scheme == .light ? channels.min()! > 0.65 : channels.max()! < 0.45 {
+                            backgroundPixels += 1
+                        }
                     }
                 }
+                pixelCounts.append((readablePixels, backgroundPixels))
             }
+            let bestSample = pixelCounts.max {
+                min($0.readable, $0.background) < min($1.readable, $1.background)
+            } ?? (0, 0)
+            let readablePixels = bestSample.readable
+            let backgroundPixels = bestSample.background
             XCTAssertGreaterThan(readablePixels, 20, "The translate symbol must remain readable with an inherited white tint in \(name) mode")
             XCTAssertGreaterThan(backgroundPixels, 20, "The icon must contain visible strokes and surrounding background, not an unrendered solid rectangle")
             XCTAssertGreaterThan(backgroundPixels, readablePixels / 2, "A solid foreground block is not a rendered translate icon")

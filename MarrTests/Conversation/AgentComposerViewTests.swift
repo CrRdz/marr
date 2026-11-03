@@ -437,7 +437,7 @@ final class AgentComposerViewTests: XCTestCase {
 
         for (theme, appearance) in [("Light", NSAppearance.Name.aqua), ("Dark", .darkAqua)] {
             UserDefaults.standard.set(theme, forKey: appearanceKey)
-            for width in [420.0, 720.0] {
+            for width in [MarrPanelShellLayout.windowSize.width, 720 + MarrPanelShellLayout.railWidth] {
                 let suite = "Marr.CompactRunningComposer.\(UUID().uuidString)"
                 let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
                 let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
@@ -492,10 +492,11 @@ final class AgentComposerViewTests: XCTestCase {
                     workspace.receiveServerMessage(["id": try XCTUnwrap(request["id"]), "result": result])
                 }
                 func click(_ point: NSPoint) throws {
+                    let location = try XCTUnwrap(window.contentView).convert(point, to: nil)
                     for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
                         // Keep toolbar interaction on the application's event
                         // routing path rather than invoking a button callback.
-                        NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point,
+                        NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: location,
                             modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
                             context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
                     }
@@ -642,14 +643,12 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
-            let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
-            session.revealAssistant(for: runningTurn)
-            settle(window)
-            let field = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSTextField }.first)
-            XCTAssertTrue(window.makeFirstResponder(field))
             let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+            XCTAssertTrue(window.makeFirstResponder(editor))
             let draft = "Keep this follow-up until the answer finishes."
             editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
+            let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
+            session.revealAssistant(for: runningTurn)
             settle(window)
             editor.keyDown(with: try key(36, characters: "\r"))
             settle(window)

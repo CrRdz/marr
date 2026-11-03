@@ -809,9 +809,10 @@ final class CodexSupportViewsTests: XCTestCase {
                 let slider = try XCTUnwrap(elements.compactMap { $0 as? NSSlider }.first)
                 let sliderFrame = slider.convert(slider.bounds, to: window.contentView)
                 let x: CGFloat = label == "Speed mode" ? window.contentView!.bounds.maxX - 24 : 100
-                let point = NSPoint(x: x, y: sliderFrame.maxY + 50)
+                let point = NSPoint(x: x, y: sliderFrame.minY - 50)
+                let location = window.contentView!.convert(point, to: nil)
                 for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                    NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point,
+                    NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: location,
                         modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
                         context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
                 }

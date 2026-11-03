@@ -635,8 +635,7 @@ struct AnswerPanelView: View {
                     },
                     onRemoveBinding: removeContextBinding
                 )
-                .frame(width: composerWidth)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: composerWidth, height: 42, alignment: .topLeading)
             }
 
             Group {
