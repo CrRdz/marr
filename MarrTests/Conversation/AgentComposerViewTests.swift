@@ -652,14 +652,25 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
-            let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
-                "Conversation's SwiftUI TextField must install its native field editor")
-            let draft = "Keep this follow-up until the answer finishes."
-            editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
-            settle(window)
             let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
             session.revealAssistant(for: runningTurn)
             settle(window)
+            let content = try XCTUnwrap(window.contentView)
+            let inputPoint = NSPoint(x: MarrPanelShellLayout.railWidth + 120,
+                y: AnswerPanelConversationLayout.bottomInset + 12 + MarrUI.Control.compact + MarrUI.Spacing.regular + 15)
+            let windowPoint = content.convert(inputPoint, to: nil)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: windowPoint,
+                    modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+            }
+            settle(window)
+            let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
+                "Conversation's busy follow-up TextField must install its native field editor")
+            let draft = "Keep this follow-up until the answer finishes."
+            editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
+            settle(window)
+            XCTAssertEqual(editor.string, draft)
             editor.keyDown(with: try key(36, characters: "\r"))
             settle(window)
 
