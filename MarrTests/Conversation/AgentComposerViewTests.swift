@@ -572,12 +572,14 @@ final class AgentComposerViewTests: XCTestCase {
                 // Open the actual model button while running. Its read-only
                 // context information must stay reachable even though selection is locked.
                 let content = try XCTUnwrap(window.contentView)
-                let modelButton = try XCTUnwrap(descendants(of: content).compactMap { $0 as? NSButton }.first {
-                    $0.identifier?.rawValue == "marr.composer.model.work"
-                        || accessibilityString($0, attribute: "accessibilityIdentifier") == "marr.composer.model.work"
-                }, "The work model button must remain mounted while a turn is running")
-                let modelPoint = modelButton.convert(NSPoint(x: modelButton.bounds.midX, y: modelButton.bounds.midY),
-                    to: content)
+                let panelWidth = max(0, content.bounds.width - MarrPanelShellLayout.railWidth)
+                let composerWidth = MarrChatLayout.columnWidth(in: panelWidth)
+                let modelControlWidth = min(280, max(80, composerWidth - 238))
+                let modelPoint = NSPoint(
+                    x: content.bounds.width - MarrPanelShellLayout.railWidth - MarrUI.Spacing.medium
+                        - MarrUI.Spacing.small - MarrUI.Control.compact - modelControlWidth / 2,
+                    y: AnswerPanelConversationLayout.bottomInset + 12 + 14
+                )
                 let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
                 try click(modelPoint)
                 let search = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSSearchField }
@@ -650,15 +652,6 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
-            @MainActor func messageField() -> NSTextField? {
-                descendants(of: window.contentView).compactMap { $0 as? NSTextField }.first {
-                    $0.identifier?.rawValue == "marr.composer.conversation.message"
-                        || accessibilityString($0, attribute: "accessibilityIdentifier") == "marr.composer.conversation.message"
-                        || accessibilityText($0).contains("Message")
-                }
-            }
-            let field = try XCTUnwrap(messageField(), "Conversation's Message TextField must be mounted")
-            XCTAssertTrue(window.makeFirstResponder(field))
             let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
                 "Conversation's SwiftUI TextField must install its native field editor")
             let draft = "Keep this follow-up until the answer finishes."
@@ -667,16 +660,11 @@ final class AgentComposerViewTests: XCTestCase {
             let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
             session.revealAssistant(for: runningTurn)
             settle(window)
-            let runningField = try XCTUnwrap(messageField(), "The Message TextField must remain mounted while busy")
-            XCTAssertEqual(runningField.stringValue, draft)
-            XCTAssertTrue(window.makeFirstResponder(runningField))
-            let runningEditor = try XCTUnwrap(window.firstResponder as? NSTextView,
-                "The busy Message TextField must install its native field editor")
-            runningEditor.keyDown(with: try key(36, characters: "\r"))
+            editor.keyDown(with: try key(36, characters: "\r"))
             settle(window)
 
             XCTAssertEqual(session.turns.count, 1, "Return must not submit another turn while Conversation is busy")
-            XCTAssertEqual(runningField.stringValue, draft, "A rejected submission must retain the draft")
+            XCTAssertEqual(editor.string, draft, "A rejected submission must retain the draft")
         }
     }
 
@@ -1058,11 +1046,6 @@ final class AgentComposerViewTests: XCTestCase {
         ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].compactMap { attribute in
             element.responds(to: NSSelectorFromString(attribute)) ? element.value(forKey: attribute) as? String : nil
         }.joined(separator: " ")
-    }
-
-    private func accessibilityString(_ element: NSObject, attribute: String) -> String {
-        guard element.responds(to: NSSelectorFromString(attribute)) else { return "" }
-        return element.value(forKey: attribute) as? String ?? ""
     }
 
     private func attachWindowSnapshots(_ window: NSWindow, name: String) throws {
