@@ -19,17 +19,19 @@ final class MarrSettingsNavigation: ObservableObject {
     @Published var selection: MarrSettingsSection = .general
     @Published var query = ""
     @Published var capabilitySection: CodexCapabilitySection = .skills
-    @Published private(set) var capabilityFocusRequest = 0
+    @Published private(set) var opensCapabilitiesDirectly = false
 
     func open(_ section: MarrSettingsSection) {
         query = ""
+        opensCapabilitiesDirectly = false
         selection = section.navigationSection
     }
 
     func openCapabilities(_ section: CodexCapabilitySection) {
         capabilitySection = section
-        capabilityFocusRequest += 1
-        open(.work)
+        query = ""
+        opensCapabilitiesDirectly = true
+        selection = MarrSettingsSection.work
     }
 
     func open(_ result: MarrSettingsSearchResult) {
@@ -214,24 +216,16 @@ struct AnswerPanelSettingsView: View {
                 CompactSettingsDivider()
                 ZStack(alignment: .topLeading) {
                     // Keep the current page alive while search temporarily covers it.
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: MarrSettingsLayout.sectionSpacing) {
-                                selectedPanel(navigation.selection)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 4)
-                            .padding(.bottom, 12)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: MarrSettingsLayout.sectionSpacing) {
+                            selectedPanel(navigation.selection)
                         }
-                        .scrollIndicators(.automatic)
-                        .id(navigation.selection)
-                        .task(id: navigation.capabilityFocusRequest) {
-                            guard navigation.capabilityFocusRequest > 0 else { return }
-                            try? await Task.sleep(for: .milliseconds(100))
-                            guard !Task.isCancelled else { return }
-                            proxy.scrollTo("codex-capabilities", anchor: .top)
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                        .padding(.bottom, 12)
                     }
+                    .scrollIndicators(.automatic)
+                    .id(navigation.selection)
                     .opacity(isSearching ? 0 : 1)
                     .allowsHitTesting(!isSearching)
                     .disabled(isSearching)
@@ -352,6 +346,9 @@ struct AnswerPanelSettingsView: View {
         case .storage:
             MarrStorageSettingsView(controller: controller)
         case .work:
+            if workspace.codexSyncEnabled && navigation.opensCapabilitiesDirectly {
+                CodexCapabilitiesView(workspace: workspace, section: $navigation.capabilitySection, embedded: true)
+            }
             PersonalAgentCloudSettings(coordinator: controller.personalAgent)
             CompactSettingsGroup("Local workspaces", info: "Chats stay on this Mac and use the connection selected in AI & Models.") {
                 HStack {
@@ -363,8 +360,9 @@ struct AnswerPanelSettingsView: View {
             MarrCodexSyncSettings(workspace: workspace)
             if workspace.codexSyncEnabled {
                 CodexAccountSettings(workspace: workspace)
-                CodexCapabilitiesView(workspace: workspace, section: $navigation.capabilitySection, embedded: true)
-                    .id("codex-capabilities")
+                if !navigation.opensCapabilitiesDirectly {
+                    CodexCapabilitiesView(workspace: workspace, section: $navigation.capabilitySection, embedded: true)
+                }
             }
         case .advanced, .configuration:
             MarrCodexSyncSettings(workspace: workspace)

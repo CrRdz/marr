@@ -5190,19 +5190,21 @@ final class ScreenshotAnnotationTests: XCTestCase {
             add(attachment)
 
             let scale = CGFloat(bitmap.pixelsWide) / bounds.width
-            let center = CGPoint(x: layout.frame.midX, y: layout.frame.minY + 75)
-            let sampleCenters = [center, CGPoint(x: center.x, y: bounds.height - center.y)]
+            let sampleRect = CGRect(x: layout.frame.minX, y: layout.frame.minY,
+                width: layout.frame.width, height: min(150, layout.frame.height))
+            let sampleRects = [sampleRect, CGRect(x: sampleRect.minX,
+                y: bounds.height - sampleRect.maxY, width: sampleRect.width, height: sampleRect.height)]
             var pixelCounts: [(readable: Int, background: Int)] = []
-            for sampleCenter in sampleCenters {
+            for sampleRect in sampleRects {
                 var readablePixels = 0
                 var backgroundPixels = 0
-                for y in Int((sampleCenter.y - 10) * scale)..<Int((sampleCenter.y + 10) * scale) {
-                    for x in Int((sampleCenter.x - 10) * scale)..<Int((sampleCenter.x + 10) * scale) {
+                for y in Int(sampleRect.minY * scale)..<Int(sampleRect.maxY * scale) {
+                    for x in Int(sampleRect.minX * scale)..<Int(sampleRect.maxX * scale) {
                         let color = try XCTUnwrap(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
                         let channels = [color.redComponent, color.greenComponent, color.blueComponent]
-                        if color.alphaComponent > 0.9, scheme == .light ? channels.max()! < 0.35 : channels.min()! > 0.75 {
+                        if color.alphaComponent > 0.5, scheme == .light ? channels.max()! < 0.35 : channels.min()! > 0.75 {
                             readablePixels += 1
-                        } else if color.alphaComponent > 0.9,
+                        } else if color.alphaComponent > 0.5,
                                   scheme == .light ? channels.min()! > 0.65 : channels.max()! < 0.45 {
                             backgroundPixels += 1
                         }

@@ -492,6 +492,7 @@ final class AgentComposerViewTests: XCTestCase {
                     workspace.receiveServerMessage(["id": try XCTUnwrap(request["id"]), "result": result])
                 }
                 func click(_ point: NSPoint) throws {
+                    window.makeKeyAndOrderFront(nil)
                     let location = try XCTUnwrap(window.contentView).convert(point, to: nil)
                     for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
                         // Keep toolbar interaction on the application's event
@@ -544,9 +545,9 @@ final class AgentComposerViewTests: XCTestCase {
                         scroll !== editor.enclosingScrollView && scroll !== transcript
                             && (scroll.documentView?.frame.width ?? 0) > scroll.contentView.bounds.width + 20
                     }, "The attachments must have a horizontally scrollable viewport")
-                XCTAssertLessThanOrEqual(attachmentScroll.frame.height, 44,
+                XCTAssertLessThanOrEqual(attachmentScroll.contentView.bounds.height, 44,
                     "An attachment row must not absorb the transcript's spare height")
-                XCTAssertGreaterThanOrEqual(attachmentScroll.frame.height, 38,
+                XCTAssertGreaterThanOrEqual(attachmentScroll.contentView.bounds.height, 38,
                     "Attachment thumbnails and remove controls must remain fully visible")
                 XCTAssertLessThanOrEqual(originalTranscriptHeight - transcript.frame.height, 56,
                     "Adding one attachment row should consume only one row plus its gap")
@@ -569,8 +570,11 @@ final class AgentComposerViewTests: XCTestCase {
                 // Open the actual model button while running. Its read-only
                 // context information must stay reachable even though selection is locked.
                 let content = try XCTUnwrap(window.contentView)
-                let modelPoint = NSPoint(x: MarrPanelShellLayout.railWidth + 220,
-                    y: AnswerPanelConversationLayout.bottomInset + 12 + 14)
+                let modelLabel = try XCTUnwrap(try renderedText(window).first {
+                    $0.text.localizedCaseInsensitiveContains("Fixture") && $0.bounds.midY < 0.25
+                }, "The selected model label must be visible before opening its menu")
+                let modelPoint = NSPoint(x: modelLabel.bounds.midX * content.bounds.width,
+                    y: modelLabel.bounds.midY * content.bounds.height)
                 let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
                 try click(modelPoint)
                 let search = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSSearchField }
@@ -643,12 +647,13 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
-            let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+            let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
+            session.revealAssistant(for: runningTurn)
+            settle(window)
+            let editor = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? AgentInputTextView }.first)
             XCTAssertTrue(window.makeFirstResponder(editor))
             let draft = "Keep this follow-up until the answer finishes."
             editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
-            let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
-            session.revealAssistant(for: runningTurn)
             settle(window)
             editor.keyDown(with: try key(36, characters: "\r"))
             settle(window)
