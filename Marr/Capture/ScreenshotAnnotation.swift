@@ -379,6 +379,7 @@ struct ScreenshotCompanionTools: View {
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             MarrIcon(symbol, size: MarrUI.Icon.toolbar)
+                .foregroundStyle(MarrPanelColors.primary(for: colorScheme))
                 .frame(width: 44, height: 44)
                 .contentShape(RoundedRectangle(cornerRadius: 18))
                 .background {

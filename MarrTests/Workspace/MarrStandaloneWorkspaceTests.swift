@@ -158,7 +158,7 @@ final class MarrStandaloneWorkspaceTests: XCTestCase {
                     request.recognitionLevel = .accurate
                     try VNImageRequestHandler(cgImage: XCTUnwrap(bitmap.cgImage)).perform([request])
                     let title = try XCTUnwrap(request.results?.filter {
-                        $0.topCandidates(1).first?.string == "Conversation" && $0.boundingBox.minX > 0.2
+                        $0.topCandidates(1).first?.string == "Conversation" && $0.boundingBox.minX > 0.14
                     }.max { $0.boundingBox.height < $1.boundingBox.height })
                     XCTAssertGreaterThan(title.boundingBox.minY, 0.75, "The page heading must stay above the scrollable settings")
                     return title.boundingBox.midY

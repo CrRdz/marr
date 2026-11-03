@@ -1438,8 +1438,9 @@ enum ImageTranslationRenderer {
                 sourceImage: backgroundSourceImage,
                 fallbackSourceRect: preparedBlock.backgroundPatchSourceRect,
                 fallbackColor: preparedBlock.backgroundColor,
-                modelBackgroundHint: preparedBlock.drawableBlock.block.sourceID == nil
-                    && preparedBlock.drawableBlock.sourceTextRects.isEmpty
+                modelBackgroundHint: preparedBlock.drawableBlock.block.translationStrategy == .block
+                    || (preparedBlock.drawableBlock.block.sourceID == nil
+                        && preparedBlock.drawableBlock.sourceTextRects.isEmpty)
                     ? TranslationColorSampling.color(from: preparedBlock.drawableBlock.block.backgroundColor) : nil
             )
             context.restoreGState()

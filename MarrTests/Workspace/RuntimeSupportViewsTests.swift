@@ -796,12 +796,26 @@ final class CodexSupportViewsTests: XCTestCase {
         func press(_ label: String) throws {
             let selector = NSSelectorFromString("accessibilityPerformPress")
             let elements = accessibilityElements(in: window)
-            let button = try XCTUnwrap(elements.first { element in
+            if let button = elements.first(where: { element in
                 ["accessibilityLabel", "accessibilityTitle", "accessibilityHelp"].contains {
                     accessibilityString(element, attribute: $0) == label
                 } && element.responds(to: selector)
-            }, "Missing accessible control: \(label). Available: \(elements.map { accessibilityString($0, attribute: "accessibilityTitle") })")
-            _ = button.perform(selector)
+            }) {
+                _ = button.perform(selector)
+            } else {
+                // SwiftUI buttons are virtual accessibility nodes and aren't
+                // published in this in-process AppKit view tree. Click the
+                // visible controls relative to the native reasoning slider.
+                let slider = try XCTUnwrap(elements.compactMap { $0 as? NSSlider }.first)
+                let sliderFrame = slider.convert(slider.bounds, to: window.contentView)
+                let x: CGFloat = label == "Speed mode" ? window.contentView!.bounds.maxX - 24 : 100
+                let point = NSPoint(x: x, y: sliderFrame.maxY + 50)
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point,
+                        modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+                }
+            }
             settleSlider(window)
         }
         try press("Speed mode")

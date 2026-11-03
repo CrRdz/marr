@@ -162,7 +162,7 @@ struct MarrSettingsSearchResult: Identifiable {
         .init(id: "local-workspaces", title: "Local workspaces", detail: "Manage workspace names and folders", section: .storage, keywords: "workspace project folder local 工作区 项目 文件夹 本地"),
         .init(id: "agent-hosting", title: "Personal Agent hosting", detail: "Connect your own always-on server", section: .work, keywords: "agent cloud server hosting token 云端 常驻 服务器 个人 智能体"),
         .init(id: "codex-sync", title: "Sync Codex work", detail: "Optional Codex history and runtime integration", section: .work, keywords: "sync codex compatibility integration history 同步 兼容 开关 历史"),
-        .init(id: "limits", title: "Codex account usage limits", detail: "Remaining allowance, credits and reset times", section: .work, keywords: "account limits rate billing usage credits reset 额度 余额 用量 重置 计费"),
+        .init(id: "limits", title: "Codex account usage limits", detail: "Remaining allowance, credits and reset times", section: .usage, keywords: "account limits rate billing usage credits reset 额度 余额 用量 重置 计费"),
         .init(id: "translation-model", title: "Translation model & reasoning", detail: "Reuse a saved AI connection or follow the conversation", section: .translation, keywords: "model codex reasoning effort strength 翻译 模型 推理 强度"),
         .init(id: "translation-api", title: "Translation connection", detail: "Choose an existing AI connection or DeepLX", section: .translation, keywords: "provider server URL gateway protocol responses chat completions messages deeplx 独立 接口 服务 地址"),
         .init(id: "translation-credentials", title: "Translation credentials", detail: "API keys, access tokens and request headers", section: .conversation, keywords: "api key token bearer authentication headers 凭据 密钥 令牌 请求头"),
@@ -326,7 +326,12 @@ struct AnswerPanelSettingsView: View {
         case .account:
             CompactProviderSettingsPanel(controller: controller, page: .conversation, openAccount: { navigation.open(.conversation) })
         case .usage:
-            CompactUsageSettingsPanel(usageStore: controller.tokenUsageStore, historyStore: controller.historyStore)
+            VStack(alignment: .leading, spacing: MarrSettingsLayout.sectionSpacing) {
+                if workspace.codexSyncEnabled {
+                    CodexAccountUsageSettings(workspace: workspace)
+                }
+                CompactUsageSettingsPanel(usageStore: controller.tokenUsageStore, historyStore: controller.historyStore)
+            }
         case .archives:
             MarrLocalChatStorageView(controller: controller, archivedOnly: true)
             if workspace.codexSyncEnabled {
@@ -348,7 +353,6 @@ struct AnswerPanelSettingsView: View {
             MarrCodexSyncSettings(workspace: workspace)
             if workspace.codexSyncEnabled {
                 CodexAccountSettings(workspace: workspace)
-                CodexAccountUsageSettings(workspace: workspace)
                 CodexCapabilitiesView(workspace: workspace, section: $navigation.capabilitySection, embedded: true)
             }
         case .advanced, .configuration:

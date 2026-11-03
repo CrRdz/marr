@@ -1433,7 +1433,7 @@ final class ConversationHarnessTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.25))
         let originalMinY = window.frame.minY
 
-        XCTAssertEqual(window.frame.width, 420, accuracy: 1)
+        XCTAssertEqual(window.frame.width, MarrPanelShellLayout.windowSize.width, accuracy: 1)
         XCTAssertEqual(window.frame.height, 596, accuracy: 1)
         XCTAssertTrue(window.isMovable)
         XCTAssertFalse(window.isMovableByWindowBackground, "Answer text drags must select text rather than move the window")
@@ -1441,7 +1441,8 @@ final class ConversationHarnessTests: XCTestCase {
         panel.setHistoryExpanded(true)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
         let visibleWidth = (window.screen ?? NSScreen.main)?.visibleFrame.width ?? 2_000
-        XCTAssertEqual(window.frame.width, min(681, visibleWidth), accuracy: 1)
+        let expandedWidth = min(MarrPanelShellLayout.windowSize.width + AnswerPanelSidebarLayout.sidebarWidth, visibleWidth)
+        XCTAssertEqual(window.frame.width, expandedWidth, accuracy: 1)
         XCTAssertTrue(panel.sidebarPresentation.layout.isExpanded)
         XCTAssertFalse(window.isVisible)
         XCTAssertFalse(window.isKeyWindow)
@@ -1450,13 +1451,13 @@ final class ConversationHarnessTests: XCTestCase {
 
         panel.setHistoryExpanded(false)
         RunLoop.main.run(until: Date().addingTimeInterval(0.35))
-        XCTAssertEqual(window.frame.width, min(681, visibleWidth), accuracy: 1)
+        XCTAssertEqual(window.frame.width, expandedWidth, accuracy: 1)
         XCTAssertFalse(panel.sidebarPresentation.layout.isExpanded)
         XCTAssertEqual(window.frame.height, 596, accuracy: 1)
         XCTAssertEqual(window.frame.minY, originalMinY, accuracy: 1)
 
         XCTAssertTrue(window.styleMask.contains(.resizable))
-        XCTAssertEqual(window.contentMinSize, NSSize(width: 420, height: 596))
+        XCTAssertEqual(window.contentMinSize, MarrPanelShellLayout.windowSize)
         XCTAssertEqual(AnswerPanelConversationLayout.windowPadding, 0)
         XCTAssertEqual(AnswerPanelConversationLayout.surfaceWidth, 420)
         XCTAssertEqual(AnswerPanelConversationLayout.surfaceHeight, 596)
@@ -1465,8 +1466,9 @@ final class ConversationHarnessTests: XCTestCase {
         XCTAssertEqual(window.contentView?.bounds.width ?? 0, 680, accuracy: 1)
         XCTAssertEqual(window.contentView?.bounds.height ?? 0, 760, accuracy: 1)
         panel.setHistoryExpanded(true)
-        XCTAssertEqual(window.frame.width, min(681, visibleWidth), accuracy: 1)
-        XCTAssertEqual(window.frame.height, 760, accuracy: 1)
+        XCTAssertEqual(window.frame.width, expandedWidth, accuracy: 1)
+        let visibleHeight = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 760
+        XCTAssertEqual(window.frame.height, min(760, visibleHeight), accuracy: 1)
         XCTAssertFalse(window.isVisible)
         XCTAssertFalse(window.isKeyWindow)
     }

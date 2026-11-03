@@ -183,11 +183,12 @@ final class AgentComposerViewTests: XCTestCase {
         // SwiftUI's virtual accessibility nodes are not part of this in-process
         // AppKit tree. Exercise the visible header control through the window.
         let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
-        let detailsPoint = NSPoint(x: window.contentLayoutRect.width - 27, y: window.contentLayoutRect.height - 67)
+        let detailsPoint = NSPoint(x: (window.contentView?.bounds.maxX ?? window.contentLayoutRect.maxX) - 27,
+                                   y: (window.contentView?.bounds.maxY ?? window.contentLayoutRect.maxY) - 67)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: detailsPoint, modifierFlags: [], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-            window.sendEvent(event)
+            NSApp.sendEvent(event)
         }
         settle(window)
         let detailsWindow = try XCTUnwrap(NSApp.windows.first { $0.isVisible && !visibleWindows.contains($0.windowNumber) },
@@ -199,7 +200,7 @@ final class AgentComposerViewTests: XCTestCase {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: detailsPoint, modifierFlags: [], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-            window.sendEvent(event)
+            NSApp.sendEvent(event)
         }
         settle(window)
         XCTAssertFalse(detailsWindow.isVisible, "The header button must close its details popover")
@@ -412,7 +413,7 @@ final class AgentComposerViewTests: XCTestCase {
                 XCTAssertEqual(editor.selectedRange(), caret, "Streaming must not move the insertion point")
             }
             let streamingText = try renderedText(window).map(\.text).joined(separator: " ")
-            XCTAssertTrue(streamingText.contains("Responding"), streamingText)
+            XCTAssertTrue(streamingText.contains("Responding") || streamingText.contains("Writing a reply"), streamingText)
             try snapshot("responding")
             window.setFrame(NSRect(x: 100, y: 100, width: 720, height: 680), display: true)
             settle(window)
@@ -589,7 +590,8 @@ final class AgentComposerViewTests: XCTestCase {
                 // Open the actual model button while running. Its read-only
                 // context information must stay reachable even though selection is locked.
                 let content = try XCTUnwrap(window.contentView)
-                let modelPoint = NSPoint(x: 220, y: AnswerPanelConversationLayout.bottomInset + 12 + 14)
+                let modelPoint = NSPoint(x: MarrPanelShellLayout.railWidth + 220,
+                    y: AnswerPanelConversationLayout.bottomInset + 12 + 14)
                 let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
                 try click(modelPoint)
                 let search = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSSearchField }
@@ -665,6 +667,8 @@ final class AgentComposerViewTests: XCTestCase {
             let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
             session.revealAssistant(for: runningTurn)
             settle(window)
+            let field = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSTextField }.first)
+            XCTAssertTrue(window.makeFirstResponder(field))
             let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
             let draft = "Keep this follow-up until the answer finishes."
             editor.insertText(draft, replacementRange: NSRange(location: 0, length: 0))
