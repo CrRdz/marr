@@ -130,7 +130,7 @@ extension MarrController {
         return true
     }
 
-    private func runChatGPTAction(_ action: @escaping @MainActor () async throws -> Void) {
+    func runChatGPTAction(_ action: @escaping @MainActor () async throws -> Void) {
         guard !chatGPTBusy else { return }
         cancelChatGPTRefresh()
         chatGPTBusy = true
