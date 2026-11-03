@@ -572,16 +572,12 @@ final class AgentComposerViewTests: XCTestCase {
                 // Open the actual model button while running. Its read-only
                 // context information must stay reachable even though selection is locked.
                 let content = try XCTUnwrap(window.contentView)
-                let modelControl = try XCTUnwrap(accessibilityElements(in: window).first {
-                    accessibilityString($0, attribute: "accessibilityIdentifier") == "marr.composer.model.work"
-                }, "The work model control must expose its visible accessibility frame")
-                let modelFrame = try XCTUnwrap(
-                    (modelControl.value(forKey: "accessibilityFrame") as? NSValue)?.rectValue
-                )
-                XCTAssertFalse(modelFrame.isEmpty)
-                let screenPoint = NSPoint(x: modelFrame.midX, y: modelFrame.midY)
-                let windowPoint = window.convertPoint(fromScreen: screenPoint)
-                let modelPoint = content.convert(windowPoint, from: nil)
+                let modelButton = try XCTUnwrap(descendants(of: content).compactMap { $0 as? NSButton }.first {
+                    $0.identifier?.rawValue == "marr.composer.model.work"
+                        || accessibilityString($0, attribute: "accessibilityIdentifier") == "marr.composer.model.work"
+                }, "The work model button must remain mounted while a turn is running")
+                let modelPoint = modelButton.convert(NSPoint(x: modelButton.bounds.midX, y: modelButton.bounds.midY),
+                    to: content)
                 let visibleWindows = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
                 try click(modelPoint)
                 let search = try XCTUnwrap(descendants(of: window.contentView).compactMap { $0 as? NSSearchField }
@@ -654,6 +650,15 @@ final class AgentComposerViewTests: XCTestCase {
         try MarrUITestSupport.requireVisibleWindows()
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
+            @MainActor func messageField() -> NSTextField? {
+                descendants(of: window.contentView).compactMap { $0 as? NSTextField }.first {
+                    $0.identifier?.rawValue == "marr.composer.conversation.message"
+                        || accessibilityString($0, attribute: "accessibilityIdentifier") == "marr.composer.conversation.message"
+                        || accessibilityText($0).contains("Message")
+                }
+            }
+            let field = try XCTUnwrap(messageField(), "Conversation's Message TextField must be mounted")
+            XCTAssertTrue(window.makeFirstResponder(field))
             let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
                 "Conversation's SwiftUI TextField must install its native field editor")
             let draft = "Keep this follow-up until the answer finishes."
@@ -662,13 +667,16 @@ final class AgentComposerViewTests: XCTestCase {
             let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
             session.revealAssistant(for: runningTurn)
             settle(window)
+            let runningField = try XCTUnwrap(messageField(), "The Message TextField must remain mounted while busy")
+            XCTAssertEqual(runningField.stringValue, draft)
+            XCTAssertTrue(window.makeFirstResponder(runningField))
             let runningEditor = try XCTUnwrap(window.firstResponder as? NSTextView,
-                "The field editor must retain focus while a conversation turn is running")
+                "The busy Message TextField must install its native field editor")
             runningEditor.keyDown(with: try key(36, characters: "\r"))
             settle(window)
 
             XCTAssertEqual(session.turns.count, 1, "Return must not submit another turn while Conversation is busy")
-            XCTAssertEqual(runningEditor.string, draft, "A rejected submission must retain the draft")
+            XCTAssertEqual(runningField.stringValue, draft, "A rejected submission must retain the draft")
         }
     }
 

@@ -1762,6 +1762,7 @@ struct AnswerPanelView: View {
                     .marrChatInput()
                     .focused($questionFocused)
                     .accessibilityLabel(editingTurnID == nil ? "Message" : "Edit latest message")
+                    .accessibilityIdentifier("marr.composer.conversation.message")
                     .onSubmit {
                         sendCurrentQuestion()
                     }
