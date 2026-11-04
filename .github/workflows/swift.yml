@@ -14,10 +14,20 @@ jobs:
       contents: read
 
     runs-on: macos-26
+    timeout-minutes: 45
 
     steps:
     - uses: actions/checkout@v4
+    - name: Check code quality boundaries
+      run: python3 scripts/check-code-quality.py
     - name: Build
       run: xcodebuild build -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
     - name: Run tests
-      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: scripts/test-marr.sh --ui -resultBundlePath build/ci-tests.xcresult -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: swift-test-results
+        path: build/ci-tests.xcresult
+        if-no-files-found: ignore

@@ -34,9 +34,11 @@ jobs:
         echo "sha=$SHA" >> "$GITHUB_OUTPUT"
         echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
     - name: Verify
-      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: scripts/test-marr.sh --ui
     - name: Build release app
       run: xcodebuild build -project Marr.xcodeproj -scheme Marr -configuration Release -destination 'platform=macOS' -derivedDataPath build/nightly CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+    - name: Verify distributed Dock icon
+      run: python3 scripts/check-marr-dock-plugin.py build/nightly/Build/Products/Release/Marr.app
     - name: Package DMG
       run: |
         set -euo pipefail

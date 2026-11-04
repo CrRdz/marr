@@ -6,12 +6,15 @@ let package = Package(
     name: "MarrModules",
     platforms: [.macOS(.v14)],
     products: [
+        .library(name: "MarrText", targets: ["MarrText"]),
         .library(name: "MarrCore", targets: ["MarrCore"]),
         .library(name: "MarrNetworking", targets: ["MarrNetworking"]),
         .library(name: "MarrPersistence", targets: ["MarrPersistence"]),
         .library(name: "MarrSettings", targets: ["MarrSettings"]),
     ],
     targets: [
+        .target(name: "MarrText"),
+        .testTarget(name: "MarrTextTests", dependencies: ["MarrText"]),
         .target(name: "MarrCore"),
         .target(
             name: "MarrNetworking",
@@ -25,6 +28,7 @@ let package = Package(
         .target(
             name: "MarrSettings",
             dependencies: ["MarrCore"],
+            sources: ["AIConnectionRegistry.swift", "InferenceSettingsRepository.swift"],
             linkerSettings: [.linkedFramework("Security")]
         ),
         .testTarget(

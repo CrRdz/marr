@@ -45,11 +45,13 @@ jobs:
         echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
     - name: Verify
-      run: xcodebuild test -project Marr.xcodeproj -scheme Marr -destination 'platform=macOS' CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+      run: scripts/test-marr.sh --ui
     - name: Verify packages
       run: swift test --package-path Packages/MarrModules
     - name: Build release app
       run: xcodebuild build -project Marr.xcodeproj -scheme Marr -configuration Release -destination 'platform=macOS' -derivedDataPath build/release ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO MARKETING_VERSION=${{ steps.metadata.outputs.version }} CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+    - name: Verify distributed Dock icon
+      run: python3 scripts/check-marr-dock-plugin.py build/release/Build/Products/Release/Marr.app --universal
     - name: Package DMG
       run: |
         set -euo pipefail

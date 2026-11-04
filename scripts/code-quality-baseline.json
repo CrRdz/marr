@@ -1,0 +1,15 @@
+{
+  "Marr/App/MarrController.swift": 2100,
+  "Marr/Capture/ScreenshotOverlay.swift": 2100,
+  "Marr/Conversation/AgentComposerView.swift": 1000,
+  "Marr/Presentation/AnswerPanel.swift": 1000,
+  "Marr/Presentation/AnswerPanelView.swift": 2500,
+  "Marr/Presentation/MarrMediaViewer.swift": 1000,
+  "Marr/Translation/TranslationMathProtection.swift": 1200,
+  "Marr/Translation/TranslationOverlay.swift": 1000,
+  "Marr/Translation/TranslationRecognition.swift": 2000,
+  "Marr/Translation/TranslationRenderer.swift": 2400,
+  "Marr/Workspace/RuntimeSupportViews.swift": 1400,
+  "Marr/Workspace/RuntimeWorkspace.swift": 4700,
+  "Packages/MarrModules/Sources/MarrPersistence/ConversationHistoryRepository.swift": 900
+}

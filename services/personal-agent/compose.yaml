@@ -1,0 +1,29 @@
+services:
+  agent:
+    build: .
+    restart: unless-stopped
+    init: true
+    environment:
+      MARR_AGENT_TOKEN: ${MARR_AGENT_TOKEN:?Set a random service token}
+      MARR_AGENT_MODEL: ${MARR_AGENT_MODEL:?Choose a model available to your account}
+    volumes:
+      - agent-data:/data
+    expose:
+      - "8787"
+    stop_grace_period: 20s
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      AGENT_DOMAIN: ${AGENT_DOMAIN:?Set your server hostname}
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  agent-data:
+  caddy-data:
+  caddy-config:
