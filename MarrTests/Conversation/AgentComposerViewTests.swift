@@ -653,17 +653,28 @@ final class AgentComposerViewTests: XCTestCase {
         let session = ConversationSession()
         try withDraftPanel(session: session) { _, window, _ in
             let runningTurn = try XCTUnwrap(session.beginTurn(question: "Already running"))
+            defer {
+                // End the synthetic stream before closing its animated hosting
+                // tree, so teardown can release the history fixture as well.
+                session.complete(runningTurn, answer: "Finished")
+                settle(window)
+            }
             session.revealAssistant(for: runningTurn)
             settle(window)
             let content = try XCTUnwrap(window.contentView)
             let inputPoint = NSPoint(x: MarrPanelShellLayout.railWidth + 120,
                 y: AnswerPanelConversationLayout.bottomInset + 12 + MarrUI.Control.compact + MarrUI.Spacing.regular + 15)
             let windowPoint = content.convert(inputPoint, to: nil)
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: windowPoint,
-                    modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
-                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
-            }
+            let mouseDown = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: windowPoint,
+                modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            let mouseUp = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: windowPoint,
+                modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 0))
+            // NSTextView tracks the mouse synchronously inside mouseDown. Queue
+            // the release first so that tracking can consume it before returning.
+            NSApp.postEvent(mouseUp, atStart: true)
+            NSApp.sendEvent(mouseDown)
             settle(window)
             let editor = try XCTUnwrap(window.firstResponder as? NSTextView,
                 "Conversation's busy follow-up TextField must install its native field editor")
@@ -962,6 +973,18 @@ final class AgentComposerViewTests: XCTestCase {
         _ body: (AnswerPanelController, NSWindow, RuntimeWorkspaceController) throws -> Void
     ) throws {
         try MarrUITestSupport.requireVisibleWindows()
+        try autoreleasepool {
+            try runDraftPanel(session: session, initialDestination: initialDestination,
+                modelFixtures: modelFixtures, body)
+        }
+    }
+
+    private func runDraftPanel(
+        session: ConversationSession,
+        initialDestination: AnswerPanelUtilityDestination?,
+        modelFixtures: Bool,
+        _ body: (AnswerPanelController, NSWindow, RuntimeWorkspaceController) throws -> Void
+    ) throws {
         let suite = "Marr.ComposerDrafts.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite, isDirectory: true)
